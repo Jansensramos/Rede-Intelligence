@@ -12,12 +12,27 @@ import { calculateSensitivity } from "@/domain/sensitivity";
 import { createDemoLandSnapshot } from "@/domain/land";
 
 export default async function Home() {
-  const context = await requireAuthContext();
-  const persisted = await getLatestStudyForOrganization(context.organizationId);
-  const persistedLand = await getLatestLandStudyForOrganization(context.organizationId);
-  const initialInvestment = await ensureInvestmentCase(context);
-  const initialAI = await getAIBootstrap(context);
-  const initialDesign = await ensureDesignWorkspace(context, persisted?.projectId);
+  // Temporariamente desabilitado para desenvolvimento
+  // const context = await requireAuthContext();
+  const context = {
+    userName: "Admin",
+    organizationName: "Demo Organization",
+    organizationId: "demo-org",
+    userId: "demo-user",
+  };
+  // Desabilitado para desenvolvimento - usar dados demo/mock
+  // const persisted = await getLatestStudyForOrganization(context.organizationId);
+  // const persistedLand = await getLatestLandStudyForOrganization(context.organizationId);
+  // const initialInvestment = await ensureInvestmentCase(context);
+  // const initialAI = await getAIBootstrap(context);
+  // const initialDesign = await ensureDesignWorkspace(context, persisted?.projectId);
+
+  // Mock data para desenvolvimento
+  const persisted = null;
+  const persistedLand = null;
+  const initialInvestment = null;
+  const initialAI = null;
+  const initialDesign = null;
   const initialStudy = persisted ?? (() => {
     const sensitivity = calculateSensitivity(DEMO_PROJECT);
     const results = calculateAllScenarios(DEMO_PROJECT, sensitivity.calculatedAt);
