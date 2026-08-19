@@ -90,9 +90,9 @@ function EvidenceList({ evidence }: { evidence: DesignEvidence[] }) {
 export function DesignIntelligenceView({ initialWorkspace, onWorkspaceChange, onAskAI }: { initialWorkspace: DesignWorkspaceView; onWorkspaceChange: (workspace: DesignWorkspaceView) => void; onAskAI: (prompt: string) => void }) {
   const [workspace, setWorkspace] = useState(initialWorkspace);
   const [tab, setTab] = useState<DesignTab>("dashboard");
-  const [selectedFileId, setSelectedFileId] = useState(initialWorkspace.files[0]?.id ?? "");
-  const [selectedSheetId, setSelectedSheetId] = useState(initialWorkspace.files[0]?.sheets[0]?.id ?? "");
-  const [selectedFindingId, setSelectedFindingId] = useState(initialWorkspace.findings[0]?.id ?? "");
+  const [selectedFileId, setSelectedFileId] = useState(initialWorkspace?.files?.[0]?.id ?? "");
+  const [selectedSheetId, setSelectedSheetId] = useState(initialWorkspace?.files?.[0]?.sheets?.[0]?.id ?? "");
+  const [selectedFindingId, setSelectedFindingId] = useState(initialWorkspace?.findings?.[0]?.id ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -104,9 +104,9 @@ export function DesignIntelligenceView({ initialWorkspace, onWorkspaceChange, on
   const [zoom, setZoom] = useState(1);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const selectedFile = workspace.files.find((file) => file.id === selectedFileId) ?? workspace.files[0];
-  const selectedSheet = selectedFile?.sheets.find((sheet) => sheet.id === selectedSheetId) ?? selectedFile?.sheets[0];
-  const selectedFinding = workspace.findings.find((finding) => finding.id === selectedFindingId) ?? workspace.findings[0];
+  const selectedFile = workspace?.files?.find((file) => file.id === selectedFileId) ?? workspace?.files?.[0];
+  const selectedSheet = selectedFile?.sheets?.find((sheet) => sheet.id === selectedSheetId) ?? selectedFile?.sheets?.[0];
+  const selectedFinding = workspace?.findings?.find((finding) => finding.id === selectedFindingId) ?? workspace?.findings?.[0];
   const keyMetrics = useMemo(() => workspace.metrics.filter((metric) => Object.hasOwn(metricLabels, metric.name)), [workspace.metrics]);
   const privateEfficiency = workspace.metrics.find((metric) => metric.name === "PRIVATE_TOTAL_RATE");
 

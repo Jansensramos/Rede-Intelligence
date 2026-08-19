@@ -90,13 +90,11 @@ function statusClass(severity: FindingSeverity) {
 function MetricCard({ label, value, meta, tone, icon: Icon }: { label: string; value: string; meta: string; tone?: "positive" | "negative" | "neutral"; icon: typeof Gauge }) {
   return (
     <article className="metric-card">
-      <div className="metric-top"><span>{label}</span><Icon size={17} /></div>
-      <strong>{value}</strong>
+const [selectedField, setSelectedField] = useState(initialWorkspace?.files?.[0]?.id ?? "");      <strong>{value}</strong>
       <small className={tone ? `metric-${tone}` : ""}>{meta}</small>
-    </article>
+          </article>
   );
 }
-
 function SectionTitle({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: React.ReactNode }) {
   return (
     <header className="section-title">
@@ -218,7 +216,14 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
 
         <div className="workspace-content">
           <div className="project-heading">
-            {view === "land" ? <div><span className="eyebrow">TERRENO · {landWorkspace.snapshot.landAsset.city.toUpperCase()}/{landWorkspace.snapshot.landAsset.state}</span><h1>{landWorkspace.snapshot.landAsset.name}</h1><p>{number.format(landWorkspace.snapshot.landAsset.area)} m² · testada {number.format(landWorkspace.snapshot.landAsset.frontage)} m · Land snapshot v{landWorkspace.versionNumber}</p></div> : view === "design" ? <div><span className="eyebrow">PROJETOS & REVISÃO · {project.city.toUpperCase()}/{project.state}</span><h1>Design Intelligence</h1><p>{designWorkspace.revision.label} · {designWorkspace.summary.openFindings} findings abertos · {designWorkspace.opportunities.length} oportunidades</p></div> : <div><span className="eyebrow">EMPREENDIMENTO · {project.city.toUpperCase()}/{project.state}</span><h1>{project.projectName}</h1><p>{project.units} unidades · {number.format(Number(project.privateAreaPerUnitM2) * project.units)} m² privativos · entrega no mês {result.metrics.deliveryMonth}</p></div>}
+{view === "land" && landWorkspace?.snapshot ? (
+  <div>
+    <span className="eyebrow">TERRENO : {landWorkspace.snapshot.landAsset.city}</span>
+    {/* ... resto do conteúdo de terreno ... */}
+  </div>
+) : view === "land" ? (
+  <div className="placeholder">Carregando dados de terreno...</div>
+) : null}
             {view !== "land" && <div className="scenario-switch" aria-label="Cenário ativo">{(["conservative", "base", "aggressive"] as ScenarioKey[]).map((key) => <button key={key} className={scenario === key ? "is-active" : ""} onClick={() => setScenario(key)}>{SCENARIOS[key].label}</button>)}</div>}
           </div>
 
