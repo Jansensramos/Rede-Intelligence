@@ -1,0 +1,17 @@
+node_modules
+.next
+.next-dev
+coverage
+dist
+.env
+.rede-storage/
+outputs/
+work/
+.env.local
+*.log
+*.tsbuildinfo
+.DS_Store
+.git/
+work/
+outputs/
+.pgdata/
