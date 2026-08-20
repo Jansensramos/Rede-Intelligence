@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createBudget, listProjectBudgets } from "@/application/budget/budget-service";
-import { prisma } from "@/infrastructure/database";
+import { prisma } from "@/infrastructure/database/prisma";
 
 export async function GET(request: NextRequest) {
   try {

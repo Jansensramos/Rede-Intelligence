@@ -41,6 +41,7 @@ import { LandIntelligenceView } from "./land-intelligence-view";
 import { InvestmentSuiteView } from "./investment-suite-view";
 import { RedeAIView } from "./rede-ai-view";
 import { DesignIntelligenceView } from "./design-intelligence-view";
+import { BudgetEditor } from "./BudgetEditor";
 import { logoutAction } from "@/app/actions/auth";
 import { createStudyAction, createStudyVersionAction } from "@/app/actions/studies";
 import { reassessInvestmentCaseAction } from "@/app/actions/investment";
@@ -55,7 +56,7 @@ import { SCENARIOS } from "@/domain/financial/scenarios";
 import type { ProjectAssumptions, ScenarioKey } from "@/domain/financial/types";
 import { analyzeRisk, type FindingSeverity } from "@/domain/risk/rules";
 
-type ViewKey = "overview" | "assumptions" | "land" | "design" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit";
+type ViewKey = "overview" | "assumptions" | "land" | "design" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "budget" | "ai" | "cashflow" | "risks" | "audit";
 type EditorMode = "create" | "version";
 
 const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
@@ -64,6 +65,7 @@ const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
   { key: "land", label: "Terreno & Potencial", icon: MapPinned },
   { key: "design", label: "Design Intelligence", icon: Layers3 },
   { key: "scenarios", label: "Cenários", icon: BarChart3 },
+  { key: "budget", label: "Orçamento", icon: CircleDollarSign },
   { key: "sensitivity", label: "Sensibilidade", icon: SlidersHorizontal },
   { key: "redteam", label: "REDE Red Team", icon: Radar },
   { key: "committee", label: "Investment Committee", icon: Gavel },
@@ -90,9 +92,9 @@ function statusClass(severity: FindingSeverity) {
 function MetricCard({ label, value, meta, tone, icon: Icon }: { label: string; value: string; meta: string; tone?: "positive" | "negative" | "neutral"; icon: typeof Gauge }) {
   return (
     <article className="metric-card">
-const [selectedField, setSelectedField] = useState(initialWorkspace?.files?.[0]?.id ?? "");      <strong>{value}</strong>
+      <strong>{value}</strong>
       <small className={tone ? `metric-${tone}` : ""}>{meta}</small>
-          </article>
+    </article>
   );
 }
 function SectionTitle({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: React.ReactNode }) {
@@ -281,6 +283,51 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
           {view === "land" && <LandIntelligenceView initialLand={landWorkspace} onLandChange={(nextLand) => { setLandWorkspace(nextLand); void reassessInvestmentCaseAction(investmentWorkspace.id, study.studyVersionId, nextLand.versionId).then((response) => { if (response.ok) setInvestmentWorkspace(response.data); }); }} />}
 
           {view === "design" && <DesignIntelligenceView initialWorkspace={designWorkspace} onWorkspaceChange={setDesignWorkspace} onAskAI={(prompt) => openAI(prompt)} />}
+
+          {view === "budget" && (
+            <div className="view-stack">
+              <BudgetEditor
+                budgetId="budget-colinas-mooca"
+                projectName="Colinas da Mooca"
+                lineItems={[
+                  { id: "1", phase: "FOUNDATION", category: "CONSTRUCTION", description: "Escavação + Fundação", quantity: 2500, unit: "m²", unitCost: 336, totalCost: 840000 },
+                  { id: "2", phase: "STRUCTURE", category: "CONSTRUCTION", description: "Pilares + Vigas", quantity: 2800, unit: "m²", unitCost: 600, totalCost: 1680000 },
+                  { id: "3", phase: "MASONRY", category: "CONSTRUCTION", description: "Vedação + Blocos", quantity: 2100, unit: "m²", unitCost: 280, totalCost: 588000 },
+                  { id: "4", phase: "FINISHING", category: "CONSTRUCTION", description: "Acabamento Interno", quantity: 2000, unit: "m²", unitCost: 504, totalCost: 1008000 },
+                  { id: "5", phase: "MEP", category: "CONSTRUCTION", description: "Instalações MEP", quantity: 2800, unit: "m²", unitCost: 300, totalCost: 840000 },
+                  { id: "6", phase: "LAND_PREP", category: "LAND", description: "Aquisição de Terreno", quantity: 1, unit: "lote", unitCost: 2000000, totalCost: 2000000 },
+                  { id: "7", phase: "LAND_PREP", category: "LAND", description: "ITBI", quantity: 1, unit: "lote", unitCost: 160000, totalCost: 160000 },
+                  { id: "8", phase: "LAND_PREP", category: "LAND", description: "Cartório + Custas", quantity: 1, unit: "lote", unitCost: 40000, totalCost: 40000 },
+                  { id: "9", phase: "DELIVERY", category: "COMMERCIAL", description: "Corretagem (3%)", quantity: 1, unit: "projeto", unitCost: 504000, totalCost: 504000 },
+                  { id: "10", phase: "DELIVERY", category: "COMMERCIAL", description: "Marketing e Publicidade", quantity: 1, unit: "projeto", unitCost: 840000, totalCost: 840000 },
+                  { id: "11", phase: "DELIVERY", category: "COMMERCIAL", description: "Showroom e Maquete", quantity: 1, unit: "projeto", unitCost: 168000, totalCost: 168000 },
+                  { id: "12", phase: "LAND_PREP", category: "TAXES", description: "Aprovação Prefeitura", quantity: 1, unit: "projeto", unitCost: 420000, totalCost: 420000 },
+                  { id: "13", phase: "FOUNDATION", category: "TAXES", description: "Licenças Ambientais", quantity: 1, unit: "projeto", unitCost: 168000, totalCost: 168000 },
+                  { id: "14", phase: "STRUCTURE", category: "TAXES", description: "Anotação de Responsabilidade", quantity: 1, unit: "projeto", unitCost: 252000, totalCost: 252000 },
+                  { id: "15", phase: "LAND_PREP", category: "PROJECT", description: "Projeto Arquitetônico", quantity: 1, unit: "projeto", unitCost: 336000, totalCost: 336000 },
+                  { id: "16", phase: "FOUNDATION", category: "PROJECT", description: "Projetos Complementares", quantity: 1, unit: "projeto", unitCost: 252000, totalCost: 252000 },
+                  { id: "17", phase: "FOUNDATION", category: "PROJECT", description: "Coordenação", quantity: 24, unit: "mês", unitCost: 20833, totalCost: 500000 },
+                  { id: "18", phase: "STRUCTURE", category: "CONTINGENCY", description: "Contingência Técnica", quantity: 1, unit: "projeto", unitCost: 1344000, totalCost: 1344000 },
+                ]}
+                totalBudget={12936000}
+                summary={{
+                  totalBudget: 12936000,
+                  categoryTotals: [
+                    { category: "CONSTRUCTION", totalCost: 6200000, percentage: 47.9 },
+                    { category: "LAND", totalCost: 2200000, percentage: 17.0 },
+                    { category: "COMMERCIAL", totalCost: 1512000, percentage: 11.7 },
+                    { category: "TAXES", totalCost: 840000, percentage: 6.5 },
+                    { category: "PROJECT", totalCost: 840000, percentage: 6.5 },
+                    { category: "CONTINGENCY", totalCost: 1344000, percentage: 10.4 },
+                  ],
+                  phaseTotals: [],
+                  vgv: 16800000,
+                  margin: 3864000,
+                  marginPercentage: 23.0,
+                }}
+              />
+            </div>
+          )}
 
           {view === "scenarios" && (
             <div className="view-stack">
