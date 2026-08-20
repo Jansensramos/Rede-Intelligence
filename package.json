@@ -30,6 +30,8 @@
     "qrcode": "1.5.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "three": "0.185.1",
+    "web-ifc": "0.0.77",
     "zod": "^4.0.17"
   },
   "devDependencies": {
@@ -38,6 +40,7 @@
     "@types/qrcode": "1.5.5",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
+    "@types/three": "0.185.4",
     "eslint": "^9.33.0",
     "eslint-config-next": "^15.4.6",
     "prisma": "^6.14.0",

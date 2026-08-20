@@ -10,6 +10,7 @@ import {
   uploadAndProcessDesignFile,
 } from "@/application/design/design-service";
 import { generateDesignReviewReport } from "@/application/design/design-report-service";
+import { createFindingFromClash } from "@/application/design/bim-service";
 
 type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : "A operação não pôde ser concluída.";
@@ -31,7 +32,7 @@ export async function uploadDesignFileAction(formData: FormData): Promise<Action
   const file = formData.get("file");
   if (!(file instanceof File)) return { ok: false, error: "Selecione um arquivo válido." };
   try {
-    return { ok: true, data: await uploadAndProcessDesignFile(context, { packageId: String(formData.get("packageId") ?? ""), revisionId: String(formData.get("revisionId") ?? ""), discipline: String(formData.get("discipline") ?? "OTHER"), revision: String(formData.get("revision") ?? "01"), file }) };
+    return { ok: true, data: await uploadAndProcessDesignFile(context, { packageId: String(formData.get("packageId") ?? ""), revisionId: String(formData.get("revisionId") ?? ""), discipline: String(formData.get("discipline") ?? "OTHER"), revision: String(formData.get("revision") ?? "01"), file }, { deferProcessing: true }) };
   } catch (error) { return { ok: false, error: errorMessage(error) }; }
 }
 
@@ -59,4 +60,10 @@ export async function generateDesignReviewReportAction(packageId: string) {
     const result = await generateDesignReviewReport(context, packageId);
     return { ok: true as const, data: { ...result, content: undefined, contentBase64: Buffer.from(result.content).toString("base64") } };
   } catch (error) { return { ok: false as const, error: errorMessage(error) }; }
+}
+
+export async function createFindingFromClashAction(clashId: string): Promise<ActionResult<string>> {
+  const context = await requireAuthContext();
+  try { return { ok: true, data: await createFindingFromClash(context, clashId) }; }
+  catch (error) { return { ok: false, error: errorMessage(error) }; }
 }

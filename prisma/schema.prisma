@@ -692,6 +692,27 @@ enum DesignChangeKind {
   UNCHANGED
 }
 
+enum BimModelStatus {
+  UPLOADED
+  PROCESSING
+  PROCESSED
+  ERROR
+}
+
+enum BimClashType {
+  HARD
+  CLEARANCE
+  DUPLICATE
+}
+
+enum BimClashStatus {
+  OPEN
+  UNDER_REVIEW
+  ACCEPTED
+  RESOLVED
+  DISCARDED
+}
+
 model Organization {
   id               String                    @id @default(cuid())
   name             String
@@ -713,6 +734,7 @@ model Organization {
   investmentBrands OrganizationBrandConfig[]
   designPackages   DesignProjectPackage[]
   designRuleSets   DesignRuleSet[]
+  bimModels        BimModel[]
   budgets          Budget[]
 
   @@map("organizations")
@@ -847,6 +869,7 @@ model Project {
   auditLogs      AuditLog[]
   landAssets     LandAsset[]
   designPackages DesignProjectPackage[]
+  bimModels      BimModel[]
   budgets        Budget[]
 
   @@unique([organizationId, name])
@@ -2967,6 +2990,7 @@ model DesignProjectPackage {
   baselines          DesignBaseline[]
   auditLogs          DesignAuditLog[]
   ruleSets           DesignRuleSet[]
+  bimModels          BimModel[]
 
   @@unique([organizationId, projectId, name, version])
   @@index([organizationId, status, updatedAt])
@@ -3001,6 +3025,9 @@ model DesignRevision {
   detectedUnits    DetectedUnit[]
   clashes          DesignClash[]
   ruleChecks       DesignRuleCheck[]
+  bimModels        BimModel[]
+  bimComparisonsFrom BimRevisionComparison[] @relation("BimComparisonFrom")
+  bimComparisonsTo   BimRevisionComparison[] @relation("BimComparisonTo")
 
   @@unique([packageId, versionNumber])
   @@index([packageId, createdAt])
@@ -3035,6 +3062,7 @@ model DesignFile {
   revisionRecord     DesignRevision        @relation(fields: [revisionId], references: [id], onDelete: Cascade)
   sheets             DesignSheet[]
   jobs               DesignProcessingJob[]
+  bimModel           BimModel?
 
   @@unique([packageId, checksum, revisionId])
   @@index([packageId, discipline, status])
@@ -3086,6 +3114,89 @@ model DesignProcessingJob {
   @@index([status, createdAt])
   @@index([fileId, createdAt])
   @@map("design_processing_jobs")
+}
+
+model BimModel {
+  id                String         @id @default(cuid())
+  organizationId    String         @map("organization_id")
+  projectId         String         @map("project_id")
+  packageId         String         @map("package_id")
+  revisionId        String         @map("revision_id")
+  fileId            String         @unique @map("file_id")
+  status            BimModelStatus @default(UPLOADED)
+  ifcSchema         String?        @map("ifc_schema")
+  geometryKey       String?        @map("geometry_key")
+  geometryChecksum  String?        @map("geometry_checksum")
+  spatialTree       Json?          @map("spatial_tree")
+  bounds            Json?
+  elementCount      Int            @default(0) @map("element_count")
+  triangleCount     Int            @default(0) @map("triangle_count")
+  fragmentCount     Int            @default(0) @map("fragment_count")
+  processingMs      Int?           @map("processing_ms")
+  loadEstimateMs    Int?           @map("load_estimate_ms")
+  errorMessage      String?        @map("error_message") @db.Text
+  processedAt       DateTime?      @map("processed_at")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  organization      Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project           Project        @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  package           DesignProjectPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  revision          DesignRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  file              DesignFile     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  elements          BimElement[]
+  clashes           DesignClash[]
+
+  @@index([organizationId, projectId, status])
+  @@index([packageId, revisionId])
+  @@map("bim_models")
+}
+
+model BimElement {
+  id              String   @id @default(cuid())
+  modelId         String   @map("model_id")
+  expressId       Int      @map("express_id")
+  ifcGuid         String?  @map("ifc_guid")
+  ifcType         String   @map("ifc_type")
+  name            String?
+  code            String?
+  discipline      String?
+  parentExpressId Int?     @map("parent_express_id")
+  building        String?
+  tower           String?
+  storey          String?
+  space           String?
+  geometry        Json?
+  bounds          Json?
+  centroid        Json?
+  properties      Json?
+  quantities      Json?
+  fingerprint     String
+  confidence      DesignConfidence @default(HIGH)
+  createdAt       DateTime @default(now()) @map("created_at")
+  model           BimModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  clashesAsA      DesignClash[] @relation("BimClashElementA")
+  clashesAsB      DesignClash[] @relation("BimClashElementB")
+
+  @@unique([modelId, expressId])
+  @@index([modelId, ifcGuid])
+  @@index([modelId, ifcType, storey])
+  @@map("bim_elements")
+}
+
+model BimRevisionComparison {
+  id             String           @id @default(cuid())
+  packageId      String           @map("package_id")
+  revisionFromId String           @map("revision_from_id")
+  revisionToId   String           @map("revision_to_id")
+  summary        Json
+  changes        Json
+  tolerance      Json
+  createdAt      DateTime         @default(now()) @map("created_at")
+  revisionFrom   DesignRevision   @relation("BimComparisonFrom", fields: [revisionFromId], references: [id], onDelete: Cascade)
+  revisionTo     DesignRevision   @relation("BimComparisonTo", fields: [revisionToId], references: [id], onDelete: Cascade)
+
+  @@unique([packageId, revisionFromId, revisionToId])
+  @@map("bim_revision_comparisons")
 }
 
 model DesignMetric {
@@ -3432,17 +3543,31 @@ model DetectedUnit {
 }
 
 model DesignClash {
-  id         String                @id @default(cuid())
-  revisionId String                @map("revision_id")
-  clashType  String                @map("clash_type")
-  elementA   Json                  @map("element_a")
-  elementB   Json                  @map("element_b")
-  geometry   Json
-  severity   DesignFindingSeverity
-  confidence DesignConfidence
-  status     DesignFindingStatus   @default(OPEN)
-  createdAt  DateTime              @default(now()) @map("created_at")
-  revision   DesignRevision        @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  id             String                @id @default(cuid())
+  modelId        String?               @map("model_id")
+  revisionId     String                @map("revision_id")
+  elementAId     String?               @map("element_a_id")
+  elementBId     String?               @map("element_b_id")
+  clashType      BimClashType          @map("clash_type")
+  elementA       Json                  @map("element_a")
+  elementB       Json                  @map("element_b")
+  geometry       Json
+  coordinate     Json?
+  description    String                @default("") @db.Text
+  severity       DesignFindingSeverity
+  confidence     DesignConfidence
+  status         BimClashStatus        @default(OPEN)
+  origin         DesignDataOrigin      @default(CALCULATED)
+  clearanceMm    Decimal?              @map("clearance_mm") @db.Decimal(12, 4)
+  ownerId        String?               @map("owner_id")
+  findingId      String?               @map("finding_id")
+  resolvedAt     DateTime?             @map("resolved_at")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  model          BimModel?             @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  elementARecord BimElement?           @relation("BimClashElementA", fields: [elementAId], references: [id], onDelete: SetNull)
+  elementBRecord BimElement?           @relation("BimClashElementB", fields: [elementBId], references: [id], onDelete: SetNull)
+  revision       DesignRevision        @relation(fields: [revisionId], references: [id], onDelete: Cascade)
 
   @@index([revisionId, status, severity])
   @@map("design_clashes")

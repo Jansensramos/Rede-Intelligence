@@ -217,4 +217,13 @@ export interface DesignWorkspaceView {
   summary: DesignReviewOutput["summary"];
   insights: string[];
   supportedFormats: Array<{ extension: string; support: DesignFileSupport; note: string }>;
+  bim: BimWorkspaceView | null;
+}
+
+export interface BimWorkspaceView {
+  model: { id: string; fileId: string; revisionId: string; status: string; schema: string | null; elementCount: number; triangleCount: number; processingMs: number | null; bounds: unknown; processedAt: string | null };
+  elements: Array<{ id: string; expressId: number; guid: string | null; type: string; name: string | null; code: string | null; building: string | null; tower: string | null; storey: string | null; space: string | null; bounds: unknown; centroid: unknown; properties: unknown; quantities: unknown; confidence: string }>;
+  clashes: Array<{ id: string; type: string; status: string; severity: string; confidence: string; description: string; elementAId: string | null; elementBId: string | null; elementA: unknown; elementB: unknown; coordinate: unknown; findingId: string | null }>;
+  detectedUnits: Array<{ id: string; key: string; type: string; floor: string | null; privateArea: number | null; confidence: string; origin: string }>;
+  comparison: { summary: unknown; changes: unknown; tolerance: unknown } | null;
 }

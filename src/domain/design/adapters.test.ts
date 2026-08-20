@@ -20,7 +20,7 @@ describe("Design file adapters and security", () => {
     expect(result.limitations.join(" ")).toMatch(/Escala não confirmada/);
   });
 
-  it("extracts IFC spatial metadata without pretending to have 3D geometry", async () => {
+  it("extracts IFC spatial metadata in preflight before the asynchronous geometric job", async () => {
     const ifc = `ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n#1=IFCPROJECT('g',$,'Demo',$,$,$,$,$,$);\n#2=IFCBUILDING('b',$,'Torre A',$,$,$,$,$,$,$,$,$);\n#3=IFCBUILDINGSTOREY('s',$,'Térreo',$,$,$,$,$,$,0.);\nENDSEC;\nEND-ISO-10303-21;`;
     const result = await processDesignFile({ fileName: "modelo.ifc", mimeType: "application/ifc", bytes: new TextEncoder().encode(ifc) });
     expect(result.status).toBe("PARTIAL");

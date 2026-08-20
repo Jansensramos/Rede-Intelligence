@@ -5,8 +5,6 @@ import { useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
-  Boxes,
-  Building2,
   CheckCircle2,
   ChevronRight,
   CircleDollarSign,
@@ -42,6 +40,7 @@ import {
   uploadDesignFileAction,
 } from "@/app/actions/design";
 import type { DesignEvidence, DesignWorkspaceView } from "@/domain/design";
+import { BimViewer } from "./bim-viewer";
 
 type DesignTab = "dashboard" | "viewer" | "findings" | "value" | "diff";
 const number = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
@@ -183,11 +182,11 @@ export function DesignIntelligenceView({ initialWorkspace, onWorkspaceChange, on
   }
 
   const tabs: Array<{ key: DesignTab; label: string; icon: typeof Gauge; count?: number }> = [
-    { key: "dashboard", label: "Overview", icon: Gauge },
-    { key: "viewer", label: "Pranchas & BIM", icon: Layers3, count: workspace.files.length },
-    { key: "findings", label: "Findings", icon: Pin, count: workspace.summary.openFindings },
-    { key: "value", label: "Value Engineering", icon: WandSparkles, count: workspace.opportunities.length },
-    { key: "diff", label: "Alternativas & Diff", icon: GitCompareArrows, count: workspace.alternatives.length },
+    { key: "dashboard", label: "Visão geral", icon: Gauge },
+    { key: "viewer", label: "Pranchas e Modelo BIM", icon: Layers3, count: workspace.files.length },
+    { key: "findings", label: "Apontamentos", icon: Pin, count: workspace.summary.openFindings },
+    { key: "value", label: "Engenharia de Valor", icon: WandSparkles, count: workspace.opportunities.length },
+    { key: "diff", label: "Alternativas e Comparação", icon: GitCompareArrows, count: workspace.alternatives.length },
   ];
 
   return <div className="design-module">
@@ -236,7 +235,7 @@ export function DesignIntelligenceView({ initialWorkspace, onWorkspaceChange, on
           {!selectedFile && <div className="design-empty-view"><ScanSearch size={42} /><h3>Selecione ou envie um projeto</h3><p>O sistema nunca mede pranchas sem escala confiável.</p><button className="button button-primary" onClick={() => setUploadOpen(true)}><Upload size={15} /> Enviar arquivo</button></div>}
           {selectedFile?.type === "PDF" && <object key={`${selectedFile.id}-${selectedSheet?.pageNumber}`} data={`/api/design/files/${selectedFile.id}#page=${selectedSheet?.pageNumber ?? 1}&toolbar=0`} type="application/pdf" className="design-document" style={{ transform: `scale(${zoom})` }}><a href={`/api/design/files/${selectedFile.id}`} target="_blank">Abrir PDF</a></object>}
           {selectedFile && ["PNG", "JPG", "JPEG", "WEBP"].includes(selectedFile.type) && <img className="design-document design-image" src={`/api/design/files/${selectedFile.id}`} alt={selectedFile.name} style={{ transform: `scale(${zoom})` }} />}
-          {selectedFile?.type === "IFC" && <div className="design-bim-placeholder"><Boxes size={48} /><span className="eyebrow">IFC METADATA VIEW</span><h3>Árvore BIM extraída com segurança</h3><div className="design-bim-tree"><div><Building2 size={15} /> Project</div><div className="depth-1"><Boxes size={15} /> {String(selectedFile.metadata?.schema ?? "IFC")}</div><div className="depth-2"><Layers3 size={15} /> {Array.isArray(selectedFile.metadata?.storeys) ? selectedFile.metadata.storeys.length : 0} pavimento(s) identificado(s)</div></div><p>Geometria 3D requer o BIM geometry adapter. Nenhuma geometria fictícia é exibida.</p></div>}
+          {selectedFile?.type === "IFC" && <BimViewer workspace={workspace.bim} />}
           {selectedFile && !["PDF", "PNG", "JPG", "JPEG", "WEBP", "IFC"].includes(selectedFile.type) && <div className="design-empty-view"><FileBox size={42} /><h3>{selectedFile.type} processado como dados</h3><p>Consulte metadados e limitações no painel lateral.</p></div>}
           <div className={`design-markup-layer ${annotating ? "capture" : ""}`}>{workspace.findings.filter((finding) => !selectedSheet || finding.sheetId === selectedSheet.id).map((finding) => { const region = finding.evidence.find((item) => item.region)?.region; return region ? <button key={finding.id} className={`design-pin pin-${severityTone(finding.severity)}`} style={{ left: `${(region.x + region.width / 2) * 100}%`, top: `${(region.y + region.height / 2) * 100}%` }} onClick={(event) => { event.stopPropagation(); setSelectedFindingId(finding.id); setTab("findings"); }} title={finding.title}><Pin size={13} /></button> : null; })}{draftRegion && <span className="design-draft-region" style={{ left: `${draftRegion.x * 100}%`, top: `${draftRegion.y * 100}%`, width: `${draftRegion.width * 100}%`, height: `${draftRegion.height * 100}%` }} />}</div>
         </div>

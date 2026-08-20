@@ -4,3 +4,4 @@ export * from "./adapters";
 export * from "./review-engine";
 export * from "./demo";
 export * from "./report";
+export * from "./bim-geometry";

@@ -13,7 +13,7 @@ function demoWorkspace(): DesignWorkspaceView {
     metrics: result.calculatedMetrics.map((metric, index) => ({ id: `metric-${index}`, name: metric.name, value: metric.value, unit: metric.unit, origin: metric.origin, confidence: metric.confidence, evidenceRefs: metric.evidence.map((item) => item.ref) })),
     findings: result.findings.map((finding, index) => ({ ...finding, id: `finding-${index}` })),
     opportunities: result.opportunities.map((opportunity, index) => ({ ...opportunity, id: `opportunity-${index}`, status: "IDENTIFIED" })),
-    alternatives: [], scorecard: result.scorecard, summary: result.summary, insights: result.insights, supportedFormats: SUPPORTED_DESIGN_FORMATS,
+    alternatives: [], bim: null, scorecard: result.scorecard, summary: result.summary, insights: result.insights, supportedFormats: SUPPORTED_DESIGN_FORMATS,
   };
 }
 

@@ -22,7 +22,7 @@ const MIME_BY_EXTENSION: Record<string, string[]> = {
 export const SUPPORTED_DESIGN_FORMATS: Array<{ extension: string; support: DesignFileSupport; note: string }> = [
   { extension: "PDF", support: "SUPPORTED", note: "Páginas, dimensões e metadados; texto nativo depende do conteúdo." },
   { extension: "PNG/JPG/WEBP", support: "SUPPORTED", note: "Imagem validada; OCR é opcional e não é usado para inventar medidas." },
-  { extension: "IFC", support: "PARTIAL", note: "Cabeçalho, árvore espacial e propriedades básicas; geometria requer BIM adapter." },
+  { extension: "IFC", support: "SUPPORTED", note: "Geometria, árvore espacial, propriedades, quantidades, comparação e conflitos via web-ifc." },
   { extension: "DXF", support: "PARTIAL", note: "Metadados ASCII e layers; conversor geométrico pode ser plugado." },
   { extension: "GeoJSON/CSV", support: "SUPPORTED", note: "Estrutura e conteúdo tabular validado." },
   { extension: "XLSX/DOCX", support: "PARTIAL", note: "Pacote validado; extração especializada permanece atrás do adapter." },

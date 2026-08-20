@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { after } from "next/server";
 import type { Prisma } from "@prisma/client";
 import type { AuthContext } from "@/application/auth/session";
 import { getLatestStudyForOrganization } from "@/application/studies/study-service";
@@ -30,6 +31,7 @@ import { calculateRedeScore } from "@/domain/score";
 import { calculateSensitivity } from "@/domain/sensitivity";
 import { prisma } from "@/infrastructure/database/prisma";
 import { designFileStorage } from "@/infrastructure/storage/design-file-storage";
+import { getLatestBimWorkspace, processIfcBimFile } from "./bim-service";
 
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 const record = (value: Prisma.JsonValue | null | undefined) => (value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {});
@@ -188,7 +190,7 @@ export async function createDesignRevision(context: AuthContext, raw: unknown) {
   return getDesignWorkspace(context.organizationId, designPackage.id);
 }
 
-export async function uploadAndProcessDesignFile(context: AuthContext, raw: { packageId: string; revisionId: string; discipline: string; revision: string; file: File }) {
+export async function uploadAndProcessDesignFile(context: AuthContext, raw: { packageId: string; revisionId: string; discipline: string; revision: string; file: File }, options: { deferProcessing?: boolean } = {}) {
   assertCanMutate(context);
   const input = uploadDesignFileSchema.parse(raw);
   const designPackage = await packageForTenant(context.organizationId, input.packageId);
@@ -204,9 +206,11 @@ export async function uploadAndProcessDesignFile(context: AuthContext, raw: { pa
   const document = designPackage.investmentCaseId ? await prisma.projectDocument.create({ data: { investmentCaseId: designPackage.investmentCaseId, category: disciplineDocumentCategory(input.discipline), title: raw.file.name, version: documentVersion, status: "RECEIVED", confidentiality: "STRICTLY_CONFIDENTIAL", fileName: raw.file.name, mimeType: validation.mimeType, fileSize: stored.size, checksum: stored.checksum, source: "DESIGN_INTELLIGENCE_PRIVATE_STORAGE", metadata: json({ provider: stored.provider, storageKey: stored.key, designPackageId: designPackage.id, revisionId: revision.id }), createdById: context.userId } }) : null;
   const file = await prisma.designFile.create({ data: { packageId: designPackage.id, revisionId: revision.id, documentId: document?.id, fileName: raw.file.name, fileType: validation.extension.toUpperCase(), mimeType: validation.mimeType, discipline: input.discipline, revision: input.revision, status: "VALIDATED", checksum: stored.checksum, fileSize: stored.size, storageProvider: stored.provider, storageKey: stored.key, uploadedById: context.userId, processingStatus: "QUEUED", processingMetadata: json({ validation: { mime: validation.mimeType, extension: validation.extension, checksumAlgorithm: "SHA-256" }, untrusted: true }) }, include: { jobs: true } });
   const job = await prisma.designProcessingJob.create({ data: { fileId: file.id, status: "QUEUED", progress: 0 } });
+  if (file.fileType === "IFC") await prisma.bimModel.create({ data: { organizationId: context.organizationId, projectId: designPackage.projectId, packageId: designPackage.id, revisionId: revision.id, fileId: file.id, status: "UPLOADED" } });
   await prisma.designProjectPackage.update({ where: { id: designPackage.id }, data: { status: "PROCESSING", disciplineSet: json([...new Set([...array(designPackage.disciplineSet).map(String), input.discipline])]) } });
   await prisma.designAuditLog.create({ data: { organizationId: context.organizationId, packageId: designPackage.id, userId: context.userId, action: "FILE_UPLOADED", entityType: "DesignFile", entityId: file.id, after: json({ fileName: file.fileName, checksum, discipline: input.discipline, revision: input.revision, documentId: document?.id }) } });
-  await processStoredFile(context, file.id, job.id);
+  if (options.deferProcessing) after(() => processStoredFile(context, file.id, job.id));
+  else await processStoredFile(context, file.id, job.id);
   return getDesignWorkspace(context.organizationId, designPackage.id);
 }
 
@@ -217,6 +221,11 @@ async function processStoredFile(context: Pick<AuthContext, "organizationId" | "
   try {
     const bytes = await designFileStorage.read(file.storageKey);
     await prisma.designProcessingJob.update({ where: { id: jobId }, data: { status: "EXTRACTING", progress: 35 } });
+    if (file.fileType === "IFC") {
+      await processIfcBimFile(context, fileId, jobId);
+      await runReview(context, file.packageId, file.revisionId);
+      return;
+    }
     const result = await processDesignFile({ fileName: file.fileName, mimeType: file.mimeType, bytes });
     await prisma.designProcessingJob.update({ where: { id: jobId }, data: { status: "ANALYZING", progress: 65, adapter: result.adapter, adapterVersion: result.version } });
     await prisma.$transaction(async (tx) => {
@@ -315,6 +324,7 @@ export async function getDesignWorkspace(organizationId: string, packageId: stri
   const findings = designPackage.findings.filter((finding) => finding.revisionId === revision.id).sort((a, b) => severityIndex[b.severity] - severityIndex[a.severity]).map((finding) => ({ id: finding.id, key: finding.sourceRuleKey ?? finding.id, discipline: finding.discipline, category: finding.category, type: finding.type, severity: finding.severity, confidence: finding.confidence, title: finding.title, description: finding.description, implication: finding.implication, recommendation: finding.recommendation, evidence: finding.evidence.map((evidence) => ({ ref: evidence.ref, label: evidence.label, value: evidence.value ?? undefined, origin: evidence.sourceType, confidence: evidence.confidence, method: String(record(evidence.metadata).method ?? "PERSISTED_EVIDENCE"), ...(record(evidence.location).region ? { region: record(evidence.location).region as DesignEvidence["region"] } : {}) })), relatedMetric: finding.relatedMetric ?? undefined, potentialImpact: finding.potentialImpact ? record(finding.potentialImpact) as Record<string, number | string | null> : undefined, status: finding.status, fileId: finding.fileId ?? undefined, sheetId: finding.sheetId ?? undefined, ownerId: finding.ownerId ?? undefined, dueDate: finding.dueDate?.toISOString() } satisfies DesignFindingDraft & { id: string; fileId?: string; sheetId?: string; ownerId?: string; dueDate?: string }));
   const opportunities = designPackage.opportunities.filter((opportunity) => opportunity.revisionId === revision.id).map((opportunity) => ({ id: opportunity.id, key: opportunity.id, title: opportunity.title, category: opportunity.category, currentCondition: opportunity.currentCondition, proposedCondition: opportunity.proposedCondition, evidence: [], relatedFindingKeys: array(opportunity.relatedFindingIds).map(String), designImpact: record(opportunity.designImpact) as Record<string, number | string | null>, costImpact: opportunity.costImpact === null ? null : Number(opportunity.costImpact), revenueImpact: opportunity.revenueImpact === null ? null : Number(opportunity.revenueImpact), scheduleImpactMonths: opportunity.scheduleImpactMonths, riskImpact: opportunity.riskImpact, confidence: opportunity.confidence, effort: opportunity.effort, requiresProfessionalValidation: true as const, valueRank: Number(record(opportunity.designImpact).valueRank ?? 0), status: opportunity.status } satisfies VEOpportunityDraft & { id: string; status: string })).sort((a, b) => b.valueRank - a.valueRank);
   const computedSummary = { criticalFindings: findings.filter((finding) => finding.severity === "CRITICAL").length, openFindings: findings.filter((finding) => !["RESOLVED", "REJECTED", "WONT_FIX", "SUPERSEDED"].includes(finding.status)).length, quantifiedOpportunities: opportunities.filter((opportunity) => opportunity.costImpact !== null || opportunity.revenueImpact !== null).length, efficiencyRate: Number(metrics.find((metric) => metric.name === "PRIVATE_TOTAL_RATE")?.value ?? 0) || null, designDriftRate: Number(metrics.find((metric) => metric.name === "BUILT_AREA_ENGINE_DRIFT_RATE")?.value ?? 0) || null };
+  const bim = await getLatestBimWorkspace(organizationId, designPackage.id);
   return {
     package: { id: designPackage.id, projectId: designPackage.projectId, name: designPackage.name, description: designPackage.description, status: designPackage.status, template: designPackage.template, reviewMode: designPackage.reviewMode, preflightStatus: designPackage.preflightStatus, limitations: array(designPackage.preflightLimits).map(String) },
     revision: { id: revision.id, label: revision.label, versionNumber: revision.versionNumber, status: revision.status },
@@ -329,6 +339,7 @@ export async function getDesignWorkspace(organizationId: string, packageId: stri
     summary: Object.keys(persistedSummary).length ? persistedSummary : computedSummary,
     insights: array(latestSummary.insights as Prisma.JsonValue).map(String),
     supportedFormats: SUPPORTED_DESIGN_FORMATS,
+    bim,
   };
 }
 
