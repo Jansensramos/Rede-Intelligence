@@ -42,6 +42,7 @@ import { InvestmentSuiteView } from "./investment-suite-view";
 import { RedeAIView } from "./rede-ai-view";
 import { DesignIntelligenceView } from "./design-intelligence-view";
 import { BudgetEditor } from "./BudgetEditor";
+import { OperationsView } from "./operations-view";
 import { logoutAction } from "@/app/actions/auth";
 import { createStudyAction, createStudyVersionAction } from "@/app/actions/studies";
 import { reassessInvestmentCaseAction } from "@/app/actions/investment";
@@ -51,6 +52,7 @@ import type { InvestmentCaseWorkspace } from "@/domain/investment";
 import type { AIBootstrapView } from "@/domain/ai";
 import type { DesignWorkspaceView } from "@/domain/design";
 import type { BudgetWorkspaceView } from "@/application/budget/budget-service";
+import type { OperationsWorkspaceView } from "@/application/operations/operations-service";
 import { DEMO_PROJECT } from "@/domain/financial/demo";
 import { calculateAllScenarios } from "@/domain/financial/engine";
 import { SCENARIOS } from "@/domain/financial/scenarios";
@@ -130,7 +132,7 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "RE";
 }
 
-export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; identity: WorkspaceIdentity }) {
+export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, initialOperations, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; initialOperations: OperationsWorkspaceView; identity: WorkspaceIdentity }) {
   const [study, setStudy] = useState<PersistedStudyView>(initialStudy);
   const [landWorkspace, setLandWorkspace] = useState<LandWorkspaceView>(initialLand);
   const [investmentWorkspace, setInvestmentWorkspace] = useState<InvestmentCaseWorkspace>(initialInvestment);
@@ -312,7 +314,9 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
 
           {view === "budget" && (budgetWorkspace ? (
             <div className="view-stack">
-              <SectionTitle eyebrow="ORÇAMENTO" title={`${budgetWorkspace.name} · v${budgetWorkspace.version}`} description="Itens persistidos por empreendimento, organização e versão." />
+              <SectionTitle eyebrow="GESTÃO OPERACIONAL" title="Base Aprovada, Orçamento e Cronograma" description="Referências separadas, versionadas e rastreáveis para a execução do empreendimento." />
+              <OperationsView workspace={initialOperations} />
+              <SectionTitle eyebrow="ESTRUTURA ANALÍTICA" title={`${budgetWorkspace.name} · v${budgetWorkspace.version}`} description="Itens persistidos por empreendimento, organização e versão." />
               <BudgetEditor
                 budgetId={budgetWorkspace.id}
                 projectName={budgetWorkspace.projectName}
@@ -321,7 +325,7 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
                 summary={budgetWorkspace.summary}
                 onUpdateItem={updateBudgetItem}
                 onDeleteItem={deleteBudgetItem}
-                readOnly={budgetWorkspace.status === "APPROVED" || budgetWorkspace.status === "ARCHIVED"}
+                readOnly={["APPROVED", "OFFICIAL", "SUPERSEDED", "CLOSED", "ARCHIVED"].includes(budgetWorkspace.status)}
               />
             </div>
           ) : (

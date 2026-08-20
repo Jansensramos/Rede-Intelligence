@@ -77,6 +77,11 @@ export function planAIIntent(question: string): AIIntentPlan {
   if (/ca atual|zoneamento|urbanistic|terreno/.test(text)) calls.push({ name: "getUrbanScenario", arguments: { type: urbanScenarioType ?? "CURRENT_LEGAL" } }, { name: "getLandAsset", arguments: {} });
   if (/funding|encontre tudo|buscar|procure/.test(text)) calls.push({ name: "searchInternalEvidence", arguments: { query: /funding/.test(text) ? "funding" : question.slice(0, 200), limit: 12 } });
   if (/sensibil|stress|break.?even|onde quebra/.test(text)) calls.push({ name: "getSensitivity", arguments: {} }, { name: "getStressTests", arguments: {} }, { name: "getBreakEven", arguments: {} });
+  if (/base aprovada|o que foi aprovado/.test(text)) calls.push({ name: "getOperationalBaseline", arguments: {} });
+  if (/orcamento oficial|quanto.*planeja.*gastar/.test(text)) calls.push({ name: "getOfficialBudget", arguments: {} });
+  if (/(?:base|orcamento).*(?:acima|abaixo|desvio|diferenca|aument)|maiores categorias.*aument/.test(text)) calls.push({ name: "compareBaselineToBudget", arguments: {} });
+  if (/cronograma fisico|prazo planejado|atividade.*critic/.test(text)) calls.push({ name: "getOperationalSchedule", arguments: {} });
+  if (/desembols|proximos 90 dias|maior necessidade|mes de maior/.test(text)) calls.push({ name: "getProjectedDisbursement", arguments: {} });
   if (/fluxo|exposicao|vgv|margem|roi|tir|vpl|econom|financeir/.test(text)) calls.push({ name: "getEngineResults", arguments: { ...(financialScenario ? { scenario: financialScenario } : {}) } });
   if (/acao|prioridade|hoje|semana/.test(text)) calls.push({ name: "getActionCenter", arguments: {} });
   if (/caminho critico|marco|atrasando/.test(text)) calls.push({ name: "getCriticalPath", arguments: {} });
@@ -94,4 +99,5 @@ export const DEFAULT_AI_SUGGESTIONS = [
   ["FINANCE", "Compare os cenários."], ["FINANCE", "E se o custo de obra subir 10%?"], ["LAND", "Quanto podemos pagar pelo terreno?"],
   ["URBAN", "Qual CA preciso para 1.300 unidades?"], ["COMMITTEE", "Prepare o Comitê."], ["DOCUMENTS", "Quais documentos faltam?"],
   ["DESIGN", "O que você mudaria neste projeto?"], ["DESIGN", "O quadro de áreas fecha?"], ["DESIGN", "Quais são as cinco maiores oportunidades?"],
+  ["OPERATIONS", "Quanto o Orçamento Oficial está acima da Base Aprovada?"], ["OPERATIONS", "Quanto desembolsaremos nos próximos 90 dias?"],
 ].map(([category, prompt]) => ({ category, prompt }));
