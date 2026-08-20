@@ -82,6 +82,11 @@ export function planAIIntent(question: string): AIIntentPlan {
   if (/(?:base|orcamento).*(?:acima|abaixo|desvio|diferenca|aument)|maiores categorias.*aument/.test(text)) calls.push({ name: "compareBaselineToBudget", arguments: {} });
   if (/cronograma fisico|prazo planejado|atividade.*critic/.test(text)) calls.push({ name: "getOperationalSchedule", arguments: {} });
   if (/desembols|proximos 90 dias|maior necessidade|mes de maior/.test(text)) calls.push({ name: "getProjectedDisbursement", arguments: {} });
+  if (/caixa|quanto temos|livre|restrit|aplicaco/.test(text)) calls.push({ name: "getCashPosition", arguments: {} });
+  if (/contas? a pagar|vence|vencid|fornecedor/.test(text)) calls.push({ name: "getPayablesDue", arguments: {} });
+  if (/contas? a receber|recebiv|inadimplen|cliente/.test(text)) calls.push({ name: "getReceivablesDue", arguments: {} });
+  if (/projecao atualizada|por que.*(?:caixa|projecao).*mudou|necessidade de capital/.test(text)) calls.push({ name: "getUpdatedCashProjection", arguments: {} });
+  if (/conciliac|sem conciliar|intercompany|spe.*falta/.test(text)) calls.push({ name: "getReconciliationStatus", arguments: {} });
   if (/fluxo|exposicao|vgv|margem|roi|tir|vpl|econom|financeir/.test(text)) calls.push({ name: "getEngineResults", arguments: { ...(financialScenario ? { scenario: financialScenario } : {}) } });
   if (/acao|prioridade|hoje|semana/.test(text)) calls.push({ name: "getActionCenter", arguments: {} });
   if (/caminho critico|marco|atrasando/.test(text)) calls.push({ name: "getCriticalPath", arguments: {} });
@@ -100,4 +105,5 @@ export const DEFAULT_AI_SUGGESTIONS = [
   ["URBAN", "Qual CA preciso para 1.300 unidades?"], ["COMMITTEE", "Prepare o Comitê."], ["DOCUMENTS", "Quais documentos faltam?"],
   ["DESIGN", "O que você mudaria neste projeto?"], ["DESIGN", "O quadro de áreas fecha?"], ["DESIGN", "Quais são as cinco maiores oportunidades?"],
   ["OPERATIONS", "Quanto o Orçamento Oficial está acima da Base Aprovada?"], ["OPERATIONS", "Quanto desembolsaremos nos próximos 90 dias?"],
+  ["FINANCE", "Quanto temos de caixa livre?"], ["FINANCE", "O que vence nos próximos 7 dias?"], ["FINANCE", "Quais transações estão sem conciliação?"],
 ].map(([category, prompt]) => ({ category, prompt }));

@@ -13,6 +13,22 @@ import { ensureDesignWorkspace } from "../src/application/design/design-service"
 import { approveBudget, createBudget } from "../src/application/budget/budget-service";
 import { START_BUTANTA_BUDGET } from "../src/domain/budget/budget-engine";
 import { approveOperationalBaseline, approveSchedule, createOfficialBudgetFromBaseline, createScheduleFromBudget, prepareOperationalBaseline, requestBaselineApproval } from "../src/application/operations/operations-service";
+import {
+  approveIntercompanyTransaction,
+  confirmReconciliation,
+  createBankAccount,
+  createCustomer,
+  createFinancialTransfer,
+  createIntercompanyTransaction,
+  createPayableAccount,
+  createReceivableAccount,
+  createSupplier,
+  importBankTransactions,
+  registerReceivablePayment,
+  suggestReconciliationsForTransaction,
+  transitionPayableInstallment,
+  transitionReceivableInstallment,
+} from "../src/application/financial-ops/financial-service";
 
 async function main() {
   const passwordHash = await hash("Rede@2026", 12);
@@ -155,6 +171,84 @@ async function main() {
   if (!operationalSchedule) operationalSchedule = await createScheduleFromBudget(context, { budgetId: officialBudget.id, startDate: new Date("2026-09-01T00:00:00.000Z"), endDate: new Date("2029-08-01T00:00:00.000Z"), method: "S_CURVE" });
   if (operationalSchedule.status === "DRAFT" || operationalSchedule.status === "UNDER_REVIEW") operationalSchedule = await approveSchedule(context, operationalSchedule.id);
 
+  // --- Fase 9B: fundação financeira demonstrativa (aditiva e idempotente) ---
+  const holdingCompany = await prisma.company.upsert({
+    where: { organizationId_name: { organizationId: organization.id, name: "REDE Holding — Demonstração" } },
+    update: { economicGroupId: economicGroup.id },
+    create: { organizationId: organization.id, economicGroupId: economicGroup.id, legalName: "REDE Holding Participações — Demonstração", name: "REDE Holding — Demonstração", type: "HOLDING", createdById: user.id },
+  });
+
+  let operationalBankAccount = await prisma.bankAccount.findFirst({ where: { companyId: company.id, agency: "1234", accountNumber: "56789-0" } });
+  if (!operationalBankAccount) operationalBankAccount = await createBankAccount(context, { companyId: company.id, projectId: butantaStudy.projectId, institutionName: "Itaú Unibanco", agency: "1234", accountNumber: "56789-0", holderName: company.name, type: "OPERATIONAL", restriction: "FREE", openingBalance: "500000" });
+  let fundingBankAccount = await prisma.bankAccount.findFirst({ where: { companyId: company.id, agency: "4321", accountNumber: "98765-0" } });
+  if (!fundingBankAccount) fundingBankAccount = await createBankAccount(context, { companyId: company.id, projectId: butantaStudy.projectId, institutionName: "Bradesco", agency: "4321", accountNumber: "98765-0", holderName: company.name, type: "FUNDING", restriction: "RESTRICTED", openingBalance: "0" });
+
+  let supplier = await prisma.supplier.findFirst({ where: { organizationId: organization.id, taxId: "12.345.678/0001-90" } });
+  if (!supplier) supplier = await createSupplier(context, { name: "Construtora Horizonte LTDA", legalName: "Construtora Horizonte LTDA", taxId: "12.345.678/0001-90", email: "financeiro@horizonteconstrutora.com.br" });
+  let customer = await prisma.customer.findFirst({ where: { organizationId: organization.id, taxId: "123.456.789-00" } });
+  if (!customer) customer = await createCustomer(context, { name: "Maria Aparecida da Silva", taxId: "123.456.789-00", email: "maria.aparecida@example.com" });
+
+  const constructionCostCenter = await prisma.costCenter.findFirst({ where: { organizationId: organization.id, projectId: butantaStudy.projectId, code: "04" } });
+  const commercialCostCenter = await prisma.costCenter.findFirst({ where: { organizationId: organization.id, projectId: butantaStudy.projectId, code: "05" } });
+  const firstScheduleActivity = await prisma.scheduleActivity.findFirst({ where: { schedule: { projectId: butantaStudy.projectId, status: "APPROVED" } }, orderBy: { sortOrder: "asc" } });
+
+  let payableAccount = await prisma.payableAccount.findFirst({ where: { organizationId: organization.id, projectId: butantaStudy.projectId, supplierId: supplier.id }, include: { installments: true } });
+  if (!payableAccount) payableAccount = await createPayableAccount(context, {
+    projectId: butantaStudy.projectId, companyId: company.id, costCenterId: constructionCostCenter?.id ?? null, scheduleActivityId: firstScheduleActivity?.id ?? null,
+    supplierId: supplier.id, documentNumber: "NF 4821", description: "Medição de obra — fundação e estrutura", origin: "MEASUREMENT",
+    competenceMonth: new Date("2026-09-01T00:00:00.000Z"),
+    installments: [
+      { number: 1, dueDate: new Date("2026-09-15T00:00:00.000Z"), amount: "180000" },
+      { number: 2, dueDate: new Date("2026-10-15T00:00:00.000Z"), amount: "180000" },
+    ],
+  });
+  const [firstPayableInstallment, secondPayableInstallment] = payableAccount.installments.length
+    ? payableAccount.installments
+    : (await prisma.payableAccount.findUniqueOrThrow({ where: { id: payableAccount.id }, include: { installments: { orderBy: { number: "asc" } } } })).installments;
+  if (firstPayableInstallment.status === "PREVISTA") {
+    await transitionPayableInstallment(context, firstPayableInstallment.id, "PROGRAMADA");
+    await transitionPayableInstallment(context, firstPayableInstallment.id, "APROVADA");
+  }
+  if (secondPayableInstallment.status === "PREVISTA") await transitionPayableInstallment(context, secondPayableInstallment.id, "PROGRAMADA");
+
+  const existingImportedTransaction = await prisma.bankTransaction.findFirst({ where: { bankAccountId: operationalBankAccount.id, description: { contains: "NF 4821" } } });
+  if (!existingImportedTransaction) {
+    const imported = await importBankTransactions(context, { bankAccountId: operationalBankAccount.id, origin: "MANUAL", transactions: [
+      { occurredAt: new Date("2026-09-15T00:00:00.000Z"), amount: "180000", direction: "DEBIT", description: "PAG NF 4821 CONSTRUTORA HORIZONTE", counterparty: "Construtora Horizonte LTDA", documentRef: "NF 4821" },
+    ] });
+    const [transaction] = imported.transactions;
+    const suggestions = await suggestReconciliationsForTransaction(context, transaction.id);
+    if (suggestions[0]) await confirmReconciliation(context, suggestions[0].id);
+  }
+
+  let receivableAccount = await prisma.receivableAccount.findFirst({ where: { organizationId: organization.id, projectId: butantaStudy.projectId, customerId: customer.id }, include: { installments: true } });
+  if (!receivableAccount) receivableAccount = await createReceivableAccount(context, {
+    projectId: butantaStudy.projectId, companyId: company.id, costCenterId: commercialCostCenter?.id ?? null, customerId: customer.id,
+    unitReference: "Torre A — Unidade 1204", contractReference: "CV-2026-0912", description: "Venda de unidade — Torre A 1204", origin: "SALE",
+    competenceMonth: new Date("2026-09-01T00:00:00.000Z"),
+    installments: [
+      { number: 1, dueDate: new Date("2026-09-10T00:00:00.000Z"), amount: "45000" },
+      { number: 2, dueDate: new Date("2027-01-10T00:00:00.000Z"), amount: "45000" },
+    ],
+  });
+  const receivableInstallments = receivableAccount.installments.length
+    ? receivableAccount.installments
+    : (await prisma.receivableAccount.findUniqueOrThrow({ where: { id: receivableAccount.id }, include: { installments: { orderBy: { number: "asc" } } } })).installments;
+  const [firstReceivableInstallment] = receivableInstallments;
+  if (firstReceivableInstallment.status === "EMITIDA") {
+    await registerReceivablePayment(context, { installmentId: firstReceivableInstallment.id, bankAccountId: operationalBankAccount.id, amount: "45000", method: "PIX", receivedAt: new Date("2026-09-10T00:00:00.000Z") });
+  }
+  if (receivableInstallments[1]?.status === "PREVISTA") await transitionReceivableInstallment(context, receivableInstallments[1].id, "EMITIDA");
+
+  const existingTransfer = await prisma.financialTransfer.findFirst({ where: { organizationId: organization.id, fromBankAccountId: operationalBankAccount.id, toBankAccountId: fundingBankAccount.id } });
+  if (!existingTransfer) await createFinancialTransfer(context, { fromBankAccountId: operationalBankAccount.id, toBankAccountId: fundingBankAccount.id, amount: "50000", transferredAt: new Date("2026-09-05T00:00:00.000Z"), description: "Reserva de funding — demonstração" });
+
+  let intercompanyTransaction = await prisma.intercompanyTransaction.findFirst({ where: { organizationId: organization.id, fromCompanyId: holdingCompany.id, toCompanyId: company.id } });
+  if (!intercompanyTransaction) {
+    intercompanyTransaction = await createIntercompanyTransaction(context, { fromCompanyId: holdingCompany.id, toCompanyId: company.id, toProjectId: butantaStudy.projectId, amount: "2000000", occurredAt: new Date("2026-09-01T00:00:00.000Z"), nature: "APORTE", description: "Aporte de capital — demonstração START BUTANTÃ" });
+  }
+  if (intercompanyTransaction.status === "PENDING") await approveIntercompanyTransaction(context, intercompanyTransaction.id);
+
   await prisma.viabilityStudy.update({ where: { id: study.studyId }, data: { updatedById: user.id } });
   const landStudy = await ensureDemoLandStudy({ userId: user.id, organizationId: organization.id });
   const investmentCase = await ensureInvestmentCase({ userId: user.id, organizationId: organization.id });
@@ -181,7 +275,7 @@ async function main() {
   });
 
   await prisma.session.deleteMany({ where: { expiresAt: { lt: new Date() } } });
-  console.info(`Seed concluído: ${organization.name} · ${user.email} · viabilidade v${study.versionNumber} · START BUTANTÃ v${butantaStudy.versionNumber} · Orçamento ${butantaBudget.id} · Base Aprovada v${operationalBaseline.version} · Orçamento Oficial v${officialBudget.version} (${officialBudget.totalBudget}) · Cronograma v${operationalSchedule.version} · Land v${landStudy.versionNumber} · Investment Case ${investmentCase.id} · Design ${designWorkspace.revision.label} (${designWorkspace.findings.length} findings derivados) · Dossiê ${demoMasterReport.reportId} (${demoMasterReport.pageCount} páginas) · REDE AI ${AI_PROMPT_VERSION} (${aiTasks.length} políticas)`);
+  console.info(`Seed concluído: ${organization.name} · ${user.email} · viabilidade v${study.versionNumber} · START BUTANTÃ v${butantaStudy.versionNumber} · Orçamento ${butantaBudget.id} · Base Aprovada v${operationalBaseline.version} · Orçamento Oficial v${officialBudget.version} (${officialBudget.totalBudget}) · Cronograma v${operationalSchedule.version} · Financeiro: ${operationalBankAccount.id === fundingBankAccount.id ? 1 : 2} contas bancárias, Conta a Pagar ${payableAccount.id}, Conta a Receber ${receivableAccount.id}, Intercompany ${intercompanyTransaction.id} · Land v${landStudy.versionNumber} · Investment Case ${investmentCase.id} · Design ${designWorkspace.revision.label} (${designWorkspace.findings.length} findings derivados) · Dossiê ${demoMasterReport.reportId} (${demoMasterReport.pageCount} páginas) · REDE AI ${AI_PROMPT_VERSION} (${aiTasks.length} políticas)`);
 }
 
 main()

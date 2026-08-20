@@ -15,6 +15,7 @@ import {
   Gauge,
   Gavel,
   LayoutDashboard,
+  Landmark,
   Layers3,
   Menu,
   MapPinned,
@@ -43,6 +44,7 @@ import { RedeAIView } from "./rede-ai-view";
 import { DesignIntelligenceView } from "./design-intelligence-view";
 import { BudgetEditor } from "./BudgetEditor";
 import { OperationsView } from "./operations-view";
+import { FinancialView } from "./financial-view";
 import { logoutAction } from "@/app/actions/auth";
 import { createStudyAction, createStudyVersionAction } from "@/app/actions/studies";
 import { reassessInvestmentCaseAction } from "@/app/actions/investment";
@@ -53,13 +55,14 @@ import type { AIBootstrapView } from "@/domain/ai";
 import type { DesignWorkspaceView } from "@/domain/design";
 import type { BudgetWorkspaceView } from "@/application/budget/budget-service";
 import type { OperationsWorkspaceView } from "@/application/operations/operations-service";
+import type { FinancialWorkspaceView } from "@/application/financial-ops/financial-service";
 import { DEMO_PROJECT } from "@/domain/financial/demo";
 import { calculateAllScenarios } from "@/domain/financial/engine";
 import { SCENARIOS } from "@/domain/financial/scenarios";
 import type { ProjectAssumptions, ScenarioKey } from "@/domain/financial/types";
 import { analyzeRisk, type FindingSeverity } from "@/domain/risk/rules";
 
-type ViewKey = "overview" | "assumptions" | "land" | "design" | "budget" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit";
+type ViewKey = "overview" | "assumptions" | "land" | "design" | "budget" | "financial" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit";
 type EditorMode = "create" | "version";
 
 const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
@@ -68,6 +71,7 @@ const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
   { key: "land", label: "Terreno & Potencial", icon: MapPinned },
   { key: "design", label: "Design Intelligence", icon: Layers3 },
   { key: "budget", label: "Orçamento", icon: CircleDollarSign },
+  { key: "financial", label: "Financeiro", icon: Landmark },
   { key: "scenarios", label: "Cenários", icon: BarChart3 },
   { key: "sensitivity", label: "Sensibilidade", icon: SlidersHorizontal },
   { key: "redteam", label: "REDE Red Team", icon: Radar },
@@ -132,7 +136,7 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "RE";
 }
 
-export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, initialOperations, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; initialOperations: OperationsWorkspaceView; identity: WorkspaceIdentity }) {
+export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, initialOperations, initialFinancial, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; initialOperations: OperationsWorkspaceView; initialFinancial: FinancialWorkspaceView; identity: WorkspaceIdentity }) {
   const [study, setStudy] = useState<PersistedStudyView>(initialStudy);
   const [landWorkspace, setLandWorkspace] = useState<LandWorkspaceView>(initialLand);
   const [investmentWorkspace, setInvestmentWorkspace] = useState<InvestmentCaseWorkspace>(initialInvestment);
@@ -331,6 +335,13 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
           ) : (
             <div className="empty-state"><CircleDollarSign size={18} /> Nenhum orçamento cadastrado para este empreendimento.</div>
           ))}
+
+          {view === "financial" && (
+            <div className="view-stack">
+              <SectionTitle eyebrow="FINANCEIRO E TESOURARIA" title="Contas a Pagar, Contas a Receber e Caixa" description="Obrigação → conta → parcela → pagamento → conciliação → realizado, rastreável por SPE e centro de custo." />
+              <FinancialView workspace={initialFinancial} />
+            </div>
+          )}
 
           {view === "scenarios" && (
             <div className="view-stack">
