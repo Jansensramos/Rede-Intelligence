@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-const decimalValue = z.union([z.string().trim().min(1), z.number().finite()]).transform(String);
+const decimalValue = z.union([z.string().trim().min(1), z.number().finite()]).transform(String)
+  .refine((value) => Number.isFinite(Number(value)) && Number(value) >= 0, "O valor deve ser numérico e não negativo.");
 
 export const budgetLineItemInputSchema = z.object({
   parentId: z.string().min(1).nullable().optional(),

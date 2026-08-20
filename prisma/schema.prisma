@@ -28,6 +28,102 @@ enum BudgetStatus {
   UNDER_REVIEW
   APPROVED
   ARCHIVED
+  OFFICIAL
+  SUPERSEDED
+  CLOSED
+}
+
+enum CompanyType {
+  HOLDING
+  INCORPORATOR
+  SPE
+  SERVICE_PROVIDER
+  ADMINISTRATOR
+  OTHER
+}
+
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum OperatingUnitType {
+  PHASE
+  TOWER
+  BLOCK
+  STAGE
+  INFRASTRUCTURE
+  COMMON_AREA
+  COMMERCIAL
+  ADMINISTRATIVE
+  OTHER
+}
+
+enum OperationalBaselineStatus {
+  PREPARING
+  UNDER_APPROVAL
+  APPROVED
+  SUPERSEDED
+}
+
+enum BudgetKind {
+  PRELIMINARY
+  OFFICIAL
+  REVISED
+}
+
+enum CostOrigin {
+  APPROVED_BASE
+  ESTIMATE
+  REDE_HISTORY
+  RECEIVED_QUOTE
+  CONTRACTED
+  MANUAL
+  INTEGRATION
+  OTHER
+}
+
+enum BudgetLineStatus {
+  PLANNED
+  UNDER_REVIEW
+  APPROVED
+  SUPERSEDED
+  CLOSED
+}
+
+enum ScheduleStatus {
+  DRAFT
+  UNDER_REVIEW
+  APPROVED
+  SUPERSEDED
+  CLOSED
+}
+
+enum ScheduleGranularity {
+  MONTH
+  WEEK
+}
+
+enum DistributionMethod {
+  LINEAR
+  S_CURVE
+  MANUAL
+  MILESTONE
+  CUSTOM
+}
+
+enum ScheduleDependencyType {
+  FINISH_TO_START
+  START_TO_START
+  FINISH_TO_FINISH
+}
+
+enum OperationalForecastStatus {
+  STRUCTURED
+  ACTIVE
+  SUPERSEDED
+  CLOSED
 }
 
 enum StudyStatus {
@@ -714,28 +810,35 @@ enum BimClashStatus {
 }
 
 model Organization {
-  id               String                    @id @default(cuid())
-  name             String
-  slug             String                    @unique
-  legalName        String?                   @map("legal_name")
-  createdAt        DateTime                  @default(now()) @map("created_at")
-  updatedAt        DateTime                  @updatedAt @map("updated_at")
-  memberships      OrganizationMembership[]
-  sessions         Session[]
-  projects         Project[]
-  runs             CalculationRun[]
-  policies         InvestmentPolicy[]
-  auditLogs        AuditLog[]
-  redTeamRuns      RedTeamRun[]
-  landAssets       LandAsset[]
-  landStudies      LandStudy[]
-  landAuditLogs    LandAuditLog[]
-  investmentCases  InvestmentCase[]
-  investmentBrands OrganizationBrandConfig[]
-  designPackages   DesignProjectPackage[]
-  designRuleSets   DesignRuleSet[]
-  bimModels        BimModel[]
-  budgets          Budget[]
+  id                   String                    @id @default(cuid())
+  name                 String
+  slug                 String                    @unique
+  legalName            String?                   @map("legal_name")
+  createdAt            DateTime                  @default(now()) @map("created_at")
+  updatedAt            DateTime                  @updatedAt @map("updated_at")
+  memberships          OrganizationMembership[]
+  sessions             Session[]
+  projects             Project[]
+  runs                 CalculationRun[]
+  policies             InvestmentPolicy[]
+  auditLogs            AuditLog[]
+  redTeamRuns          RedTeamRun[]
+  landAssets           LandAsset[]
+  landStudies          LandStudy[]
+  landAuditLogs        LandAuditLog[]
+  investmentCases      InvestmentCase[]
+  investmentBrands     OrganizationBrandConfig[]
+  designPackages       DesignProjectPackage[]
+  designRuleSets       DesignRuleSet[]
+  bimModels            BimModel[]
+  budgets              Budget[]
+  economicGroups       EconomicGroup[]
+  companies            Company[]
+  operationalBaselines OperationalBaseline[]
+  costCenters          CostCenter[]
+  economicItems        EconomicItem[]
+  schedules            OperationalSchedule[]
+  materialityPolicies  MaterialityPolicy[]
 
   @@map("organizations")
 }
@@ -848,94 +951,492 @@ model InvestmentPolicy {
 }
 
 model Project {
-  id             String                 @id @default(cuid())
-  organizationId String                 @map("organization_id")
-  name           String
-  city           String
-  state          String                 @db.Char(2)
-  address        String?
-  currency       String                 @default("BRL") @db.Char(3)
-  status         ProjectStatus          @default(DRAFT)
-  createdById    String                 @map("created_by_id")
-  updatedById    String                 @map("updated_by_id")
-  createdAt      DateTime               @default(now()) @map("created_at")
-  updatedAt      DateTime               @updatedAt @map("updated_at")
-  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  createdBy      User                   @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy      User                   @relation("ProjectUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
-  studies        ViabilityStudy[]
-  runs           CalculationRun[]
-  actualEntries  ActualEntry[]
-  auditLogs      AuditLog[]
-  landAssets     LandAsset[]
-  designPackages DesignProjectPackage[]
-  bimModels      BimModel[]
-  budgets        Budget[]
+  id                   String                 @id @default(cuid())
+  organizationId       String                 @map("organization_id")
+  companyId            String?                @map("company_id")
+  name                 String
+  city                 String
+  state                String                 @db.Char(2)
+  address              String?
+  currency             String                 @default("BRL") @db.Char(3)
+  status               ProjectStatus          @default(DRAFT)
+  createdById          String                 @map("created_by_id")
+  updatedById          String                 @map("updated_by_id")
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @updatedAt @map("updated_at")
+  organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company              Company?               @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdBy            User                   @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy            User                   @relation("ProjectUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  studies              ViabilityStudy[]
+  runs                 CalculationRun[]
+  actualEntries        ActualEntry[]
+  auditLogs            AuditLog[]
+  landAssets           LandAsset[]
+  designPackages       DesignProjectPackage[]
+  bimModels            BimModel[]
+  budgets              Budget[]
+  operatingUnits       ProjectOperatingUnit[]
+  costCenters          CostCenter[]
+  economicItems        EconomicItem[]
+  operationalBaselines OperationalBaseline[]
+  operationalSchedules OperationalSchedule[]
+  operationalForecasts OperationalForecast[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
+  @@index([companyId])
   @@map("projects")
 }
 
 model Budget {
-  id             String        @id @default(cuid())
-  organizationId String        @map("organization_id")
-  projectId      String        @map("project_id")
-  studyVersionId String?       @map("study_version_id")
-  name           String
-  description    String?
-  status         BudgetStatus  @default(DRAFT)
-  currency       String        @default("BRL") @db.Char(3)
-  baseDate       DateTime      @map("base_date") @db.Date
-  version        Int           @default(1)
-  totalBudget    Decimal       @default(0) @map("total_budget") @db.Decimal(20, 2)
-  createdById    String        @map("created_by_id")
-  updatedById    String        @map("updated_by_id")
-  approvedById   String?       @map("approved_by_id")
-  approvedAt     DateTime?     @map("approved_at")
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project        Project       @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  studyVersion   StudyVersion? @relation(fields: [studyVersionId], references: [id], onDelete: Restrict)
-  createdBy      User          @relation("BudgetCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy      User          @relation("BudgetUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
-  approvedBy     User?         @relation("BudgetApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
-  lineItems      BudgetLineItem[]
+  id                     String                        @id @default(cuid())
+  organizationId         String                        @map("organization_id")
+  projectId              String                        @map("project_id")
+  studyVersionId         String?                       @map("study_version_id")
+  operationalBaselineId  String?                       @map("operational_baseline_id")
+  companyId              String?                       @map("company_id")
+  previousBudgetId       String?                       @map("previous_budget_id")
+  name                   String
+  description            String?
+  status                 BudgetStatus                  @default(DRAFT)
+  kind                   BudgetKind                    @default(PRELIMINARY)
+  currency               String                        @default("BRL") @db.Char(3)
+  baseDate               DateTime                      @map("base_date") @db.Date
+  version                Int                           @default(1)
+  totalBudget            Decimal                       @default(0) @map("total_budget") @db.Decimal(20, 2)
+  createdById            String                        @map("created_by_id")
+  updatedById            String                        @map("updated_by_id")
+  approvedById           String?                       @map("approved_by_id")
+  approvedAt             DateTime?                     @map("approved_at")
+  revisionReason         String?                       @map("revision_reason")
+  checksum               String?
+  createdAt              DateTime                      @default(now()) @map("created_at")
+  updatedAt              DateTime                      @updatedAt @map("updated_at")
+  organization           Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project                Project                       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  studyVersion           StudyVersion?                 @relation(fields: [studyVersionId], references: [id], onDelete: Restrict)
+  operationalBaseline    OperationalBaseline?          @relation(fields: [operationalBaselineId], references: [id], onDelete: Restrict)
+  company                Company?                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  previousBudget         Budget?                       @relation("BudgetVersions", fields: [previousBudgetId], references: [id], onDelete: Restrict)
+  revisions              Budget[]                      @relation("BudgetVersions")
+  createdBy              User                          @relation("BudgetCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy              User                          @relation("BudgetUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  approvedBy             User?                         @relation("BudgetApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+  lineItems              BudgetLineItem[]
+  schedules              OperationalSchedule[]
+  varianceJustifications BudgetVarianceJustification[]
 
   @@unique([projectId, name, version])
   @@index([organizationId, status])
   @@index([projectId, status])
   @@index([studyVersionId])
+  @@index([operationalBaselineId])
+  @@index([companyId])
+  @@index([previousBudgetId])
   @@map("budgets")
 }
 
 model BudgetLineItem {
-  id          String           @id @default(cuid())
-  budgetId    String           @map("budget_id")
-  parentId    String?          @map("parent_id")
-  code        String?
-  description String
-  category    String
-  phase       String
-  unit        String
-  quantity    Decimal          @db.Decimal(18, 4)
-  unitCost    Decimal          @map("unit_cost") @db.Decimal(20, 2)
-  totalCost   Decimal          @map("total_cost") @db.Decimal(20, 2)
-  sortOrder   Int              @default(0) @map("sort_order")
-  costCenter  String?          @map("cost_center")
-  tower       String?
-  origin      String?
-  createdAt   DateTime         @default(now()) @map("created_at")
-  updatedAt   DateTime         @updatedAt @map("updated_at")
-  budget      Budget           @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  parent      BudgetLineItem?  @relation("BudgetItemHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
-  children    BudgetLineItem[] @relation("BudgetItemHierarchy")
+  id                 String                  @id @default(cuid())
+  budgetId           String                  @map("budget_id")
+  parentId           String?                 @map("parent_id")
+  economicItemId     String?                 @map("economic_item_id")
+  costCenterId       String?                 @map("cost_center_id")
+  operatingUnitId    String?                 @map("operating_unit_id")
+  responsibleId      String?                 @map("responsible_id")
+  code               String?
+  description        String
+  category           String
+  subcategory        String?
+  phase              String
+  unit               String
+  quantity           Decimal                 @db.Decimal(18, 4)
+  unitCost           Decimal                 @map("unit_cost") @db.Decimal(20, 2)
+  totalCost          Decimal                 @map("total_cost") @db.Decimal(20, 2)
+  sortOrder          Int                     @default(0) @map("sort_order")
+  costCenter         String?                 @map("cost_center")
+  tower              String?
+  origin             String?
+  costOrigin         CostOrigin              @default(MANUAL) @map("cost_origin")
+  status             BudgetLineStatus        @default(PLANNED)
+  startDate          DateTime?               @map("start_date") @db.Date
+  endDate            DateTime?               @map("end_date") @db.Date
+  notes              String?
+  createdAt          DateTime                @default(now()) @map("created_at")
+  updatedAt          DateTime                @updatedAt @map("updated_at")
+  budget             Budget                  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  parent             BudgetLineItem?         @relation("BudgetItemHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children           BudgetLineItem[]        @relation("BudgetItemHierarchy")
+  economicItem       EconomicItem?           @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+  costCenterRef      CostCenter?             @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  operatingUnit      ProjectOperatingUnit?   @relation(fields: [operatingUnitId], references: [id], onDelete: Restrict)
+  scheduleActivities ScheduleActivity[]
+  laborComposition   BudgetLaborComposition?
 
   @@unique([budgetId, code])
   @@index([budgetId, phase, sortOrder])
   @@index([parentId])
+  @@index([economicItemId])
+  @@index([costCenterId])
+  @@index([operatingUnitId])
   @@map("budget_line_items")
+}
+
+model EconomicGroup {
+  id             String        @id @default(cuid())
+  organizationId String        @map("organization_id")
+  name           String
+  legalName      String?       @map("legal_name")
+  status         CompanyStatus @default(ACTIVE)
+  settings       Json?
+  createdById    String        @map("created_by_id")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  companies      Company[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@map("economic_groups")
+}
+
+model Company {
+  id                   String                @id @default(cuid())
+  organizationId       String                @map("organization_id")
+  economicGroupId      String?               @map("economic_group_id")
+  legalName            String                @map("legal_name")
+  name                 String
+  taxId                String?               @map("tax_id")
+  type                 CompanyType
+  status               CompanyStatus         @default(ACTIVE)
+  currency             String                @default("BRL") @db.Char(3)
+  timezone             String                @default("America/Sao_Paulo")
+  settings             Json?
+  createdById          String                @map("created_by_id")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  economicGroup        EconomicGroup?        @relation(fields: [economicGroupId], references: [id], onDelete: Restrict)
+  projects             Project[]
+  budgets              Budget[]
+  operationalBaselines OperationalBaseline[]
+  schedules            OperationalSchedule[]
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, taxId])
+  @@index([economicGroupId, status])
+  @@map("companies")
+}
+
+model ProjectOperatingUnit {
+  id                 String                 @id @default(cuid())
+  projectId          String                 @map("project_id")
+  parentId           String?                @map("parent_id")
+  code               String
+  name               String
+  type               OperatingUnitType
+  status             CompanyStatus          @default(ACTIVE)
+  sortOrder          Int                    @default(0) @map("sort_order")
+  metadata           Json?
+  createdById        String                 @map("created_by_id")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+  project            Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent             ProjectOperatingUnit?  @relation("OperatingUnitHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children           ProjectOperatingUnit[] @relation("OperatingUnitHierarchy")
+  economicItems      EconomicItem[]
+  budgetLineItems    BudgetLineItem[]
+  scheduleActivities ScheduleActivity[]
+
+  @@unique([projectId, code])
+  @@index([parentId, sortOrder])
+  @@map("project_operating_units")
+}
+
+model CostCenter {
+  id                String           @id @default(cuid())
+  organizationId    String           @map("organization_id")
+  projectId         String?          @map("project_id")
+  parentId          String?          @map("parent_id")
+  code              String
+  name              String
+  responsibleId     String?          @map("responsible_id")
+  managerialAccount String?          @map("managerial_account")
+  status            CompanyStatus    @default(ACTIVE)
+  createdById       String           @map("created_by_id")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  organization      Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project           Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent            CostCenter?      @relation("CostCenterHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children          CostCenter[]     @relation("CostCenterHierarchy")
+  economicItems     EconomicItem[]
+  budgetLineItems   BudgetLineItem[]
+
+  @@unique([organizationId, projectId, code])
+  @@index([organizationId, status])
+  @@index([parentId])
+  @@map("cost_centers")
+}
+
+model EconomicItem {
+  id                 String                    @id @default(cuid())
+  organizationId     String                    @map("organization_id")
+  projectId          String                    @map("project_id")
+  costCenterId       String?                   @map("cost_center_id")
+  operatingUnitId    String?                   @map("operating_unit_id")
+  code               String
+  description        String
+  category           String
+  subcategory        String?
+  unit               String
+  responsibleId      String?                   @map("responsible_id")
+  metadata           Json?
+  createdById        String                    @map("created_by_id")
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  updatedAt          DateTime                  @updatedAt @map("updated_at")
+  organization       Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project            Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  costCenter         CostCenter?               @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  operatingUnit      ProjectOperatingUnit?     @relation(fields: [operatingUnitId], references: [id], onDelete: Restrict)
+  baselineLines      OperationalBaselineLine[]
+  budgetLineItems    BudgetLineItem[]
+  scheduleActivities ScheduleActivity[]
+
+  @@unique([projectId, code])
+  @@index([organizationId, category])
+  @@map("economic_items")
+}
+
+model OperationalBaseline {
+  id                 String                    @id @default(cuid())
+  organizationId     String                    @map("organization_id")
+  companyId          String?                   @map("company_id")
+  projectId          String                    @map("project_id")
+  studyVersionId     String                    @map("study_version_id")
+  snapshotBundleId   String?                   @map("snapshot_bundle_id")
+  previousBaselineId String?                   @map("previous_baseline_id")
+  version            Int
+  name               String
+  status             OperationalBaselineStatus @default(PREPARING)
+  reason             String?
+  content            Json
+  totals             Json
+  checksum           String
+  createdById        String                    @map("created_by_id")
+  approvedById       String?                   @map("approved_by_id")
+  requestedAt        DateTime?                 @map("requested_at")
+  approvedAt         DateTime?                 @map("approved_at")
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  updatedAt          DateTime                  @updatedAt @map("updated_at")
+  organization       Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company            Company?                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  project            Project                   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  studyVersion       StudyVersion              @relation(fields: [studyVersionId], references: [id], onDelete: Restrict)
+  snapshotBundle     InvestmentSnapshotBundle? @relation(fields: [snapshotBundleId], references: [id], onDelete: Restrict)
+  previousBaseline   OperationalBaseline?      @relation("OperationalBaselineVersions", fields: [previousBaselineId], references: [id], onDelete: Restrict)
+  revisions          OperationalBaseline[]     @relation("OperationalBaselineVersions")
+  lines              OperationalBaselineLine[]
+  budgets            Budget[]
+  forecasts          OperationalForecast[]
+
+  @@unique([projectId, version])
+  @@unique([projectId, checksum])
+  @@index([organizationId, status])
+  @@index([studyVersionId])
+  @@map("operational_baselines")
+}
+
+model OperationalBaselineLine {
+  id             String              @id @default(cuid())
+  baselineId     String              @map("baseline_id")
+  economicItemId String?             @map("economic_item_id")
+  code           String
+  category       String
+  description    String
+  value          Decimal             @db.Decimal(20, 2)
+  origin         CostOrigin
+  evidence       Json?
+  createdAt      DateTime            @default(now()) @map("created_at")
+  baseline       OperationalBaseline @relation(fields: [baselineId], references: [id], onDelete: Cascade)
+  economicItem   EconomicItem?       @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+
+  @@unique([baselineId, code])
+  @@index([baselineId, category])
+  @@map("operational_baseline_lines")
+}
+
+model MaterialityPolicy {
+  id                String       @id @default(cuid())
+  organizationId    String       @map("organization_id")
+  name              String
+  isActive          Boolean      @default(true) @map("is_active")
+  informationRate   Decimal      @default(0.02) @map("information_rate") @db.Decimal(9, 6)
+  attentionRate     Decimal      @default(0.05) @map("attention_rate") @db.Decimal(9, 6)
+  relevantRate      Decimal      @default(0.10) @map("relevant_rate") @db.Decimal(9, 6)
+  absoluteThreshold Decimal?     @map("absolute_threshold") @db.Decimal(20, 2)
+  createdById       String       @map("created_by_id")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive])
+  @@map("materiality_policies")
+}
+
+model BudgetVarianceJustification {
+  id             String   @id @default(cuid())
+  budgetId       String   @map("budget_id")
+  baselineLineId String?  @map("baseline_line_id")
+  economicItemId String?  @map("economic_item_id")
+  category       String
+  reason         String
+  baselineValue  Decimal  @map("baseline_value") @db.Decimal(20, 2)
+  budgetValue    Decimal  @map("budget_value") @db.Decimal(20, 2)
+  createdById    String   @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  budget         Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@index([budgetId, category])
+  @@map("budget_variance_justifications")
+}
+
+model BudgetLaborComposition {
+  id               String         @id @default(cuid())
+  budgetLineItemId String         @unique @map("budget_line_item_id")
+  roleName         String         @map("role_name")
+  headcount        Decimal        @db.Decimal(12, 4)
+  monthlyCost      Decimal        @map("monthly_cost") @db.Decimal(20, 2)
+  burdenRate       Decimal        @default(0) @map("burden_rate") @db.Decimal(9, 6)
+  monthlyBenefits  Decimal        @default(0) @map("monthly_benefits") @db.Decimal(20, 2)
+  months           Decimal        @db.Decimal(12, 4)
+  totalCost        Decimal        @map("total_cost") @db.Decimal(20, 2)
+  budgetLineItem   BudgetLineItem @relation(fields: [budgetLineItemId], references: [id], onDelete: Cascade)
+
+  @@map("budget_labor_compositions")
+}
+
+model OperationalSchedule {
+  id                 String                @id @default(cuid())
+  organizationId     String                @map("organization_id")
+  companyId          String?               @map("company_id")
+  projectId          String                @map("project_id")
+  budgetId           String                @map("budget_id")
+  previousScheduleId String?               @map("previous_schedule_id")
+  name               String
+  version            Int
+  status             ScheduleStatus        @default(DRAFT)
+  granularity        ScheduleGranularity   @default(MONTH)
+  baseDate           DateTime              @map("base_date") @db.Date
+  reason             String?
+  createdById        String                @map("created_by_id")
+  approvedById       String?               @map("approved_by_id")
+  approvedAt         DateTime?             @map("approved_at")
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company            Company?              @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  project            Project               @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  budget             Budget                @relation(fields: [budgetId], references: [id], onDelete: Restrict)
+  previousSchedule   OperationalSchedule?  @relation("ScheduleVersions", fields: [previousScheduleId], references: [id], onDelete: Restrict)
+  revisions          OperationalSchedule[] @relation("ScheduleVersions")
+  activities         ScheduleActivity[]
+  forecasts          OperationalForecast[]
+
+  @@unique([projectId, name, version])
+  @@index([organizationId, status])
+  @@index([budgetId])
+  @@map("operational_schedules")
+}
+
+model ScheduleActivity {
+  id                 String                @id @default(cuid())
+  scheduleId         String                @map("schedule_id")
+  economicItemId     String?               @map("economic_item_id")
+  budgetLineItemId   String?               @map("budget_line_item_id")
+  operatingUnitId    String?               @map("operating_unit_id")
+  parentId           String?               @map("parent_id")
+  responsibleId      String?               @map("responsible_id")
+  code               String
+  name               String
+  startDate          DateTime              @map("start_date") @db.Date
+  endDate            DateTime              @map("end_date") @db.Date
+  plannedPhysical    Decimal               @default(1) @map("planned_physical") @db.Decimal(9, 6)
+  plannedCost        Decimal               @default(0) @map("planned_cost") @db.Decimal(20, 2)
+  distributionMethod DistributionMethod    @default(LINEAR) @map("distribution_method")
+  isMilestone        Boolean               @default(false) @map("is_milestone")
+  milestoneType      String?               @map("milestone_type")
+  isCritical         Boolean               @default(false) @map("is_critical")
+  sortOrder          Int                   @default(0) @map("sort_order")
+  metadata           Json?
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+  schedule           OperationalSchedule   @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  economicItem       EconomicItem?         @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+  budgetLineItem     BudgetLineItem?       @relation(fields: [budgetLineItemId], references: [id], onDelete: Restrict)
+  operatingUnit      ProjectOperatingUnit? @relation(fields: [operatingUnitId], references: [id], onDelete: Restrict)
+  parent             ScheduleActivity?     @relation("ScheduleActivityHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children           ScheduleActivity[]    @relation("ScheduleActivityHierarchy")
+  predecessors       ScheduleDependency[]  @relation("DependencySuccessor")
+  successors         ScheduleDependency[]  @relation("DependencyPredecessor")
+  allocations        ScheduleAllocation[]
+
+  @@unique([scheduleId, code])
+  @@index([scheduleId, startDate, endDate])
+  @@index([economicItemId])
+  @@map("schedule_activities")
+}
+
+model ScheduleDependency {
+  id            String                 @id @default(cuid())
+  predecessorId String                 @map("predecessor_id")
+  successorId   String                 @map("successor_id")
+  type          ScheduleDependencyType @default(FINISH_TO_START)
+  lagDays       Int                    @default(0) @map("lag_days")
+  predecessor   ScheduleActivity       @relation("DependencyPredecessor", fields: [predecessorId], references: [id], onDelete: Cascade)
+  successor     ScheduleActivity       @relation("DependencySuccessor", fields: [successorId], references: [id], onDelete: Cascade)
+
+  @@unique([predecessorId, successorId])
+  @@index([successorId])
+  @@map("schedule_dependencies")
+}
+
+model ScheduleAllocation {
+  id                  String           @id @default(cuid())
+  activityId          String           @map("activity_id")
+  periodStart         DateTime         @map("period_start") @db.Date
+  physicalPercent     Decimal          @map("physical_percent") @db.Decimal(9, 6)
+  financialPercent    Decimal          @map("financial_percent") @db.Decimal(9, 6)
+  plannedDisbursement Decimal          @map("planned_disbursement") @db.Decimal(20, 2)
+  notes               String?
+  activity            ScheduleActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, periodStart])
+  @@index([periodStart])
+  @@map("schedule_allocations")
+}
+
+model OperationalForecast {
+  id              String                    @id @default(cuid())
+  projectId       String                    @map("project_id")
+  baselineId      String                    @map("baseline_id")
+  scheduleId      String?                   @map("schedule_id")
+  version         Int
+  status          OperationalForecastStatus @default(STRUCTURED)
+  assumptions     Json
+  projectedResult Json?                     @map("projected_result")
+  createdById     String                    @map("created_by_id")
+  createdAt       DateTime                  @default(now()) @map("created_at")
+  updatedAt       DateTime                  @updatedAt @map("updated_at")
+  project         Project                   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  baseline        OperationalBaseline       @relation(fields: [baselineId], references: [id], onDelete: Restrict)
+  schedule        OperationalSchedule?      @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+
+  @@unique([projectId, version])
+  @@map("operational_forecasts")
 }
 
 model ViabilityStudy {
@@ -961,32 +1462,33 @@ model ViabilityStudy {
 }
 
 model StudyVersion {
-  id            String                @id @default(cuid())
-  studyId       String                @map("study_id")
-  versionNumber Int                   @map("version_number")
-  status        StudyVersionStatus    @default(DRAFT)
-  label         String?
-  notes         String?
-  inputHash     String                @map("input_hash")
-  engineVersion String                @map("engine_version")
-  policyId      String?               @map("policy_id")
-  createdById   String                @map("created_by_id")
-  updatedById   String                @map("updated_by_id")
-  createdAt     DateTime              @default(now()) @map("created_at")
-  updatedAt     DateTime              @updatedAt @map("updated_at")
-  lockedAt      DateTime?             @map("locked_at")
-  study         ViabilityStudy        @relation(fields: [studyId], references: [id], onDelete: Restrict)
-  createdBy     User                  @relation("VersionCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy     User                  @relation("VersionUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
-  policy        InvestmentPolicy?     @relation(fields: [policyId], references: [id], onDelete: Restrict)
-  assumptions   AssumptionSnapshot?
-  scenarios     Scenario[]
-  runs          CalculationRun[]
-  sensitivity   SensitivityAnalysis[]
-  redTeamRuns   RedTeamRun[]
-  scores        Score[]
-  aiRuns        AIAnalysisRun[]
-  budgets       Budget[]
+  id                   String                @id @default(cuid())
+  studyId              String                @map("study_id")
+  versionNumber        Int                   @map("version_number")
+  status               StudyVersionStatus    @default(DRAFT)
+  label                String?
+  notes                String?
+  inputHash            String                @map("input_hash")
+  engineVersion        String                @map("engine_version")
+  policyId             String?               @map("policy_id")
+  createdById          String                @map("created_by_id")
+  updatedById          String                @map("updated_by_id")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  lockedAt             DateTime?             @map("locked_at")
+  study                ViabilityStudy        @relation(fields: [studyId], references: [id], onDelete: Restrict)
+  createdBy            User                  @relation("VersionCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy            User                  @relation("VersionUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  policy               InvestmentPolicy?     @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  assumptions          AssumptionSnapshot?
+  scenarios            Scenario[]
+  runs                 CalculationRun[]
+  sensitivity          SensitivityAnalysis[]
+  redTeamRuns          RedTeamRun[]
+  scores               Score[]
+  aiRuns               AIAnalysisRun[]
+  budgets              Budget[]
+  operationalBaselines OperationalBaseline[]
 
   @@unique([studyId, versionNumber])
   @@index([studyId, createdAt])
@@ -2013,23 +2515,24 @@ model InvestmentCase {
 }
 
 model InvestmentSnapshotBundle {
-  id                 String                     @id @default(cuid())
-  investmentCaseId   String                     @map("investment_case_id")
-  version            Int
-  schemaVersion      String                     @map("schema_version")
-  studyVersionId     String                     @map("study_version_id")
-  landStudyVersionId String?                    @map("land_study_version_id")
-  redTeamRunId       String?                    @map("red_team_run_id")
-  scenario           String
-  content            Json
-  checksum           String
-  frozenAt           DateTime                   @map("frozen_at")
-  frozenById         String                     @map("frozen_by_id")
-  createdAt          DateTime                   @default(now()) @map("created_at")
-  investmentCase     InvestmentCase             @relation(fields: [investmentCaseId], references: [id], onDelete: Restrict)
-  rounds             InvestmentReviewRound[]
-  artifacts          StudioArtifact[]
-  reportConfigs      MasterReportConfigRecord[]
+  id                   String                     @id @default(cuid())
+  investmentCaseId     String                     @map("investment_case_id")
+  version              Int
+  schemaVersion        String                     @map("schema_version")
+  studyVersionId       String                     @map("study_version_id")
+  landStudyVersionId   String?                    @map("land_study_version_id")
+  redTeamRunId         String?                    @map("red_team_run_id")
+  scenario             String
+  content              Json
+  checksum             String
+  frozenAt             DateTime                   @map("frozen_at")
+  frozenById           String                     @map("frozen_by_id")
+  createdAt            DateTime                   @default(now()) @map("created_at")
+  investmentCase       InvestmentCase             @relation(fields: [investmentCaseId], references: [id], onDelete: Restrict)
+  rounds               InvestmentReviewRound[]
+  artifacts            StudioArtifact[]
+  reportConfigs        MasterReportConfigRecord[]
+  operationalBaselines OperationalBaseline[]
 
   @@unique([investmentCaseId, version])
   @@unique([investmentCaseId, checksum])
@@ -2999,33 +3502,33 @@ model DesignProjectPackage {
 }
 
 model DesignRevision {
-  id               String               @id @default(cuid())
-  packageId        String               @map("package_id")
-  versionNumber    Int                  @map("version_number")
-  label            String
-  description      String               @default("") @db.Text
-  status           DesignPackageStatus  @default(UPLOADING)
-  sourceRevisionId String?              @map("source_revision_id")
-  contentHash      String?              @map("content_hash")
-  issuedAt         DateTime?            @map("issued_at") @db.Date
-  createdById      String               @map("created_by_id")
-  createdAt        DateTime             @default(now()) @map("created_at")
-  updatedAt        DateTime             @updatedAt @map("updated_at")
-  package          DesignProjectPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
-  files            DesignFile[]
-  metrics          DesignMetric[]
-  findings         DesignFinding[]
-  opportunities    VEOpportunity[]
-  alternatives     DesignAlternative[]
-  reviewRounds     DesignReviewRound[]
-  changesFrom      DesignChange[]       @relation("DesignChangeFrom")
-  changesTo        DesignChange[]       @relation("DesignChangeTo")
-  baselines        DesignBaseline[]
-  decisions        DesignDecision[]
-  detectedUnits    DetectedUnit[]
-  clashes          DesignClash[]
-  ruleChecks       DesignRuleCheck[]
-  bimModels        BimModel[]
+  id                 String                  @id @default(cuid())
+  packageId          String                  @map("package_id")
+  versionNumber      Int                     @map("version_number")
+  label              String
+  description        String                  @default("") @db.Text
+  status             DesignPackageStatus     @default(UPLOADING)
+  sourceRevisionId   String?                 @map("source_revision_id")
+  contentHash        String?                 @map("content_hash")
+  issuedAt           DateTime?               @map("issued_at") @db.Date
+  createdById        String                  @map("created_by_id")
+  createdAt          DateTime                @default(now()) @map("created_at")
+  updatedAt          DateTime                @updatedAt @map("updated_at")
+  package            DesignProjectPackage    @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  files              DesignFile[]
+  metrics            DesignMetric[]
+  findings           DesignFinding[]
+  opportunities      VEOpportunity[]
+  alternatives       DesignAlternative[]
+  reviewRounds       DesignReviewRound[]
+  changesFrom        DesignChange[]          @relation("DesignChangeFrom")
+  changesTo          DesignChange[]          @relation("DesignChangeTo")
+  baselines          DesignBaseline[]
+  decisions          DesignDecision[]
+  detectedUnits      DetectedUnit[]
+  clashes            DesignClash[]
+  ruleChecks         DesignRuleCheck[]
+  bimModels          BimModel[]
   bimComparisonsFrom BimRevisionComparison[] @relation("BimComparisonFrom")
   bimComparisonsTo   BimRevisionComparison[] @relation("BimComparisonTo")
 
@@ -3117,34 +3620,34 @@ model DesignProcessingJob {
 }
 
 model BimModel {
-  id                String         @id @default(cuid())
-  organizationId    String         @map("organization_id")
-  projectId         String         @map("project_id")
-  packageId         String         @map("package_id")
-  revisionId        String         @map("revision_id")
-  fileId            String         @unique @map("file_id")
-  status            BimModelStatus @default(UPLOADED)
-  ifcSchema         String?        @map("ifc_schema")
-  geometryKey       String?        @map("geometry_key")
-  geometryChecksum  String?        @map("geometry_checksum")
-  spatialTree       Json?          @map("spatial_tree")
-  bounds            Json?
-  elementCount      Int            @default(0) @map("element_count")
-  triangleCount     Int            @default(0) @map("triangle_count")
-  fragmentCount     Int            @default(0) @map("fragment_count")
-  processingMs      Int?           @map("processing_ms")
-  loadEstimateMs    Int?           @map("load_estimate_ms")
-  errorMessage      String?        @map("error_message") @db.Text
-  processedAt       DateTime?      @map("processed_at")
-  createdAt         DateTime       @default(now()) @map("created_at")
-  updatedAt         DateTime       @updatedAt @map("updated_at")
-  organization      Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project           Project        @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  package           DesignProjectPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
-  revision          DesignRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
-  file              DesignFile     @relation(fields: [fileId], references: [id], onDelete: Cascade)
-  elements          BimElement[]
-  clashes           DesignClash[]
+  id               String               @id @default(cuid())
+  organizationId   String               @map("organization_id")
+  projectId        String               @map("project_id")
+  packageId        String               @map("package_id")
+  revisionId       String               @map("revision_id")
+  fileId           String               @unique @map("file_id")
+  status           BimModelStatus       @default(UPLOADED)
+  ifcSchema        String?              @map("ifc_schema")
+  geometryKey      String?              @map("geometry_key")
+  geometryChecksum String?              @map("geometry_checksum")
+  spatialTree      Json?                @map("spatial_tree")
+  bounds           Json?
+  elementCount     Int                  @default(0) @map("element_count")
+  triangleCount    Int                  @default(0) @map("triangle_count")
+  fragmentCount    Int                  @default(0) @map("fragment_count")
+  processingMs     Int?                 @map("processing_ms")
+  loadEstimateMs   Int?                 @map("load_estimate_ms")
+  errorMessage     String?              @map("error_message") @db.Text
+  processedAt      DateTime?            @map("processed_at")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+  organization     Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project          Project              @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  package          DesignProjectPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  revision         DesignRevision       @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  file             DesignFile           @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  elements         BimElement[]
+  clashes          DesignClash[]
 
   @@index([organizationId, projectId, status])
   @@index([packageId, revisionId])
@@ -3152,15 +3655,15 @@ model BimModel {
 }
 
 model BimElement {
-  id              String   @id @default(cuid())
-  modelId         String   @map("model_id")
-  expressId       Int      @map("express_id")
-  ifcGuid         String?  @map("ifc_guid")
-  ifcType         String   @map("ifc_type")
+  id              String           @id @default(cuid())
+  modelId         String           @map("model_id")
+  expressId       Int              @map("express_id")
+  ifcGuid         String?          @map("ifc_guid")
+  ifcType         String           @map("ifc_type")
   name            String?
   code            String?
   discipline      String?
-  parentExpressId Int?     @map("parent_express_id")
+  parentExpressId Int?             @map("parent_express_id")
   building        String?
   tower           String?
   storey          String?
@@ -3172,10 +3675,10 @@ model BimElement {
   quantities      Json?
   fingerprint     String
   confidence      DesignConfidence @default(HIGH)
-  createdAt       DateTime @default(now()) @map("created_at")
-  model           BimModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
-  clashesAsA      DesignClash[] @relation("BimClashElementA")
-  clashesAsB      DesignClash[] @relation("BimClashElementB")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  model           BimModel         @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  clashesAsA      DesignClash[]    @relation("BimClashElementA")
+  clashesAsB      DesignClash[]    @relation("BimClashElementB")
 
   @@unique([modelId, expressId])
   @@index([modelId, ifcGuid])
@@ -3184,16 +3687,16 @@ model BimElement {
 }
 
 model BimRevisionComparison {
-  id             String           @id @default(cuid())
-  packageId      String           @map("package_id")
-  revisionFromId String           @map("revision_from_id")
-  revisionToId   String           @map("revision_to_id")
+  id             String         @id @default(cuid())
+  packageId      String         @map("package_id")
+  revisionFromId String         @map("revision_from_id")
+  revisionToId   String         @map("revision_to_id")
   summary        Json
   changes        Json
   tolerance      Json
-  createdAt      DateTime         @default(now()) @map("created_at")
-  revisionFrom   DesignRevision   @relation("BimComparisonFrom", fields: [revisionFromId], references: [id], onDelete: Cascade)
-  revisionTo     DesignRevision   @relation("BimComparisonTo", fields: [revisionToId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  revisionFrom   DesignRevision @relation("BimComparisonFrom", fields: [revisionFromId], references: [id], onDelete: Cascade)
+  revisionTo     DesignRevision @relation("BimComparisonTo", fields: [revisionToId], references: [id], onDelete: Cascade)
 
   @@unique([packageId, revisionFromId, revisionToId])
   @@map("bim_revision_comparisons")

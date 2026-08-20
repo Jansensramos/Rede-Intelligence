@@ -57,8 +57,9 @@ function lineTotal(quantity: Prisma.Decimal.Value, unitCost: Prisma.Decimal.Valu
 }
 
 async function recalculateBudgetTotal(budgetId: string) {
-  const items = await prisma.budgetLineItem.findMany({ where: { budgetId }, select: { totalCost: true } });
-  const totalBudget = items.reduce((sum, item) => sum.add(item.totalCost), new Prisma.Decimal(0));
+  const items = await prisma.budgetLineItem.findMany({ where: { budgetId }, select: { id: true, parentId: true, totalCost: true } });
+  const parents = new Set(items.flatMap((item) => item.parentId ? [item.parentId] : []));
+  const totalBudget = items.filter((item) => !parents.has(item.id)).reduce((sum, item) => sum.add(item.totalCost), new Prisma.Decimal(0));
   await prisma.budget.update({ where: { id: budgetId }, data: { totalBudget } });
   return totalBudget;
 }
@@ -152,7 +153,7 @@ export async function updateLineItem(context: AuthContext, budgetId: string, lin
   assertCanMutate(context);
   const input = updateBudgetLineItemSchema.parse(raw);
   const budget = await budgetForTenant(context.organizationId, budgetId);
-  if (budget.status === "APPROVED" || budget.status === "ARCHIVED") throw new Error("Crie uma nova versão para alterar um orçamento aprovado.");
+  if (["APPROVED", "OFFICIAL", "SUPERSEDED", "CLOSED", "ARCHIVED"].includes(budget.status)) throw new Error("Crie uma nova versão para alterar um orçamento aprovado.");
   const currentItem = budget.lineItems.find((item) => item.id === lineItemId);
   if (!currentItem) throw new Error("Item não encontrado neste orçamento.");
   const quantity = new Prisma.Decimal(input.quantity ?? currentItem.quantity);
@@ -174,7 +175,7 @@ export async function updateLineItem(context: AuthContext, budgetId: string, lin
 export async function deleteLineItem(context: AuthContext, budgetId: string, lineItemId: string) {
   assertCanMutate(context);
   const budget = await budgetForTenant(context.organizationId, budgetId);
-  if (budget.status === "APPROVED" || budget.status === "ARCHIVED") throw new Error("Crie uma nova versão para alterar um orçamento aprovado.");
+  if (["APPROVED", "OFFICIAL", "SUPERSEDED", "CLOSED", "ARCHIVED"].includes(budget.status)) throw new Error("Crie uma nova versão para alterar um orçamento aprovado.");
   if (!budget.lineItems.some((item) => item.id === lineItemId)) throw new Error("Item não encontrado neste orçamento.");
   await prisma.budgetLineItem.delete({ where: { id: lineItemId } });
   await recalculateBudgetTotal(budgetId);
@@ -205,10 +206,20 @@ export async function getLatestProjectBudget(context: Pick<AuthContext, "organiz
 
 export async function approveBudget(context: AuthContext, budgetId: string) {
   if (!(["OWNER", "ADMIN"] as const).includes(context.role as "OWNER" | "ADMIN")) throw new Error("Somente Owner ou Admin pode aprovar orçamentos.");
-  await budgetForTenant(context.organizationId, budgetId);
-  return prisma.budget.update({
-    where: { id: budgetId },
-    data: { status: "APPROVED", approvedById: context.userId, approvedAt: new Date(), updatedById: context.userId },
-    include: budgetInclude,
+  const budget = await budgetForTenant(context.organizationId, budgetId);
+  const parents = new Set(budget.lineItems.flatMap((item) => item.parentId ? [item.parentId] : []));
+  const proofTotal = budget.lineItems.filter((item) => !parents.has(item.id)).reduce((sum, item) => sum.add(item.totalCost), new Prisma.Decimal(0));
+  if (!proofTotal.equals(budget.totalBudget)) throw new Error("Prova-zero inválida: a soma das linhas finais difere do total do orçamento.");
+  return prisma.$transaction(async (tx) => {
+    if (budget.kind === "OFFICIAL" || budget.kind === "REVISED") {
+      await tx.budget.updateMany({ where: { projectId: budget.projectId, status: "OFFICIAL", id: { not: budget.id } }, data: { status: "SUPERSEDED" } });
+    }
+    const approved = await tx.budget.update({
+      where: { id: budgetId },
+      data: { status: budget.kind === "PRELIMINARY" ? "APPROVED" : "OFFICIAL", approvedById: context.userId, approvedAt: new Date(), updatedById: context.userId },
+      include: budgetInclude,
+    });
+    await tx.auditLog.create({ data: { organizationId: context.organizationId, userId: context.userId, projectId: budget.projectId, action: "BUDGET_APPROVED", entityType: "Budget", entityId: budget.id, after: { status: approved.status, version: approved.version, totalBudget: approved.totalBudget.toString() } } });
+    return approved;
   });
 }

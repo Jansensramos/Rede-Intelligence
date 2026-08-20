@@ -5,6 +5,7 @@ import { ensureInvestmentCase } from "@/application/investment/investment-servic
 import { getAIBootstrap } from "@/application/ai/ai-service";
 import { ensureDesignWorkspace } from "@/application/design/design-service";
 import { getLatestProjectBudget } from "@/application/budget/budget-service";
+import { getOperationsWorkspace } from "@/application/operations/operations-service";
 import { IntelligenceWorkspace } from "@/components/intelligence-workspace";
 import { START_BUTANTA_PROJECT } from "@/domain/financial/demo";
 import { calculateAllScenarios } from "@/domain/financial/engine";
@@ -33,11 +34,12 @@ export default async function Home() {
   const baseVgv = calculateAllScenarios(initialStudy.assumptions).base.metrics.vgv;
 
   const initialInvestment = await ensureInvestmentCase(context);
-  const [initialLand, initialDesign, initialAI, initialBudget] = await Promise.all([
+  const [initialLand, initialDesign, initialAI, initialBudget, initialOperations] = await Promise.all([
     getLatestLandStudyForOrganization(context.organizationId),
     ensureDesignWorkspace(context, initialStudy.projectId),
     getAIBootstrap(context),
     getLatestProjectBudget(context, initialStudy.projectId, baseVgv),
+    getOperationsWorkspace(context, initialStudy.projectId),
   ]);
   if (!initialLand) throw new Error("Execute o seed para carregar o estudo territorial demonstrativo.");
 
@@ -49,6 +51,7 @@ export default async function Home() {
       initialAI={initialAI}
       initialDesign={initialDesign}
       initialBudget={initialBudget}
+      initialOperations={initialOperations}
       identity={{ userName: context.userName, organizationName: context.organizationName }}
     />
   );
