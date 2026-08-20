@@ -20,7 +20,7 @@ interface BudgetEditorProps {
   lineItems: BudgetLineItem[];
   totalBudget: number;
   summary?: BudgetSummary;
-  onUpdateItem?: (itemId: string, updates: any) => Promise<void>;
+  onUpdateItem?: (itemId: string, updates: Partial<Pick<BudgetLineItem, "description" | "quantity" | "unitCost">>) => Promise<void>;
   onDeleteItem?: (itemId: string) => Promise<void>;
   readOnly?: boolean;
 }
@@ -43,7 +43,7 @@ export function BudgetEditor({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleInputChange = (itemId: string, field: string, value: any) => {
+  const handleInputChange = (itemId: string, field: "description" | "quantity" | "unitCost", value: string) => {
     setEditing((prev) => ({
       ...prev,
       [itemId]: {
@@ -67,8 +67,8 @@ export function BudgetEditor({
             return newState;
           });
         }
-      } catch (err: any) {
-        setError(err.message || "Erro ao salvar");
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Erro ao salvar");
       } finally {
         setLoading(false);
       }
@@ -85,8 +85,8 @@ export function BudgetEditor({
         if (onDeleteItem) {
           await onDeleteItem(itemId);
         }
-      } catch (err: any) {
-        setError(err.message || "Erro ao deletar");
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Erro ao excluir");
       } finally {
         setLoading(false);
       }
@@ -105,7 +105,7 @@ export function BudgetEditor({
   const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-budget-id={budgetId}>
       <div className="bg-white rounded-lg shadow">
         <div className="bg-gradient-to-r from-slate-800 to-slate-700 text-white px-6 py-4 rounded-t-lg">
           <h2 className="text-2xl font-bold">{projectName}</h2>
@@ -123,7 +123,7 @@ export function BudgetEditor({
             {summary.vgv && (
               <>
                 <div>
-                  <p className="text-xs text-slate-600 font-semibold">MARGIN</p>
+                  <p className="text-xs text-slate-600 font-semibold">MARGEM</p>
                   <p className="text-2xl font-bold text-green-600">
                     {formatCurrency(summary.margin || 0)}
                   </p>
@@ -156,7 +156,7 @@ export function BudgetEditor({
                 <th className="text-left py-3 font-semibold text-slate-700">Categoria</th>
                 <th className="text-left py-3 font-semibold text-slate-700">Descrição</th>
                 <th className="text-right py-3 font-semibold text-slate-700">Qtd</th>
-                <th className="text-center py-3 font-semibold text-slate-700">Unit</th>
+                <th className="text-center py-3 font-semibold text-slate-700">Unidade</th>
                 <th className="text-right py-3 font-semibold text-slate-700">Valor Unit</th>
                 <th className="text-right py-3 font-semibold text-slate-700">Total</th>
                 {!readOnly && (
@@ -271,14 +271,14 @@ export function BudgetEditor({
                               }
                               className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
                             >
-                              Edit
+                              Editar
                             </button>
                             <button
                               onClick={() => handleDelete(item.id)}
                               disabled={loading}
                               className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 disabled:opacity-50"
                             >
-                              Del
+                              Excluir
                             </button>
                           </div>
                         )}
@@ -305,7 +305,7 @@ export function BudgetEditor({
         {summary?.categoryTotals && (
           <div className="px-6 py-4 bg-slate-50 border-t border-slate-200">
             <h3 className="font-semibold text-slate-800 mb-3">
-              Breakdown por Categoria
+              Composição por categoria
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {summary.categoryTotals.map((cat) => (

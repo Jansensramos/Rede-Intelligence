@@ -1,142 +1,46 @@
 import { requireAuthContext } from "@/application/auth/session";
-import { getLatestStudyForOrganization } from "@/application/studies/study-service";
+import { getStudyForOrganization } from "@/application/studies/study-service";
 import { getLatestLandStudyForOrganization } from "@/application/land/land-service";
 import { ensureInvestmentCase } from "@/application/investment/investment-service";
 import { getAIBootstrap } from "@/application/ai/ai-service";
 import { ensureDesignWorkspace } from "@/application/design/design-service";
+import { getLatestProjectBudget } from "@/application/budget/budget-service";
 import { IntelligenceWorkspace } from "@/components/intelligence-workspace";
-import { DEMO_PROJECT } from "@/domain/financial/demo";
+import { START_BUTANTA_PROJECT } from "@/domain/financial/demo";
 import { calculateAllScenarios } from "@/domain/financial/engine";
-import { calculateRedeScore } from "@/domain/score";
-import { calculateSensitivity } from "@/domain/sensitivity";
-import { createDemoLandSnapshot } from "@/domain/land";
+import { prisma } from "@/infrastructure/database/prisma";
 
 export default async function Home() {
-  // Temporariamente desabilitado para desenvolvimento
-  // const context = await requireAuthContext();
-  const context = {
-    userName: "Admin",
-    organizationName: "Demo Organization",
-    organizationId: "demo-org",
-    userId: "demo-user",
-  };
-  // Desabilitado para desenvolvimento - usar dados demo/mock
-  // const persisted = await getLatestStudyForOrganization(context.organizationId);
-  // const persistedLand = await getLatestLandStudyForOrganization(context.organizationId);
-  // const initialInvestment = await ensureInvestmentCase(context);
-  // const initialAI = await getAIBootstrap(context);
-  // const initialDesign = await ensureDesignWorkspace(context, persisted?.projectId);
-
-  // ✅ DADOS DO PROJETO START BUTANTÃ - MCMV
-  // VGV: R$ 83 milhões | Obra reduzida 20% para MCMV
-  const BUTANTA_PROJECT = {
-    projectName: "START BUTANTÃ",
-    city: "São Paulo",
-    state: "SP",
-    landAreaM2: "14500",
-    landPrice: "8000000",
-    units: 200,
-    privateAreaPerUnitM2: "45",
-    grossBuiltAreaM2: null,
-    efficiencyRate: "82",
-    unitPrice: "415000", // 83M / 200 = 415k por unidade
-    constructionCostPerM2: "2240", // 2800 - 20% = 2240 (redução MCMV)
-    indirectCostsRate: "8",
-    contingencyRate: "5",
-    taxRate: "2",
-    commissionRate: "2.5",
-    marketingRate: "1.5",
-    approvalMonths: 6,
-    constructionMonths: 24,
-    salesVelocityUnitsMonth: "8",
-    salesStartDelayMonths: 0,
-    downPaymentRate: "10",
-    duringConstructionRate: "80",
-    onDeliveryRate: "10",
-    financingLimit: "45000000",
-    annualFinancingRate: "8.5",
-    policy: {
-      minimumMarginRate: "15",
-      minimumRoiRate: "12",
-      minimumIrrRate: "15",
-      maximumExposure: "20000000",
-      minimumContingencyRate: "5",
+  const context = await requireAuthContext();
+  const project = await prisma.project.findUnique({
+    where: {
+      organizationId_name: {
+        organizationId: context.organizationId,
+        name: START_BUTANTA_PROJECT.projectName,
+      },
     },
-    annualDiscountRate: "12",
-  };
+    include: {
+      studies: {
+        where: { status: "ACTIVE" },
+        orderBy: { updatedAt: "desc" },
+        take: 1,
+      },
+    },
+  });
+  const studyId = project?.studies[0]?.id;
+  const initialStudy = studyId ? await getStudyForOrganization(context.organizationId, studyId) : null;
+  if (!initialStudy) throw new Error("Execute o seed para carregar o projeto demonstrativo START BUTANTÃ.");
+  const baseVgv = calculateAllScenarios(initialStudy.assumptions).base.metrics.vgv;
 
-  const persisted = null;
-  const persistedLand = null;
-  const initialInvestment = null ?? { id: "butanta-case", versionId: "v1", findings: [], documents: [], dataRoomCompleteness: 0, equityRequired: "26400000", financingLimit: "39600000", costOfCapital: "8.5" };
-  const initialAI = null ?? { activeConversation: null, conversations: [] };
-  const initialDesign = null ?? { package: null, revision: null, files: [], findings: [], metrics: [], insights: [], opportunities: [], summary: { openFindings: 0, criticalFindings: 0 }, revisions: [], revisionDiff: [], alternatives: [], supportedFormats: [] };
-  const initialStudy = persisted ?? (() => {
-    const sensitivity = calculateSensitivity(BUTANTA_PROJECT);
-    const results = calculateAllScenarios(BUTANTA_PROJECT, sensitivity.calculatedAt);
-    return {
-      projectId: "butanta-001",
-      studyId: "study-butanta-001",
-      studyVersionId: "v1-20260820",
-      versionNumber: 1,
-      assumptions: BUTANTA_PROJECT,
-      analytics: {
-        sensitivity,
-        scores: {
-          conservative: calculateRedeScore({ result: results.conservative, resilience: sensitivity.resilience }),
-          base: sensitivity.baseScore,
-          aggressive: calculateRedeScore({ result: results.aggressive, resilience: sensitivity.resilience }),
-        },
-      },
-      redTeam: {
-        redTeamVersion: "v1.0",
-        promptVersion: "1.0",
-        startedAt: new Date().toISOString(),
-        finishedAt: new Date().toISOString(),
-        scenario: "BASE",
-        provider: { configured: false, name: "none", model: null },
-        evidencePack: { version: "1.0", items: [] },
-        agents: [
-          { agent: "FINANCE_FUNDING", label: "Financeiro", opinion: "Estrutura de capital adequada ao perfil MCMV", status: "CONFIRMED", confidence: "HIGH", questions: [], findings: [] },
-          { agent: "ENGINEERING_COST", label: "Engenharia", opinion: "Custos reduzidos mantêm conformidade técnica", status: "CONFIRMED", confidence: "MEDIUM", questions: [], findings: [] },
-          { agent: "COMMERCIAL_MARKET", label: "Comercial", opinion: "Velocidade de vendas é o principal risco identificado", status: "CHALLENGED", confidence: "MEDIUM", questions: ["Como será a absorção de mercado?"], findings: [] },
-          { agent: "LEGAL_STRUCTURING", label: "Legal", opinion: "Estrutura jurídica compatível com MCMV", status: "CONFIRMED", confidence: "HIGH", questions: [], findings: [] },
-          { agent: "INVESTOR_CFO", label: "Investidor", opinion: "Retorno atrativo com riscos gerenciáveis", status: "CONFIRMED", confidence: "MEDIUM", questions: [], findings: [] },
-          { agent: "DEVELOPER_OPERATOR", label: "Operador", opinion: "Operação viável com protocolo MCMV conhecido", status: "CONFIRMED", confidence: "HIGH", questions: [], findings: [] },
-        ],
-        findings: [
-          { id: "1", agent: "COMMERCIAL_MARKET", severity: "HIGH", confidence: "HIGH", type: "RISK", title: "Risco de velocidade de vendas", description: "Meta de 8 un/mês pode ser ambiciosa para MCMV", implication: "Atraso no fluxo de caixa e comprometimento da margem projetada", recommendedAction: "Revisar plano comercial com market research; considerar alternativos de precificação", evidence: [], evidenceRefs: ["MARKET_01", "COMMERCIAL_ANALYSIS"], status: "OPEN", createdAt: new Date().toISOString() },
-          { id: "2", agent: "FINANCE_FUNDING", severity: "MEDIUM", confidence: "MEDIUM", type: "RISK", title: "Dependência de financiamento", description: "Projeto requer 60% de funding externo", implication: "Taxa de juros pode impactar o retorno final do projeto", recommendedAction: "Negociar termos de financiamento antes do início das obras", evidence: [], evidenceRefs: ["FINANCE_02"], status: "OPEN", createdAt: new Date().toISOString() },
-        ],
-        assumptionChallenges: [],
-        evidenceRequests: [],
-        crossReviews: [],
-        disagreements: [],
-        conclusion: {
-          decision: "ADVANCE_WITH_CONDITIONS",
-          confidence: "MEDIUM",
-          dominantRisk: "Risco de velocidade de vendas - meta comercial ambiciosa",
-          topFindingIds: ["1"],
-          decisionBlockerIds: [],
-          requiredActions: ["Validar absorção de mercado", "Revisar plano de vendas"],
-          evidenceRequestIds: [],
-          disagreementIds: [],
-          strengths: ["Localização estratégica", "Produto MCMV competitivo"],
-          mitigations: ["Plano de contingência comercial", "Diversificação de público"],
-          residualRisk: "Moderado",
-          whatWouldChangeDecision: [],
-          enginePosition: "Projeto viável com riscos gerenciáveis",
-          executiveSummary: "Projeto START BUTANTÃ apresenta fundamentais financeiros sólidos com risco comercial identificável e mitigável."
-        },
-        observability: { calls: 0, durationMs: 0, inputTokens: null, outputTokens: null }
-      },
-    };
-  })();
-  const initialLand = persistedLand ?? {
-    landStudyId: "",
-    versionId: "",
-    versionNumber: 1,
-    snapshot: createDemoLandSnapshot(context.organizationId),
-  };
+  const initialInvestment = await ensureInvestmentCase(context);
+  const [initialLand, initialDesign, initialAI, initialBudget] = await Promise.all([
+    getLatestLandStudyForOrganization(context.organizationId),
+    ensureDesignWorkspace(context, initialStudy.projectId),
+    getAIBootstrap(context),
+    getLatestProjectBudget(context, initialStudy.projectId, baseVgv),
+  ]);
+  if (!initialLand) throw new Error("Execute o seed para carregar o estudo territorial demonstrativo.");
+
   return (
     <IntelligenceWorkspace
       initialStudy={initialStudy}
@@ -144,6 +48,7 @@ export default async function Home() {
       initialInvestment={initialInvestment}
       initialAI={initialAI}
       initialDesign={initialDesign}
+      initialBudget={initialBudget}
       identity={{ userName: context.userName, organizationName: context.organizationName }}
     />
   );

@@ -23,6 +23,13 @@ enum ProjectStatus {
   ARCHIVED
 }
 
+enum BudgetStatus {
+  DRAFT
+  UNDER_REVIEW
+  APPROVED
+  ARCHIVED
+}
+
 enum StudyStatus {
   ACTIVE
   ARCHIVED
@@ -706,6 +713,7 @@ model Organization {
   investmentBrands OrganizationBrandConfig[]
   designPackages   DesignProjectPackage[]
   designRuleSets   DesignRuleSet[]
+  budgets          Budget[]
 
   @@map("organizations")
 }
@@ -751,6 +759,9 @@ model User {
   landVersionsCreated    LandStudyVersion[]           @relation("LandVersionCreatedBy")
   landDocumentsCreated   LandDocument[]
   landAuditLogs          LandAuditLog[]
+  budgetsCreated         Budget[]                     @relation("BudgetCreatedBy")
+  budgetsUpdated         Budget[]                     @relation("BudgetUpdatedBy")
+  budgetsApproved        Budget[]                     @relation("BudgetApprovedBy")
 
   @@map("users")
 }
@@ -836,10 +847,72 @@ model Project {
   auditLogs      AuditLog[]
   landAssets     LandAsset[]
   designPackages DesignProjectPackage[]
+  budgets        Budget[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
   @@map("projects")
+}
+
+model Budget {
+  id             String        @id @default(cuid())
+  organizationId String        @map("organization_id")
+  projectId      String        @map("project_id")
+  studyVersionId String?       @map("study_version_id")
+  name           String
+  description    String?
+  status         BudgetStatus  @default(DRAFT)
+  currency       String        @default("BRL") @db.Char(3)
+  baseDate       DateTime      @map("base_date") @db.Date
+  version        Int           @default(1)
+  totalBudget    Decimal       @default(0) @map("total_budget") @db.Decimal(20, 2)
+  createdById    String        @map("created_by_id")
+  updatedById    String        @map("updated_by_id")
+  approvedById   String?       @map("approved_by_id")
+  approvedAt     DateTime?     @map("approved_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project        Project       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  studyVersion   StudyVersion? @relation(fields: [studyVersionId], references: [id], onDelete: Restrict)
+  createdBy      User          @relation("BudgetCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy      User          @relation("BudgetUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  approvedBy     User?         @relation("BudgetApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+  lineItems      BudgetLineItem[]
+
+  @@unique([projectId, name, version])
+  @@index([organizationId, status])
+  @@index([projectId, status])
+  @@index([studyVersionId])
+  @@map("budgets")
+}
+
+model BudgetLineItem {
+  id          String           @id @default(cuid())
+  budgetId    String           @map("budget_id")
+  parentId    String?          @map("parent_id")
+  code        String?
+  description String
+  category    String
+  phase       String
+  unit        String
+  quantity    Decimal          @db.Decimal(18, 4)
+  unitCost    Decimal          @map("unit_cost") @db.Decimal(20, 2)
+  totalCost   Decimal          @map("total_cost") @db.Decimal(20, 2)
+  sortOrder   Int              @default(0) @map("sort_order")
+  costCenter  String?          @map("cost_center")
+  tower       String?
+  origin      String?
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  budget      Budget           @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  parent      BudgetLineItem?  @relation("BudgetItemHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children    BudgetLineItem[] @relation("BudgetItemHierarchy")
+
+  @@unique([budgetId, code])
+  @@index([budgetId, phase, sortOrder])
+  @@index([parentId])
+  @@map("budget_line_items")
 }
 
 model ViabilityStudy {
@@ -890,6 +963,7 @@ model StudyVersion {
   redTeamRuns   RedTeamRun[]
   scores        Score[]
   aiRuns        AIAnalysisRun[]
+  budgets       Budget[]
 
   @@unique([studyId, versionNumber])
   @@index([studyId, createdAt])

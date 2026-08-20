@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getBudget, getBudgetSummary } from "@/application/budget/budget-service";
-import { prisma } from "@/infrastructure/database/prisma";
+import { getBudget, toBudgetWorkspaceView } from "@/application/budget/budget-service";
+import { requireAuthContext } from "@/application/auth/session";
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : "A operação não pôde ser concluída.";
+
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const context = await requireAuthContext();
     const { id } = await params;
-    const budget = await getBudget(prisma, id);
-    const summary = await getBudgetSummary(prisma, id, 16_800_000);
-    return NextResponse.json({ success: true, data: { ...budget, summary } });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const budget = await getBudget(context, id);
+    return NextResponse.json({ success: true, data: toBudgetWorkspaceView(budget) });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }

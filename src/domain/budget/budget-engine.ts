@@ -201,6 +201,16 @@ export const COLINAS_MOOCA_BUDGET: BudgetLineItemInput[] = [
   { phase: "STRUCTURE", category: "CONTINGENCY", description: "Contingência Técnica", quantity: 1, unit: "projeto", unitCost: 1344000 },
 ];
 
+export const START_BUTANTA_BUDGET: BudgetLineItemInput[] = [
+  { phase: "LAND_PREP", category: "LAND", description: "Aquisição do terreno", quantity: 1, unit: "lote", unitCost: 8_000_000 },
+  { phase: "STRUCTURE", category: "CONSTRUCTION", description: "Construção MCMV", quantity: 10_975.6098, unit: "m²", unitCost: 2_240 },
+  { phase: "FOUNDATION", category: "INDIRECT", description: "Custos indiretos", quantity: 1, unit: "projeto", unitCost: 1_966_829.27 },
+  { phase: "STRUCTURE", category: "CONTINGENCY", description: "Contingência técnica", quantity: 1, unit: "projeto", unitCost: 1_229_268.29 },
+  { phase: "DELIVERY", category: "TAXES", description: "Tributos sobre vendas", quantity: 1, unit: "projeto", unitCost: 1_660_000 },
+  { phase: "DELIVERY", category: "COMMERCIAL", description: "Comissão de vendas", quantity: 1, unit: "projeto", unitCost: 2_075_000 },
+  { phase: "DELIVERY", category: "COMMERCIAL", description: "Marketing", quantity: 1, unit: "projeto", unitCost: 1_245_000 },
+];
+
 export function calculateImpactOnFinancial(
   currentBudgetTotal: number,
   newBudgetTotal: number,
