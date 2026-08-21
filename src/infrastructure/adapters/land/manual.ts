@@ -8,4 +8,5 @@ export class ManualMunicipalityAdapter implements MunicipalityAdapter {
   async getUrbanParameters(zoningCode: string) { void zoningCode; return { status: "MANUAL_REQUIRED" as const, data: null, sourceIds: ["MANUAL"], warnings: ["Preencha parâmetros, unidades, fonte e confiança."] }; }
   async getRestrictions(input: ParcelLookupInput) { void input; return { status: "MANUAL_REQUIRED" as const, data: [], sourceIds: ["MANUAL"], warnings: ["Informe somente restrições sustentadas por evidência."] }; }
   async getSourceMetadata() { return []; }
+  async getMunicipalProperty(input: ParcelLookupInput & { fiscalYear: number }) { void input; return { status: "MANUAL_REQUIRED" as const, data: null, sourceIds: ["MANUAL"], warnings: ["Informe IPTU, cadastro municipal, exercício e evidência da consulta."] }; }
 }

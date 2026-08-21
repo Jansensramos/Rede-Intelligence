@@ -47,6 +47,7 @@ import { BudgetEditor } from "./BudgetEditor";
 import { OperationsView } from "./operations-view";
 import { FinancialView } from "./financial-view";
 import { ProcurementView } from "./procurement-view";
+import { LegalView } from "./legal-view";
 import { logoutAction } from "@/app/actions/auth";
 import { createStudyAction, createStudyVersionAction } from "@/app/actions/studies";
 import { reassessInvestmentCaseAction } from "@/app/actions/investment";
@@ -59,13 +60,14 @@ import type { BudgetWorkspaceView } from "@/application/budget/budget-service";
 import type { OperationsWorkspaceView } from "@/application/operations/operations-service";
 import type { FinancialWorkspaceView } from "@/application/financial-ops/financial-service";
 import type { ProcurementWorkspaceView } from "@/application/procurement/procurement-service";
+import type { LegalWorkspaceView } from "@/application/legal/legal-service";
 import { DEMO_PROJECT } from "@/domain/financial/demo";
 import { calculateAllScenarios } from "@/domain/financial/engine";
 import { SCENARIOS } from "@/domain/financial/scenarios";
 import type { ProjectAssumptions, ScenarioKey } from "@/domain/financial/types";
 import { analyzeRisk, type FindingSeverity } from "@/domain/risk/rules";
 
-type ViewKey = "overview" | "assumptions" | "land" | "design" | "budget" | "procurement" | "financial" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit";
+type ViewKey = "overview" | "assumptions" | "land" | "design" | "budget" | "procurement" | "legal" | "financial" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit";
 type EditorMode = "create" | "version";
 
 const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
@@ -75,6 +77,7 @@ const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
   { key: "design", label: "Design Intelligence", icon: Layers3 },
   { key: "budget", label: "Orçamento", icon: CircleDollarSign },
   { key: "procurement", label: "Suprimentos e Contratos", icon: ShoppingCart },
+  { key: "legal", label: "Jurídico e Diligência", icon: Scale },
   { key: "financial", label: "Financeiro", icon: Landmark },
   { key: "scenarios", label: "Cenários", icon: BarChart3 },
   { key: "sensitivity", label: "Sensibilidade", icon: SlidersHorizontal },
@@ -140,7 +143,7 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "RE";
 }
 
-export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, initialOperations, initialFinancial, initialProcurement, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; initialOperations: OperationsWorkspaceView; initialFinancial: FinancialWorkspaceView; initialProcurement: ProcurementWorkspaceView; identity: WorkspaceIdentity }) {
+export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; initialOperations: OperationsWorkspaceView; initialFinancial: FinancialWorkspaceView; initialProcurement: ProcurementWorkspaceView; initialLegal: LegalWorkspaceView; identity: WorkspaceIdentity }) {
   const [study, setStudy] = useState<PersistedStudyView>(initialStudy);
   const [landWorkspace, setLandWorkspace] = useState<LandWorkspaceView>(initialLand);
   const [investmentWorkspace, setInvestmentWorkspace] = useState<InvestmentCaseWorkspace>(initialInvestment);
@@ -351,6 +354,13 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
             <div className="view-stack">
               <SectionTitle eyebrow="SUPRIMENTOS, CONTRATOS E MEDIÇÕES" title="Do planejamento à execução contratual" description="Necessidade → requisição → cotação → contrato → medição → obrigação, sem dupla contagem." />
               <ProcurementView workspace={initialProcurement} />
+            </div>
+          )}
+
+          {view === "legal" && (
+            <div className="view-stack">
+              <SectionTitle eyebrow="JURÍDICO, DILIGÊNCIA E OBRIGAÇÕES" title="Central Jurídica do Empreendimento" description="Imóvel, evidências, riscos, licenças, prazos e impactos conectados à decisão, ao cronograma e ao Financeiro." />
+              <LegalView workspace={initialLegal} />
             </div>
           )}
 

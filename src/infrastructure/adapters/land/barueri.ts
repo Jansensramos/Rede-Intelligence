@@ -127,4 +127,9 @@ export class BarueriMunicipalityAdapter implements MunicipalityAdapter {
   async getSourceMetadata() {
     return BARUERI_SOURCES;
   }
+
+  async getMunicipalProperty(input: ParcelLookupInput & { fiscalYear: number }) {
+    void input;
+    return { status: "MANUAL_REQUIRED" as const, data: null, sourceIds: ["BARUERI_MANUAL_PARCEL"], warnings: ["Não há consulta pública estruturada integrada. Registre manualmente o espelho do IPTU e a certidão municipal, preservando a evidência."] };
+  }
 }

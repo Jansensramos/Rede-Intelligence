@@ -7,6 +7,16 @@ export interface ParcelLookupInput {
   cadastralIdentifier?: string;
 }
 
+export interface MunicipalPropertyData {
+  municipalRegistration: string;
+  fiscalYear: number;
+  assessedValue?: number;
+  propertyTaxAmount?: number;
+  debtStatus: "CLEAR" | "HAS_DEBT" | "NOT_VERIFIED";
+  debtAmount?: number;
+  sourceRef: string;
+}
+
 export interface AdapterResult<T> {
   status: "FOUND" | "PARTIAL" | "MANUAL_REQUIRED" | "UNAVAILABLE";
   data: T | null;
@@ -22,6 +32,7 @@ export interface MunicipalityAdapter {
   getUrbanParameters(zoningCode: string): Promise<AdapterResult<UrbanParameters>>;
   getRestrictions(input: ParcelLookupInput): Promise<AdapterResult<UrbanRestriction[]>>;
   getSourceMetadata(): Promise<UrbanSource[]>;
+  getMunicipalProperty(input: ParcelLookupInput & { fiscalYear: number }): Promise<AdapterResult<MunicipalPropertyData>>;
 }
 
 export interface GeocoderProvider {

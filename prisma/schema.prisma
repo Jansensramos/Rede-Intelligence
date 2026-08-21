@@ -809,6 +809,89 @@ enum BimClashStatus {
   DISCARDED
 }
 
+enum LegalRecordProvenance {
+  OFFICIAL_DOCUMENT
+  MUNICIPAL_PORTAL
+  REGISTRY_OFFICE
+  CONTRACT
+  USER_CONFIRMED
+  MANUAL
+}
+
+enum LegalDiligenceStatus {
+  DRAFT
+  IN_PROGRESS
+  UNDER_REVIEW
+  COMPLETED
+  SUPERSEDED
+  CANCELLED
+}
+
+enum LegalDecisionStatus {
+  PROCEED
+  PROCEED_WITH_CONDITIONS
+  HOLD
+  DO_NOT_PROCEED
+  INSUFFICIENT_EVIDENCE
+}
+
+enum LegalItemStatus {
+  NOT_STARTED
+  REQUESTED
+  RECEIVED
+  UNDER_REVIEW
+  COMPLIANT
+  NON_COMPLIANT
+  WAIVED
+  EXPIRED
+  RESOLVED
+  CANCELLED
+}
+
+enum LegalCriticality {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum LegalObligationStatus {
+  DRAFT
+  ACTIVE
+  DUE_SOON
+  OVERDUE
+  FULFILLED
+  WAIVED
+  CANCELLED
+}
+
+enum LegalAlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+enum LegalLicenseStatus {
+  NOT_STARTED
+  IN_PREPARATION
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  APPROVED_WITH_CONDITIONS
+  REJECTED
+  SUSPENDED
+  EXPIRED
+  RENEWAL_REQUIRED
+}
+
+enum LegalFinancialEventStatus {
+  PENDING
+  PROCESSED
+  REVERSED
+  FAILED
+}
+
 model Organization {
   id                         String                      @id @default(cuid())
   name                       String
@@ -863,6 +946,16 @@ model Organization {
   measurementCertificates    MeasurementCertificate[]
   financialIntegrationEvents FinancialIntegrationEvent[]
   procurementDocumentLinks   ProcurementDocumentLink[]
+  legalDueDiligenceCases     LegalDueDiligenceCase[]
+  legalAssetRegistrations    LegalAssetRegistration[]
+  municipalPropertyRecords   MunicipalPropertyRecord[]
+  legalObligations           LegalObligation[]
+  legalDeadlinePolicies      LegalDeadlinePolicy[]
+  legalAlerts                LegalAlert[]
+  legalLicenses              LegalLicense[]
+  legalAuthorityProcesses    LegalAuthorityProcess[]
+  legalTimelineEvents        LegalTimelineEvent[]
+  legalFinancialEvents       LegalFinancialEvent[]
 
   @@map("organizations")
 }
@@ -1019,6 +1112,13 @@ model Project {
   operationalContracts         OperationalContract[]
   measurementCertificates      MeasurementCertificate[]
   financialIntegrationEvents   FinancialIntegrationEvent[]
+  legalDueDiligenceCases       LegalDueDiligenceCase[]
+  legalObligations             LegalObligation[]
+  legalAlerts                  LegalAlert[]
+  legalLicenses                LegalLicense[]
+  legalAuthorityProcesses      LegalAuthorityProcess[]
+  legalTimelineEvents          LegalTimelineEvent[]
+  legalFinancialEvents         LegalFinancialEvent[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -1465,6 +1565,7 @@ model ScheduleActivity {
   contractItems        OperationalContractItem[]
   purchaseOrderItems   PurchaseOrderItem[]
   measurementLines     MeasurementLine[]
+  legalTimelineEvents  LegalTimelineEvent[]
 
   @@unique([scheduleId, code])
   @@index([scheduleId, startDate, endDate])
@@ -2274,34 +2375,37 @@ model AuditLog {
 }
 
 model LandAsset {
-  id                    String         @id @default(cuid())
-  organizationId        String         @map("organization_id")
-  projectId             String?        @map("project_id")
+  id                    String                    @id @default(cuid())
+  organizationId        String                    @map("organization_id")
+  projectId             String?                   @map("project_id")
   name                  String
   address               String
   number                String
   neighborhood          String
   city                  String
-  state                 String         @db.Char(2)
-  postalCode            String         @map("postal_code")
-  latitude              Decimal        @db.Decimal(11, 8)
-  longitude             Decimal        @db.Decimal(11, 8)
-  cadastralIdentifier   String?        @map("cadastral_identifier")
-  municipalRegistration String?        @map("municipal_registration")
-  area                  Decimal        @db.Decimal(20, 4)
-  frontage              Decimal        @db.Decimal(20, 4)
-  polygonGeometry       Json           @map("polygon_geometry")
-  sourceRef             String         @map("source_ref")
-  createdById           String         @map("created_by_id")
-  updatedById           String         @map("updated_by_id")
-  createdAt             DateTime       @default(now()) @map("created_at")
-  updatedAt             DateTime       @updatedAt @map("updated_at")
-  organization          Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project               Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  createdBy             User           @relation("LandAssetCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy             User           @relation("LandAssetUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  state                 String                    @db.Char(2)
+  postalCode            String                    @map("postal_code")
+  latitude              Decimal                   @db.Decimal(11, 8)
+  longitude             Decimal                   @db.Decimal(11, 8)
+  cadastralIdentifier   String?                   @map("cadastral_identifier")
+  municipalRegistration String?                   @map("municipal_registration")
+  area                  Decimal                   @db.Decimal(20, 4)
+  frontage              Decimal                   @db.Decimal(20, 4)
+  polygonGeometry       Json                      @map("polygon_geometry")
+  sourceRef             String                    @map("source_ref")
+  createdById           String                    @map("created_by_id")
+  updatedById           String                    @map("updated_by_id")
+  createdAt             DateTime                  @default(now()) @map("created_at")
+  updatedAt             DateTime                  @updatedAt @map("updated_at")
+  organization          Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project               Project?                  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy             User                      @relation("LandAssetCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy             User                      @relation("LandAssetUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
   studies               LandStudy[]
   documents             LandDocument[]
+  legalRegistrations    LegalAssetRegistration[]
+  dueDiligenceCases     LegalDueDiligenceCase[]
+  municipalRecords      MunicipalPropertyRecord[]
 
   @@index([organizationId, city, state])
   @@index([projectId])
@@ -5681,6 +5785,8 @@ model OperationalContract {
   amendments            ContractAmendment[]
   advances              ContractAdvance[]
   measurements          MeasurementCertificate[]
+  legalConditions       LegalContractCondition[]
+  legalGuarantees       LegalGuarantee[]
 
   @@unique([projectId, number])
   @@index([organizationId, projectId, status])
@@ -5918,4 +6024,468 @@ model ProcurementDocumentLink {
   @@unique([organizationId, entityType, entityId, documentType, version])
   @@index([organizationId, entityType, entityId])
   @@map("procurement_document_links")
+}
+
+model LegalDueDiligenceCase {
+  id                 String                 @id @default(cuid())
+  organizationId     String                 @map("organization_id")
+  projectId          String                 @map("project_id")
+  landAssetId        String?                @map("land_asset_id")
+  code               String
+  title              String
+  scope              String                 @db.Text
+  status             LegalDiligenceStatus   @default(DRAFT)
+  currentVersion     Int                    @default(1) @map("current_version")
+  startedAt          DateTime?              @map("started_at") @db.Date
+  targetCompletionAt DateTime?              @map("target_completion_at") @db.Date
+  completedAt        DateTime?              @map("completed_at") @db.Date
+  responsibleId      String                 @map("responsible_id")
+  createdById        String                 @map("created_by_id")
+  updatedById        String                 @map("updated_by_id")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+  organization       Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project            Project                @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  landAsset          LandAsset?             @relation(fields: [landAssetId], references: [id], onDelete: Restrict)
+  parties            LegalPartyLink[]
+  checklistItems     LegalChecklistItem[]
+  documentRequests   LegalDocumentRequest[]
+  findings           LegalFinding[]
+  decisions          LegalDecision[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, projectId, status])
+  @@map("legal_due_diligence_cases")
+}
+
+model LegalAssetRegistration {
+  id                   String                @id @default(cuid())
+  organizationId       String                @map("organization_id")
+  landAssetId          String                @map("land_asset_id")
+  registryOffice       String                @map("registry_office")
+  registrationNumber   String                @map("registration_number")
+  book                 String?
+  sheet                String?
+  version              Int
+  status               LegalItemStatus       @default(UNDER_REVIEW)
+  provenance           LegalRecordProvenance
+  sourceDocumentLinkId String?               @map("source_document_link_id")
+  registeredOwner      String                @map("registered_owner")
+  area                 Decimal?              @db.Decimal(20, 4)
+  entries              Json
+  effectiveAt          DateTime?             @map("effective_at") @db.Date
+  verifiedAt           DateTime?             @map("verified_at")
+  responsibleId        String                @map("responsible_id")
+  createdById          String                @map("created_by_id")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  landAsset            LandAsset             @relation(fields: [landAssetId], references: [id], onDelete: Restrict)
+
+  @@unique([landAssetId, registrationNumber, version])
+  @@index([organizationId, registrationNumber])
+  @@map("legal_asset_registrations")
+}
+
+model LegalPartyLink {
+  id              String                @id @default(cuid())
+  diligenceCaseId String                @map("diligence_case_id")
+  partyType       String                @map("party_type")
+  partyId         String                @map("party_id")
+  role            String
+  nameSnapshot    String                @map("name_snapshot")
+  taxIdSnapshot   String?               @map("tax_id_snapshot")
+  provenance      LegalRecordProvenance
+  createdById     String                @map("created_by_id")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  diligenceCase   LegalDueDiligenceCase @relation(fields: [diligenceCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([diligenceCaseId, partyType, partyId, role])
+  @@index([partyType, partyId])
+  @@map("legal_party_links")
+}
+
+model LegalChecklistItem {
+  id                  String                @id @default(cuid())
+  diligenceCaseId     String                @map("diligence_case_id")
+  templateKey         String                @map("template_key")
+  templateVersion     Int                   @map("template_version")
+  code                String
+  category            String
+  title               String
+  description         String?
+  criticality         LegalCriticality
+  status              LegalItemStatus       @default(NOT_STARTED)
+  responsibleId       String                @map("responsible_id")
+  dueAt               DateTime?             @map("due_at") @db.Date
+  evidenceDocumentIds Json?                 @map("evidence_document_ids")
+  reviewedById        String?               @map("reviewed_by_id")
+  reviewedAt          DateTime?             @map("reviewed_at")
+  notes               String?               @db.Text
+  createdById         String                @map("created_by_id")
+  updatedById         String                @map("updated_by_id")
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @updatedAt @map("updated_at")
+  diligenceCase       LegalDueDiligenceCase @relation(fields: [diligenceCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([diligenceCaseId, code])
+  @@index([diligenceCaseId, status, criticality])
+  @@map("legal_checklist_items")
+}
+
+model LegalDocumentRequest {
+  id                   String                @id @default(cuid())
+  diligenceCaseId      String                @map("diligence_case_id")
+  checklistItemId      String?               @map("checklist_item_id")
+  code                 String
+  documentType         String                @map("document_type")
+  title                String
+  requestedFromPartyId String?               @map("requested_from_party_id")
+  status               LegalItemStatus       @default(REQUESTED)
+  requestedAt          DateTime              @map("requested_at") @db.Date
+  dueAt                DateTime?             @map("due_at") @db.Date
+  receivedAt           DateTime?             @map("received_at")
+  documentLinkId       String?               @map("document_link_id")
+  version              Int                   @default(1)
+  responsibleId        String                @map("responsible_id")
+  createdById          String                @map("created_by_id")
+  updatedById          String                @map("updated_by_id")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  diligenceCase        LegalDueDiligenceCase @relation(fields: [diligenceCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([diligenceCaseId, code, version])
+  @@index([diligenceCaseId, status, dueAt])
+  @@map("legal_document_requests")
+}
+
+model LegalFinding {
+  id              String                @id @default(cuid())
+  diligenceCaseId String                @map("diligence_case_id")
+  code            String
+  category        String
+  severity        LegalCriticality
+  title           String
+  description     String                @db.Text
+  evidence        Json
+  recommendation  String                @db.Text
+  status          LegalItemStatus       @default(UNDER_REVIEW)
+  riskFindingId   String?               @map("risk_finding_id")
+  ownerId         String                @map("owner_id")
+  targetDate      DateTime?             @map("target_date") @db.Date
+  resolvedAt      DateTime?             @map("resolved_at")
+  createdById     String                @map("created_by_id")
+  updatedById     String                @map("updated_by_id")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+  diligenceCase   LegalDueDiligenceCase @relation(fields: [diligenceCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([diligenceCaseId, code])
+  @@index([diligenceCaseId, severity, status])
+  @@map("legal_findings")
+}
+
+model LegalDecision {
+  id                  String                @id @default(cuid())
+  diligenceCaseId     String                @map("diligence_case_id")
+  version             Int
+  decision            LegalDecisionStatus
+  executiveConclusion String                @map("executive_conclusion") @db.Text
+  conditions          Json
+  blockers            Json
+  findingSnapshot     Json                  @map("finding_snapshot")
+  decidedById         String                @map("decided_by_id")
+  decidedAt           DateTime              @map("decided_at")
+  createdAt           DateTime              @default(now()) @map("created_at")
+  diligenceCase       LegalDueDiligenceCase @relation(fields: [diligenceCaseId], references: [id], onDelete: Restrict)
+
+  @@unique([diligenceCaseId, version])
+  @@map("legal_decisions")
+}
+
+model MunicipalPropertyRecord {
+  id                    String                @id @default(cuid())
+  organizationId        String                @map("organization_id")
+  landAssetId           String                @map("land_asset_id")
+  municipalityCode      String                @map("municipality_code")
+  municipalRegistration String                @map("municipal_registration")
+  fiscalYear            Int                   @map("fiscal_year")
+  version               Int                   @default(1)
+  assessedValue         Decimal?              @map("assessed_value") @db.Decimal(20, 2)
+  propertyTaxAmount     Decimal?              @map("property_tax_amount") @db.Decimal(20, 2)
+  debtStatus            String                @map("debt_status")
+  debtAmount            Decimal?              @map("debt_amount") @db.Decimal(20, 2)
+  provenance            LegalRecordProvenance
+  sourceRef             String                @map("source_ref")
+  sourceSnapshot        Json?                 @map("source_snapshot")
+  verifiedAt            DateTime?             @map("verified_at")
+  createdById           String                @map("created_by_id")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  landAsset             LandAsset             @relation(fields: [landAssetId], references: [id], onDelete: Restrict)
+
+  @@unique([landAssetId, fiscalYear, version])
+  @@index([organizationId, municipalityCode, fiscalYear])
+  @@map("municipal_property_records")
+}
+
+model LegalDeadlinePolicy {
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  name           String
+  version        Int
+  milestones     Json
+  isActive       Boolean      @default(true) @map("is_active")
+  createdById    String       @map("created_by_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, name, version])
+  @@index([organizationId, isActive])
+  @@map("legal_deadline_policies")
+}
+
+model LegalObligation {
+  id                    String                @id @default(cuid())
+  organizationId        String                @map("organization_id")
+  projectId             String                @map("project_id")
+  operationalContractId String?               @map("operational_contract_id")
+  code                  String
+  type                  String
+  title                 String
+  description           String                @db.Text
+  authority             String?
+  criticality           LegalCriticality
+  status                LegalObligationStatus @default(DRAFT)
+  dueAt                 DateTime              @map("due_at") @db.Date
+  recurrenceRule        Json?                 @map("recurrence_rule")
+  amount                Decimal?              @db.Decimal(20, 2)
+  supplierId            String?               @map("supplier_id")
+  companyId             String?               @map("company_id")
+  costCenterId          String?               @map("cost_center_id")
+  economicItemId        String?               @map("economic_item_id")
+  budgetLineItemId      String?               @map("budget_line_item_id")
+  scheduleActivityId    String?               @map("schedule_activity_id")
+  provenance            LegalRecordProvenance
+  sourceRef             String                @map("source_ref")
+  responsibleId         String                @map("responsible_id")
+  fulfilledAt           DateTime?             @map("fulfilled_at")
+  createdById           String                @map("created_by_id")
+  updatedById           String                @map("updated_by_id")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project               Project               @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  alerts                LegalAlert[]
+  financialEvents       LegalFinancialEvent[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, projectId, status, dueAt])
+  @@map("legal_obligations")
+}
+
+model LegalAlert {
+  id                String           @id @default(cuid())
+  organizationId    String           @map("organization_id")
+  projectId         String           @map("project_id")
+  legalObligationId String?          @map("legal_obligation_id")
+  sourceType        String           @map("source_type")
+  sourceId          String           @map("source_id")
+  milestoneCode     String           @map("milestone_code")
+  criticality       LegalCriticality
+  status            LegalAlertStatus @default(OPEN)
+  triggerAt         DateTime         @map("trigger_at") @db.Date
+  title             String
+  message           String           @db.Text
+  responsibleId     String           @map("responsible_id")
+  acknowledgedAt    DateTime?        @map("acknowledged_at")
+  resolvedAt        DateTime?        @map("resolved_at")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  organization      Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project           Project          @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  legalObligation   LegalObligation? @relation(fields: [legalObligationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, sourceType, sourceId, milestoneCode])
+  @@index([organizationId, projectId, status, triggerAt])
+  @@map("legal_alerts")
+}
+
+model LegalLicense {
+  id              String                  @id @default(cuid())
+  organizationId  String                  @map("organization_id")
+  projectId       String                  @map("project_id")
+  code            String
+  type            String
+  title           String
+  authority       String
+  processNumber   String?                 @map("process_number")
+  status          LegalLicenseStatus      @default(NOT_STARTED)
+  version         Int                     @default(1)
+  issuedAt        DateTime?               @map("issued_at") @db.Date
+  validFrom       DateTime?               @map("valid_from") @db.Date
+  expiresAt       DateTime?               @map("expires_at") @db.Date
+  renewalLeadDays Int                     @default(90) @map("renewal_lead_days")
+  documentLinkId  String?                 @map("document_link_id")
+  provenance      LegalRecordProvenance
+  responsibleId   String                  @map("responsible_id")
+  createdById     String                  @map("created_by_id")
+  updatedById     String                  @map("updated_by_id")
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+  organization    Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project         Project                 @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  conditions      LegalLicenseCondition[]
+
+  @@unique([projectId, code, version])
+  @@index([organizationId, projectId, status, expiresAt])
+  @@map("legal_licenses")
+}
+
+model LegalLicenseCondition {
+  id            String          @id @default(cuid())
+  licenseId     String          @map("license_id")
+  code          String
+  description   String          @db.Text
+  status        LegalItemStatus @default(NOT_STARTED)
+  dueAt         DateTime?       @map("due_at") @db.Date
+  responsibleId String          @map("responsible_id")
+  evidence      Json?
+  fulfilledAt   DateTime?       @map("fulfilled_at")
+  createdById   String          @map("created_by_id")
+  updatedById   String          @map("updated_by_id")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  license       LegalLicense    @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, code])
+  @@index([licenseId, status, dueAt])
+  @@map("legal_license_conditions")
+}
+
+model LegalAuthorityProcess {
+  id                 String                @id @default(cuid())
+  organizationId     String                @map("organization_id")
+  projectId          String                @map("project_id")
+  code               String
+  authority          String
+  processNumber      String                @map("process_number")
+  subject            String
+  status             LegalLicenseStatus    @default(IN_PREPARATION)
+  submittedAt        DateTime?             @map("submitted_at") @db.Date
+  expectedDecisionAt DateTime?             @map("expected_decision_at") @db.Date
+  lastMovementAt     DateTime?             @map("last_movement_at") @db.Date
+  movements          Json
+  provenance         LegalRecordProvenance
+  responsibleId      String                @map("responsible_id")
+  createdById        String                @map("created_by_id")
+  updatedById        String                @map("updated_by_id")
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project            Project               @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, authority, processNumber])
+  @@index([organizationId, projectId, status])
+  @@map("legal_authority_processes")
+}
+
+model LegalTimelineEvent {
+  id                 String            @id @default(cuid())
+  organizationId     String            @map("organization_id")
+  projectId          String            @map("project_id")
+  scheduleActivityId String?           @map("schedule_activity_id")
+  sourceType         String            @map("source_type")
+  sourceId           String            @map("source_id")
+  code               String
+  title              String
+  plannedAt          DateTime          @map("planned_at") @db.Date
+  actualAt           DateTime?         @map("actual_at") @db.Date
+  status             LegalItemStatus   @default(NOT_STARTED)
+  blocksSchedule     Boolean           @default(false) @map("blocks_schedule")
+  impactDays         Int               @default(0) @map("impact_days")
+  criticality        LegalCriticality
+  responsibleId      String            @map("responsible_id")
+  createdById        String            @map("created_by_id")
+  updatedById        String            @map("updated_by_id")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+  organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project            Project           @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  scheduleActivity   ScheduleActivity? @relation(fields: [scheduleActivityId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, sourceType, sourceId, code])
+  @@index([organizationId, projectId, status, plannedAt])
+  @@map("legal_timeline_events")
+}
+
+model LegalContractCondition {
+  id            String              @id @default(cuid())
+  contractId    String              @map("contract_id")
+  code          String
+  description   String              @db.Text
+  status        LegalItemStatus     @default(NOT_STARTED)
+  dueAt         DateTime?           @map("due_at") @db.Date
+  responsibleId String              @map("responsible_id")
+  evidence      Json?
+  satisfiedAt   DateTime?           @map("satisfied_at")
+  createdById   String              @map("created_by_id")
+  updatedById   String              @map("updated_by_id")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+  contract      OperationalContract @relation(fields: [contractId], references: [id], onDelete: Restrict)
+
+  @@unique([contractId, code])
+  @@index([contractId, status, dueAt])
+  @@map("legal_contract_conditions")
+}
+
+model LegalGuarantee {
+  id             String              @id @default(cuid())
+  contractId     String              @map("contract_id")
+  code           String
+  type           String
+  issuer         String
+  beneficiary    String
+  amount         Decimal?            @db.Decimal(20, 2)
+  startsAt       DateTime?           @map("starts_at") @db.Date
+  expiresAt      DateTime?           @map("expires_at") @db.Date
+  status         LegalItemStatus
+  documentLinkId String?             @map("document_link_id")
+  createdById    String              @map("created_by_id")
+  updatedById    String              @map("updated_by_id")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+  contract       OperationalContract @relation(fields: [contractId], references: [id], onDelete: Restrict)
+
+  @@unique([contractId, code])
+  @@index([contractId, status, expiresAt])
+  @@map("legal_guarantees")
+}
+
+model LegalFinancialEvent {
+  id                    String                    @id @default(cuid())
+  organizationId        String                    @map("organization_id")
+  projectId             String                    @map("project_id")
+  legalObligationId     String                    @map("legal_obligation_id")
+  financialObligationId String?                   @map("financial_obligation_id")
+  payableAccountId      String?                   @map("payable_account_id")
+  eventType             String                    @map("event_type")
+  sourceVersion         Int                       @default(1) @map("source_version")
+  idempotencyKey        String                    @unique @map("idempotency_key")
+  payloadChecksum       String                    @map("payload_checksum")
+  payload               Json
+  status                LegalFinancialEventStatus @default(PENDING)
+  processedAt           DateTime?                 @map("processed_at")
+  reversedAt            DateTime?                 @map("reversed_at")
+  lastError             String?                   @map("last_error") @db.Text
+  createdById           String                    @map("created_by_id")
+  createdAt             DateTime                  @default(now()) @map("created_at")
+  updatedAt             DateTime                  @updatedAt @map("updated_at")
+  organization          Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project               Project                   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  legalObligation       LegalObligation           @relation(fields: [legalObligationId], references: [id], onDelete: Restrict)
+
+  @@unique([legalObligationId, eventType, sourceVersion])
+  @@index([organizationId, projectId, status])
+  @@map("legal_financial_events")
 }

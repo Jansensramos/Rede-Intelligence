@@ -25,6 +25,7 @@ export interface ExternalPayableCommand {
   description: string;
   responsibleId: string;
   createdById: string;
+  origin?: "MEASUREMENT" | "CONTRACT" | "LEGAL" | "MANUAL";
 }
 
 export async function createExternalPayableObligation(tx: Prisma.TransactionClient, command: ExternalPayableCommand) {
@@ -41,7 +42,7 @@ export async function createExternalPayableObligation(tx: Prisma.TransactionClie
       budgetLineItemId: command.budgetLineItemId ?? null,
       scheduleActivityId: command.scheduleActivityId ?? null,
       nature: "PAYABLE",
-      origin: "MEASUREMENT",
+      origin: command.origin ?? "MEASUREMENT",
       documentRef: `${command.sourceType}:${command.sourceId}:v${command.sourceVersion}`,
       description: command.description,
       competenceDate: command.competenceDate,
@@ -64,7 +65,7 @@ export async function createExternalPayableObligation(tx: Prisma.TransactionClie
       obligationId: obligation.id,
       supplierId: command.supplierId,
       description: command.description,
-      origin: "MEASUREMENT",
+      origin: command.origin ?? "MEASUREMENT",
       competenceMonth: command.competenceDate,
       originalAmount: command.netAmount,
       responsibleId: command.responsibleId,
