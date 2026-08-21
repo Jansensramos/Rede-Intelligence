@@ -1,0 +1,91 @@
+import { Prisma } from "@prisma/client";
+
+export const EXTERNAL_OBLIGATION_CONTRACT_VERSION = 1;
+
+export interface ExternalPayableCommand {
+  organizationId: string;
+  companyId: string;
+  projectId: string;
+  supplierId: string;
+  costCenterId?: string | null;
+  economicItemId?: string | null;
+  budgetLineItemId?: string | null;
+  scheduleActivityId?: string | null;
+  sourceType: string;
+  sourceId: string;
+  sourceVersion: number;
+  competenceDate: Date;
+  dueDate: Date;
+  grossAmount: Prisma.Decimal;
+  withholdings: Prisma.Decimal;
+  discounts: Prisma.Decimal;
+  advancesApplied: Prisma.Decimal;
+  netAmount: Prisma.Decimal;
+  currency: string;
+  description: string;
+  responsibleId: string;
+  createdById: string;
+}
+
+export async function createExternalPayableObligation(tx: Prisma.TransactionClient, command: ExternalPayableCommand) {
+  if (!command.grossAmount.sub(command.withholdings).sub(command.discounts).sub(command.advancesApplied).equals(command.netAmount)) {
+    throw new Error("O payload financeiro não fecha: bruto - retenções - descontos - adiantamentos deve ser igual ao líquido.");
+  }
+  const obligation = await tx.financialObligation.create({
+    data: {
+      organizationId: command.organizationId,
+      companyId: command.companyId,
+      projectId: command.projectId,
+      costCenterId: command.costCenterId ?? null,
+      economicItemId: command.economicItemId ?? null,
+      budgetLineItemId: command.budgetLineItemId ?? null,
+      scheduleActivityId: command.scheduleActivityId ?? null,
+      nature: "PAYABLE",
+      origin: "MEASUREMENT",
+      documentRef: `${command.sourceType}:${command.sourceId}:v${command.sourceVersion}`,
+      description: command.description,
+      competenceDate: command.competenceDate,
+      dueDate: command.dueDate,
+      amount: command.netAmount,
+      responsibleId: command.responsibleId,
+      status: "CONVERTED",
+      createdById: command.createdById,
+    },
+  });
+  const payable = await tx.payableAccount.create({
+    data: {
+      organizationId: command.organizationId,
+      companyId: command.companyId,
+      projectId: command.projectId,
+      costCenterId: command.costCenterId ?? null,
+      economicItemId: command.economicItemId ?? null,
+      budgetLineItemId: command.budgetLineItemId ?? null,
+      scheduleActivityId: command.scheduleActivityId ?? null,
+      obligationId: obligation.id,
+      supplierId: command.supplierId,
+      description: command.description,
+      origin: "MEASUREMENT",
+      competenceMonth: command.competenceDate,
+      originalAmount: command.netAmount,
+      responsibleId: command.responsibleId,
+      notes: `Origem externa ${command.sourceType}:${command.sourceId}; contrato v${EXTERNAL_OBLIGATION_CONTRACT_VERSION}.`,
+      createdById: command.createdById,
+      approvedById: command.createdById,
+      approvedAt: new Date(),
+      installments: {
+        create: [{ number: 1, dueDate: command.dueDate, originalAmount: command.netAmount, currentAmount: command.netAmount, withholdingAmount: command.withholdings, status: "APROVADA" }],
+      },
+    },
+  });
+  return { obligationId: obligation.id, payableAccountId: payable.id, status: obligation.status };
+}
+
+export async function reverseExternalPayableObligation(tx: Prisma.TransactionClient, input: { organizationId: string; obligationId: string; reason: string }) {
+  const obligation = await tx.financialObligation.findFirst({ where: { id: input.obligationId, organizationId: input.organizationId }, include: { payableAccount: { include: { installments: { include: { payments: true } } } } } });
+  if (!obligation?.payableAccount) throw new Error("Obrigação externa não encontrada nesta organização.");
+  const hasEffectivePayment = obligation.payableAccount.installments.some((item) => item.payments.some((payment) => ["PROCESSED", "CLEARED"].includes(payment.status)));
+  if (hasEffectivePayment) throw new Error("A obrigação já possui pagamento; reverta o pagamento no Financeiro antes de anular a medição.");
+  await tx.payableInstallment.updateMany({ where: { payableAccountId: obligation.payableAccount.id }, data: { status: "CANCELADA", cancelledAt: new Date(), cancelledReason: input.reason } });
+  await tx.payableAccount.update({ where: { id: obligation.payableAccount.id }, data: { cancelledAt: new Date(), cancelledReason: input.reason } });
+  await tx.financialObligation.update({ where: { id: obligation.id }, data: { status: "CANCELLED", cancelledAt: new Date(), cancelledReason: input.reason } });
+}

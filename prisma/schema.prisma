@@ -810,48 +810,59 @@ enum BimClashStatus {
 }
 
 model Organization {
-  id                       String                    @id @default(cuid())
-  name                     String
-  slug                     String                    @unique
-  legalName                String?                   @map("legal_name")
-  createdAt                DateTime                  @default(now()) @map("created_at")
-  updatedAt                DateTime                  @updatedAt @map("updated_at")
-  memberships              OrganizationMembership[]
-  sessions                 Session[]
-  projects                 Project[]
-  runs                     CalculationRun[]
-  policies                 InvestmentPolicy[]
-  auditLogs                AuditLog[]
-  redTeamRuns              RedTeamRun[]
-  landAssets               LandAsset[]
-  landStudies              LandStudy[]
-  landAuditLogs            LandAuditLog[]
-  investmentCases          InvestmentCase[]
-  investmentBrands         OrganizationBrandConfig[]
-  designPackages           DesignProjectPackage[]
-  designRuleSets           DesignRuleSet[]
-  bimModels                BimModel[]
-  budgets                  Budget[]
-  economicGroups           EconomicGroup[]
-  companies                Company[]
-  operationalBaselines     OperationalBaseline[]
-  costCenters              CostCenter[]
-  economicItems            EconomicItem[]
-  schedules                OperationalSchedule[]
-  materialityPolicies      MaterialityPolicy[]
-  financialInstitutions    FinancialInstitution[]
-  suppliers                Supplier[]
-  customers                Customer[]
-  bankAccounts             BankAccount[]
-  financialObligations     FinancialObligation[]
-  payableAccounts          PayableAccount[]
-  receivableAccounts       ReceivableAccount[]
-  bankTransactions         BankTransaction[]
-  financialTransfers       FinancialTransfer[]
-  intercompanyTransactions IntercompanyTransaction[]
-  financialIndexes         FinancialIndex[]
-  correctionRules          CorrectionRule[]
-  financialPeriodClosures  FinancialPeriodClosure[]
+  id                         String                      @id @default(cuid())
+  name                       String
+  slug                       String                      @unique
+  legalName                  String?                     @map("legal_name")
+  createdAt                  DateTime                    @default(now()) @map("created_at")
+  updatedAt                  DateTime                    @updatedAt @map("updated_at")
+  memberships                OrganizationMembership[]
+  sessions                   Session[]
+  projects                   Project[]
+  runs                       CalculationRun[]
+  policies                   InvestmentPolicy[]
+  auditLogs                  AuditLog[]
+  redTeamRuns                RedTeamRun[]
+  landAssets                 LandAsset[]
+  landStudies                LandStudy[]
+  landAuditLogs              LandAuditLog[]
+  investmentCases            InvestmentCase[]
+  investmentBrands           OrganizationBrandConfig[]
+  designPackages             DesignProjectPackage[]
+  designRuleSets             DesignRuleSet[]
+  bimModels                  BimModel[]
+  budgets                    Budget[]
+  economicGroups             EconomicGroup[]
+  companies                  Company[]
+  operationalBaselines       OperationalBaseline[]
+  costCenters                CostCenter[]
+  economicItems              EconomicItem[]
+  schedules                  OperationalSchedule[]
+  materialityPolicies        MaterialityPolicy[]
+  financialInstitutions      FinancialInstitution[]
+  suppliers                  Supplier[]
+  customers                  Customer[]
+  bankAccounts               BankAccount[]
+  financialObligations       FinancialObligation[]
+  payableAccounts            PayableAccount[]
+  receivableAccounts         ReceivableAccount[]
+  bankTransactions           BankTransaction[]
+  financialTransfers         FinancialTransfer[]
+  intercompanyTransactions   IntercompanyTransaction[]
+  financialIndexes           FinancialIndex[]
+  correctionRules            CorrectionRule[]
+  financialPeriodClosures    FinancialPeriodClosure[]
+  supplierQualifications     SupplierQualification[]
+  procurementNeeds           ProcurementNeed[]
+  purchaseRequisitions       PurchaseRequisition[]
+  quotationProcesses         QuotationProcess[]
+  approvalPolicies           ApprovalPolicy[]
+  approvalRequests           ApprovalRequest[]
+  purchaseOrders             PurchaseOrder[]
+  operationalContracts       OperationalContract[]
+  measurementCertificates    MeasurementCertificate[]
+  financialIntegrationEvents FinancialIntegrationEvent[]
+  procurementDocumentLinks   ProcurementDocumentLink[]
 
   @@map("organizations")
 }
@@ -964,23 +975,23 @@ model InvestmentPolicy {
 }
 
 model Project {
-  id                           String                    @id @default(cuid())
-  organizationId               String                    @map("organization_id")
-  companyId                    String?                   @map("company_id")
+  id                           String                      @id @default(cuid())
+  organizationId               String                      @map("organization_id")
+  companyId                    String?                     @map("company_id")
   name                         String
   city                         String
-  state                        String                    @db.Char(2)
+  state                        String                      @db.Char(2)
   address                      String?
-  currency                     String                    @default("BRL") @db.Char(3)
-  status                       ProjectStatus             @default(DRAFT)
-  createdById                  String                    @map("created_by_id")
-  updatedById                  String                    @map("updated_by_id")
-  createdAt                    DateTime                  @default(now()) @map("created_at")
-  updatedAt                    DateTime                  @updatedAt @map("updated_at")
-  organization                 Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  company                      Company?                  @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  createdBy                    User                      @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy                    User                      @relation("ProjectUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  currency                     String                      @default("BRL") @db.Char(3)
+  status                       ProjectStatus               @default(DRAFT)
+  createdById                  String                      @map("created_by_id")
+  updatedById                  String                      @map("updated_by_id")
+  createdAt                    DateTime                    @default(now()) @map("created_at")
+  updatedAt                    DateTime                    @updatedAt @map("updated_at")
+  organization                 Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company                      Company?                    @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdBy                    User                        @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy                    User                        @relation("ProjectUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
   studies                      ViabilityStudy[]
   runs                         CalculationRun[]
   actualEntries                ActualEntry[]
@@ -999,8 +1010,15 @@ model Project {
   financialObligations         FinancialObligation[]
   payableAccounts              PayableAccount[]
   receivableAccounts           ReceivableAccount[]
-  intercompanyTransactionsFrom IntercompanyTransaction[] @relation("IntercompanyFromProject")
-  intercompanyTransactionsTo   IntercompanyTransaction[] @relation("IntercompanyToProject")
+  intercompanyTransactionsFrom IntercompanyTransaction[]   @relation("IntercompanyFromProject")
+  intercompanyTransactionsTo   IntercompanyTransaction[]   @relation("IntercompanyToProject")
+  procurementNeeds             ProcurementNeed[]
+  purchaseRequisitions         PurchaseRequisition[]
+  quotationProcesses           QuotationProcess[]
+  purchaseOrders               PurchaseOrder[]
+  operationalContracts         OperationalContract[]
+  measurementCertificates      MeasurementCertificate[]
+  financialIntegrationEvents   FinancialIntegrationEvent[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -1057,43 +1075,48 @@ model Budget {
 }
 
 model BudgetLineItem {
-  id                   String                  @id @default(cuid())
-  budgetId             String                  @map("budget_id")
-  parentId             String?                 @map("parent_id")
-  economicItemId       String?                 @map("economic_item_id")
-  costCenterId         String?                 @map("cost_center_id")
-  operatingUnitId      String?                 @map("operating_unit_id")
-  responsibleId        String?                 @map("responsible_id")
+  id                   String                    @id @default(cuid())
+  budgetId             String                    @map("budget_id")
+  parentId             String?                   @map("parent_id")
+  economicItemId       String?                   @map("economic_item_id")
+  costCenterId         String?                   @map("cost_center_id")
+  operatingUnitId      String?                   @map("operating_unit_id")
+  responsibleId        String?                   @map("responsible_id")
   code                 String?
   description          String
   category             String
   subcategory          String?
   phase                String
   unit                 String
-  quantity             Decimal                 @db.Decimal(18, 4)
-  unitCost             Decimal                 @map("unit_cost") @db.Decimal(20, 2)
-  totalCost            Decimal                 @map("total_cost") @db.Decimal(20, 2)
-  sortOrder            Int                     @default(0) @map("sort_order")
-  costCenter           String?                 @map("cost_center")
+  quantity             Decimal                   @db.Decimal(18, 4)
+  unitCost             Decimal                   @map("unit_cost") @db.Decimal(20, 2)
+  totalCost            Decimal                   @map("total_cost") @db.Decimal(20, 2)
+  sortOrder            Int                       @default(0) @map("sort_order")
+  costCenter           String?                   @map("cost_center")
   tower                String?
   origin               String?
-  costOrigin           CostOrigin              @default(MANUAL) @map("cost_origin")
-  status               BudgetLineStatus        @default(PLANNED)
-  startDate            DateTime?               @map("start_date") @db.Date
-  endDate              DateTime?               @map("end_date") @db.Date
+  costOrigin           CostOrigin                @default(MANUAL) @map("cost_origin")
+  status               BudgetLineStatus          @default(PLANNED)
+  startDate            DateTime?                 @map("start_date") @db.Date
+  endDate              DateTime?                 @map("end_date") @db.Date
   notes                String?
-  createdAt            DateTime                @default(now()) @map("created_at")
-  updatedAt            DateTime                @updatedAt @map("updated_at")
-  budget               Budget                  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  parent               BudgetLineItem?         @relation("BudgetItemHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
-  children             BudgetLineItem[]        @relation("BudgetItemHierarchy")
-  economicItem         EconomicItem?           @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
-  costCenterRef        CostCenter?             @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
-  operatingUnit        ProjectOperatingUnit?   @relation(fields: [operatingUnitId], references: [id], onDelete: Restrict)
+  createdAt            DateTime                  @default(now()) @map("created_at")
+  updatedAt            DateTime                  @updatedAt @map("updated_at")
+  budget               Budget                    @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  parent               BudgetLineItem?           @relation("BudgetItemHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children             BudgetLineItem[]          @relation("BudgetItemHierarchy")
+  economicItem         EconomicItem?             @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+  costCenterRef        CostCenter?               @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  operatingUnit        ProjectOperatingUnit?     @relation(fields: [operatingUnitId], references: [id], onDelete: Restrict)
   scheduleActivities   ScheduleActivity[]
   laborComposition     BudgetLaborComposition?
   financialObligations FinancialObligation[]
   payableAccounts      PayableAccount[]
+  procurementNeeds     ProcurementNeed[]
+  requisitionItems     PurchaseRequisitionItem[]
+  contractItems        OperationalContractItem[]
+  purchaseOrderItems   PurchaseOrderItem[]
+  measurementLines     MeasurementLine[]
 
   @@unique([budgetId, code])
   @@index([budgetId, phase, sortOrder])
@@ -1151,6 +1174,10 @@ model Company {
   financialPeriodClosures      FinancialPeriodClosure[]
   intercompanyTransactionsFrom IntercompanyTransaction[] @relation("IntercompanyFrom")
   intercompanyTransactionsTo   IntercompanyTransaction[] @relation("IntercompanyTo")
+  procurementNeeds             ProcurementNeed[]
+  purchaseRequisitions         PurchaseRequisition[]
+  purchaseOrders               PurchaseOrder[]
+  operationalContracts         OperationalContract[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, taxId])
@@ -1159,24 +1186,27 @@ model Company {
 }
 
 model ProjectOperatingUnit {
-  id                 String                 @id @default(cuid())
-  projectId          String                 @map("project_id")
-  parentId           String?                @map("parent_id")
+  id                 String                    @id @default(cuid())
+  projectId          String                    @map("project_id")
+  parentId           String?                   @map("parent_id")
   code               String
   name               String
   type               OperatingUnitType
-  status             CompanyStatus          @default(ACTIVE)
-  sortOrder          Int                    @default(0) @map("sort_order")
+  status             CompanyStatus             @default(ACTIVE)
+  sortOrder          Int                       @default(0) @map("sort_order")
   metadata           Json?
-  createdById        String                 @map("created_by_id")
-  createdAt          DateTime               @default(now()) @map("created_at")
-  updatedAt          DateTime               @updatedAt @map("updated_at")
-  project            Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent             ProjectOperatingUnit?  @relation("OperatingUnitHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
-  children           ProjectOperatingUnit[] @relation("OperatingUnitHierarchy")
+  createdById        String                    @map("created_by_id")
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  updatedAt          DateTime                  @updatedAt @map("updated_at")
+  project            Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent             ProjectOperatingUnit?     @relation("OperatingUnitHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children           ProjectOperatingUnit[]    @relation("OperatingUnitHierarchy")
   economicItems      EconomicItem[]
   budgetLineItems    BudgetLineItem[]
   scheduleActivities ScheduleActivity[]
+  procurementNeeds   ProcurementNeed[]
+  contractItems      OperationalContractItem[]
+  purchaseOrderItems PurchaseOrderItem[]
 
   @@unique([projectId, code])
   @@index([parentId, sortOrder])
@@ -1184,27 +1214,32 @@ model ProjectOperatingUnit {
 }
 
 model CostCenter {
-  id                   String                @id @default(cuid())
-  organizationId       String                @map("organization_id")
-  projectId            String?               @map("project_id")
-  parentId             String?               @map("parent_id")
+  id                   String                    @id @default(cuid())
+  organizationId       String                    @map("organization_id")
+  projectId            String?                   @map("project_id")
+  parentId             String?                   @map("parent_id")
   code                 String
   name                 String
-  responsibleId        String?               @map("responsible_id")
-  managerialAccount    String?               @map("managerial_account")
-  status               CompanyStatus         @default(ACTIVE)
-  createdById          String                @map("created_by_id")
-  createdAt            DateTime              @default(now()) @map("created_at")
-  updatedAt            DateTime              @updatedAt @map("updated_at")
-  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project              Project?              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent               CostCenter?           @relation("CostCenterHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
-  children             CostCenter[]          @relation("CostCenterHierarchy")
+  responsibleId        String?                   @map("responsible_id")
+  managerialAccount    String?                   @map("managerial_account")
+  status               CompanyStatus             @default(ACTIVE)
+  createdById          String                    @map("created_by_id")
+  createdAt            DateTime                  @default(now()) @map("created_at")
+  updatedAt            DateTime                  @updatedAt @map("updated_at")
+  organization         Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project              Project?                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent               CostCenter?               @relation("CostCenterHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children             CostCenter[]              @relation("CostCenterHierarchy")
   economicItems        EconomicItem[]
   budgetLineItems      BudgetLineItem[]
   financialObligations FinancialObligation[]
   payableAccounts      PayableAccount[]
   receivableAccounts   ReceivableAccount[]
+  procurementNeeds     ProcurementNeed[]
+  requisitionItems     PurchaseRequisitionItem[]
+  contractItems        OperationalContractItem[]
+  purchaseOrderItems   PurchaseOrderItem[]
+  measurementLines     MeasurementLine[]
 
   @@unique([organizationId, projectId, code])
   @@index([organizationId, status])
@@ -1238,6 +1273,12 @@ model EconomicItem {
   financialObligations FinancialObligation[]
   payableAccounts      PayableAccount[]
   receivableAccounts   ReceivableAccount[]
+  procurementNeeds     ProcurementNeed[]
+  requisitionItems     PurchaseRequisitionItem[]
+  contractItems        OperationalContractItem[]
+  purchaseOrderItems   PurchaseOrderItem[]
+  measurementLines     MeasurementLine[]
+  validatedSavings     ValidatedSaving[]
 
   @@unique([projectId, code])
   @@index([organizationId, category])
@@ -1388,38 +1429,42 @@ model OperationalSchedule {
 }
 
 model ScheduleActivity {
-  id                   String                @id @default(cuid())
-  scheduleId           String                @map("schedule_id")
-  economicItemId       String?               @map("economic_item_id")
-  budgetLineItemId     String?               @map("budget_line_item_id")
-  operatingUnitId      String?               @map("operating_unit_id")
-  parentId             String?               @map("parent_id")
-  responsibleId        String?               @map("responsible_id")
+  id                   String                    @id @default(cuid())
+  scheduleId           String                    @map("schedule_id")
+  economicItemId       String?                   @map("economic_item_id")
+  budgetLineItemId     String?                   @map("budget_line_item_id")
+  operatingUnitId      String?                   @map("operating_unit_id")
+  parentId             String?                   @map("parent_id")
+  responsibleId        String?                   @map("responsible_id")
   code                 String
   name                 String
-  startDate            DateTime              @map("start_date") @db.Date
-  endDate              DateTime              @map("end_date") @db.Date
-  plannedPhysical      Decimal               @default(1) @map("planned_physical") @db.Decimal(9, 6)
-  plannedCost          Decimal               @default(0) @map("planned_cost") @db.Decimal(20, 2)
-  distributionMethod   DistributionMethod    @default(LINEAR) @map("distribution_method")
-  isMilestone          Boolean               @default(false) @map("is_milestone")
-  milestoneType        String?               @map("milestone_type")
-  isCritical           Boolean               @default(false) @map("is_critical")
-  sortOrder            Int                   @default(0) @map("sort_order")
+  startDate            DateTime                  @map("start_date") @db.Date
+  endDate              DateTime                  @map("end_date") @db.Date
+  plannedPhysical      Decimal                   @default(1) @map("planned_physical") @db.Decimal(9, 6)
+  plannedCost          Decimal                   @default(0) @map("planned_cost") @db.Decimal(20, 2)
+  distributionMethod   DistributionMethod        @default(LINEAR) @map("distribution_method")
+  isMilestone          Boolean                   @default(false) @map("is_milestone")
+  milestoneType        String?                   @map("milestone_type")
+  isCritical           Boolean                   @default(false) @map("is_critical")
+  sortOrder            Int                       @default(0) @map("sort_order")
   metadata             Json?
-  createdAt            DateTime              @default(now()) @map("created_at")
-  updatedAt            DateTime              @updatedAt @map("updated_at")
-  schedule             OperationalSchedule   @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
-  economicItem         EconomicItem?         @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
-  budgetLineItem       BudgetLineItem?       @relation(fields: [budgetLineItemId], references: [id], onDelete: Restrict)
-  operatingUnit        ProjectOperatingUnit? @relation(fields: [operatingUnitId], references: [id], onDelete: Restrict)
-  parent               ScheduleActivity?     @relation("ScheduleActivityHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
-  children             ScheduleActivity[]    @relation("ScheduleActivityHierarchy")
-  predecessors         ScheduleDependency[]  @relation("DependencySuccessor")
-  successors           ScheduleDependency[]  @relation("DependencyPredecessor")
+  createdAt            DateTime                  @default(now()) @map("created_at")
+  updatedAt            DateTime                  @updatedAt @map("updated_at")
+  schedule             OperationalSchedule       @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  economicItem         EconomicItem?             @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+  budgetLineItem       BudgetLineItem?           @relation(fields: [budgetLineItemId], references: [id], onDelete: Restrict)
+  operatingUnit        ProjectOperatingUnit?     @relation(fields: [operatingUnitId], references: [id], onDelete: Restrict)
+  parent               ScheduleActivity?         @relation("ScheduleActivityHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children             ScheduleActivity[]        @relation("ScheduleActivityHierarchy")
+  predecessors         ScheduleDependency[]      @relation("DependencySuccessor")
+  successors           ScheduleDependency[]      @relation("DependencyPredecessor")
   allocations          ScheduleAllocation[]
   financialObligations FinancialObligation[]
   payableAccounts      PayableAccount[]
+  procurementNeeds     ProcurementNeed[]
+  contractItems        OperationalContractItem[]
+  purchaseOrderItems   PurchaseOrderItem[]
+  measurementLines     MeasurementLine[]
 
   @@unique([scheduleId, code])
   @@index([scheduleId, startDate, endDate])
@@ -4365,21 +4410,26 @@ model FinancialInstitution {
 }
 
 model Supplier {
-  id              String           @id @default(cuid())
-  organizationId  String           @map("organization_id")
-  name            String
-  legalName       String?          @map("legal_name")
-  taxId           String?          @map("tax_id")
-  personType      PartyType        @default(LEGAL_ENTITY) @map("person_type")
-  email           String?
-  phone           String?
-  bankData        Json?            @map("bank_data")
-  status          PartyStatus      @default(ACTIVE)
-  createdById     String           @map("created_by_id")
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
-  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  payableAccounts PayableAccount[]
+  id                   String                  @id @default(cuid())
+  organizationId       String                  @map("organization_id")
+  name                 String
+  legalName            String?                 @map("legal_name")
+  taxId                String?                 @map("tax_id")
+  personType           PartyType               @default(LEGAL_ENTITY) @map("person_type")
+  email                String?
+  phone                String?
+  bankData             Json?                   @map("bank_data")
+  status               PartyStatus             @default(ACTIVE)
+  createdById          String                  @map("created_by_id")
+  createdAt            DateTime                @default(now()) @map("created_at")
+  updatedAt            DateTime                @updatedAt @map("updated_at")
+  organization         Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  payableAccounts      PayableAccount[]
+  qualifications       SupplierQualification[]
+  quotationInvitations QuotationInvitation[]
+  proposals            SupplierProposal[]
+  purchaseOrders       PurchaseOrder[]
+  contracts            OperationalContract[]
 
   @@unique([organizationId, taxId])
   @@index([organizationId, status])
@@ -4465,15 +4515,16 @@ model FinancialObligation {
   cancelledAt        DateTime?        @map("cancelled_at")
   cancelledReason    String?          @map("cancelled_reason")
 
-  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  company           Company?           @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  project           Project            @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  costCenter        CostCenter?        @relation(fields: [costCenterId], references: [id], onDelete: SetNull)
-  economicItem      EconomicItem?      @relation(fields: [economicItemId], references: [id], onDelete: SetNull)
-  budgetLineItem    BudgetLineItem?    @relation(fields: [budgetLineItemId], references: [id], onDelete: SetNull)
-  scheduleActivity  ScheduleActivity?  @relation(fields: [scheduleActivityId], references: [id], onDelete: SetNull)
-  payableAccount    PayableAccount?
-  receivableAccount ReceivableAccount?
+  organization                Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company                     Company?                   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  project                     Project                    @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  costCenter                  CostCenter?                @relation(fields: [costCenterId], references: [id], onDelete: SetNull)
+  economicItem                EconomicItem?              @relation(fields: [economicItemId], references: [id], onDelete: SetNull)
+  budgetLineItem              BudgetLineItem?            @relation(fields: [budgetLineItemId], references: [id], onDelete: SetNull)
+  scheduleActivity            ScheduleActivity?          @relation(fields: [scheduleActivityId], references: [id], onDelete: SetNull)
+  payableAccount              PayableAccount?
+  receivableAccount           ReceivableAccount?
+  procurementIntegrationEvent FinancialIntegrationEvent?
 
   @@index([organizationId, status])
   @@index([projectId, nature])
@@ -4509,18 +4560,19 @@ model PayableAccount {
   cancelledAt               DateTime?        @map("cancelled_at")
   cancelledReason           String?          @map("cancelled_reason")
 
-  organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  company                 Company?                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  project                 Project                  @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  costCenter              CostCenter?              @relation(fields: [costCenterId], references: [id], onDelete: SetNull)
-  economicItem            EconomicItem?            @relation(fields: [economicItemId], references: [id], onDelete: SetNull)
-  budgetLineItem          BudgetLineItem?          @relation(fields: [budgetLineItemId], references: [id], onDelete: SetNull)
-  scheduleActivity        ScheduleActivity?        @relation(fields: [scheduleActivityId], references: [id], onDelete: SetNull)
-  obligation              FinancialObligation?     @relation(fields: [obligationId], references: [id], onDelete: SetNull)
-  supplier                Supplier?                @relation(fields: [supplierId], references: [id], onDelete: Restrict)
-  correctionRule          CorrectionRule?          @relation(fields: [correctionRuleId], references: [id], onDelete: SetNull)
-  intercompanyTransaction IntercompanyTransaction? @relation("IntercompanyPayable", fields: [intercompanyTransactionId], references: [id], onDelete: SetNull)
-  installments            PayableInstallment[]
+  organization                Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company                     Company?                   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  project                     Project                    @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  costCenter                  CostCenter?                @relation(fields: [costCenterId], references: [id], onDelete: SetNull)
+  economicItem                EconomicItem?              @relation(fields: [economicItemId], references: [id], onDelete: SetNull)
+  budgetLineItem              BudgetLineItem?            @relation(fields: [budgetLineItemId], references: [id], onDelete: SetNull)
+  scheduleActivity            ScheduleActivity?          @relation(fields: [scheduleActivityId], references: [id], onDelete: SetNull)
+  obligation                  FinancialObligation?       @relation(fields: [obligationId], references: [id], onDelete: SetNull)
+  supplier                    Supplier?                  @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  correctionRule              CorrectionRule?            @relation(fields: [correctionRuleId], references: [id], onDelete: SetNull)
+  intercompanyTransaction     IntercompanyTransaction?   @relation("IntercompanyPayable", fields: [intercompanyTransactionId], references: [id], onDelete: SetNull)
+  installments                PayableInstallment[]
+  procurementIntegrationEvent FinancialIntegrationEvent?
 
   @@index([organizationId, projectId])
   @@index([supplierId])
@@ -4833,9 +4885,10 @@ model CorrectionRule {
   createdAt      DateTime           @default(now()) @map("created_at")
   updatedAt      DateTime           @updatedAt @map("updated_at")
 
-  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  payableAccounts    PayableAccount[]
-  receivableAccounts ReceivableAccount[]
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  payableAccounts      PayableAccount[]
+  receivableAccounts   ReceivableAccount[]
+  operationalContracts OperationalContract[]
 
   @@unique([organizationId, name])
   @@index([organizationId, isActive])
@@ -4887,4 +4940,982 @@ model FinancialPeriodClosure {
   @@unique([organizationId, companyId, referenceMonth])
   @@index([organizationId, status])
   @@map("financial_period_closures")
+}
+
+// ============================================================================
+// FASE 9C — SUPRIMENTOS, CONTRATOS, ADITIVOS E MEDIÇÕES
+// ============================================================================
+
+enum SupplierQualificationStatus {
+  PENDING
+  QUALIFIED
+  QUALIFIED_WITH_RESTRICTIONS
+  EXPIRED
+  REJECTED
+}
+
+enum ProcurementNeedOrigin {
+  BUDGET
+  ENGINEERING
+  SCHEDULE
+  BIM
+  VALUE_ENGINEERING
+  MANUAL
+  OTHER
+}
+
+enum ProcurementPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum ProcurementNeedStatus {
+  IDENTIFIED
+  VALIDATED
+  CONVERTED_TO_REQUISITION
+  DISCARDED
+}
+
+enum PurchaseRequisitionStatus {
+  DRAFT
+  REQUESTED
+  IN_APPROVAL
+  RETURNED
+  APPROVED_FOR_QUOTATION
+  IN_QUOTATION
+  FULFILLED
+  CANCELLED
+}
+
+enum QuotationStatus {
+  PREPARING
+  OPEN
+  UNDER_ANALYSIS
+  DECIDED
+  CANCELLED
+}
+
+enum QuotationInvitationStatus {
+  INVITED
+  ACKNOWLEDGED
+  PROPOSAL_RECEIVED
+  DECLINED
+  EXPIRED
+}
+
+enum SupplierProposalStatus {
+  DRAFT
+  SUBMITTED
+  REPLACED
+  WITHDRAWN
+  SELECTED
+  REJECTED
+}
+
+enum ProposalComparability {
+  COMPARABLE
+  COMPARABLE_WITH_ADJUSTMENTS
+  NOT_COMPARABLE
+}
+
+enum SavingClassification {
+  NEGOTIATED_SAVING
+  TECHNICAL_SAVING
+  SCOPE_CHANGE
+  QUANTITY_REDUCTION
+  COST_TRANSFER
+  VALIDATED_SAVING
+  UNCLASSIFIED_DIFFERENCE
+}
+
+enum ApprovalActType {
+  REQUISITION
+  PROCUREMENT_DECISION
+  PURCHASE_ORDER
+  CONTRACT
+  AMENDMENT
+  EXCEPTION
+  MEASUREMENT
+  CANCELLATION
+}
+
+enum ApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  RETURNED
+  CANCELLED
+}
+
+enum ApprovalDecisionKind {
+  APPROVE
+  REJECT
+  RETURN
+  ABSTAIN
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  IN_APPROVAL
+  APPROVED
+  ISSUED
+  PARTIALLY_DELIVERED
+  DELIVERED
+  CANCELLED
+  SUPERSEDED
+}
+
+enum OperationalContractType {
+  SUPPLY
+  SERVICE
+  CONSTRUCTION
+  DESIGN
+  CONSULTING
+  LEASE
+  ACQUISITION
+  OTHER
+}
+
+enum ContractBillingModel {
+  MEASUREMENT
+  FIXED_INSTALLMENT
+  MONTHLY
+  MILESTONE
+  DELIVERY
+  ADVANCE
+  CUSTOM
+}
+
+enum OperationalContractStatus {
+  DRAFT
+  UNDER_REVIEW
+  IN_APPROVAL
+  APPROVED
+  ACTIVE
+  SUSPENDED
+  CLOSED
+  CANCELLED
+  TERMINATED
+}
+
+enum ContractAmendmentType {
+  INCREASE
+  SUPPRESSION
+  TERM
+  SCOPE
+  READJUSTMENT
+  OTHER
+}
+
+enum ContractAmendmentStatus {
+  DRAFT
+  IN_APPROVAL
+  APPROVED
+  CANCELLED
+}
+
+enum DeviationCause {
+  PRICE
+  QUANTITY
+  SCOPE
+  TERM
+  DESIGN
+  BUDGET_ERROR
+  MARKET
+  SUPPLIER
+  REWORK
+  PRODUCTIVITY
+  UNFORESEEN_CONDITION
+  LEGAL_CHANGE
+  OTHER
+}
+
+enum MeasurementStatus {
+  DRAFT
+  SUBMITTED
+  IN_TECHNICAL_REVIEW
+  TECHNICALLY_APPROVED
+  IN_APPROVAL
+  APPROVED
+  SENT_TO_FINANCE
+  RETURNED
+  REVERSED
+  CANCELLED
+}
+
+enum MeasurementAdjustmentType {
+  CONTRACT_RETENTION
+  GUARANTEE
+  TECHNICAL_RETENTION
+  TAX
+  DISCOUNT
+  GLOSA
+  OTHER
+}
+
+enum ContractAdvanceStatus {
+  PLANNED
+  RELEASED
+  PARTIALLY_AMORTIZED
+  AMORTIZED
+  CANCELLED
+}
+
+enum FinancialIntegrationEventType {
+  MEASUREMENT_APPROVED
+  MEASUREMENT_REVERSED
+  RETENTION_RELEASED
+  CONTRACT_COMMITMENT_UPDATED
+}
+
+enum FinancialIntegrationEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  REVERSED
+}
+
+model SupplierQualification {
+  id                String                      @id @default(cuid())
+  organizationId    String                      @map("organization_id")
+  supplierId        String                      @map("supplier_id")
+  category          String
+  status            SupplierQualificationStatus @default(PENDING)
+  validFrom         DateTime?                   @map("valid_from") @db.Date
+  validUntil        DateTime?                   @map("valid_until") @db.Date
+  technicalCapacity String?                     @map("technical_capacity") @db.Text
+  insuranceNotes    String?                     @map("insurance_notes") @db.Text
+  restrictions      String?                     @db.Text
+  evidence          Json?
+  reviewedById      String?                     @map("reviewed_by_id")
+  reviewedAt        DateTime?                   @map("reviewed_at")
+  createdById       String                      @map("created_by_id")
+  createdAt         DateTime                    @default(now()) @map("created_at")
+  updatedAt         DateTime                    @updatedAt @map("updated_at")
+  organization      Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  supplier          Supplier                    @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  @@unique([supplierId, category])
+  @@index([organizationId, status, validUntil])
+  @@map("supplier_qualifications")
+}
+
+model ProcurementNeed {
+  id                 String                    @id @default(cuid())
+  organizationId     String                    @map("organization_id")
+  companyId          String?                   @map("company_id")
+  projectId          String                    @map("project_id")
+  operatingUnitId    String?                   @map("operating_unit_id")
+  costCenterId       String?                   @map("cost_center_id")
+  economicItemId     String?                   @map("economic_item_id")
+  budgetLineItemId   String?                   @map("budget_line_item_id")
+  scheduleActivityId String?                   @map("schedule_activity_id")
+  code               String
+  description        String
+  specification      String                    @db.Text
+  quantity           Decimal                   @db.Decimal(18, 4)
+  unit               String
+  requiredAt         DateTime                  @map("required_at") @db.Date
+  expectedLeadDays   Int                       @default(30) @map("expected_lead_days")
+  bufferDays         Int                       @default(7) @map("buffer_days")
+  priority           ProcurementPriority       @default(NORMAL)
+  origin             ProcurementNeedOrigin     @default(MANUAL)
+  originReference    String?                   @map("origin_reference")
+  originMetadata     Json?                     @map("origin_metadata")
+  requesterId        String                    @map("requester_id")
+  technicalOwnerId   String?                   @map("technical_owner_id")
+  status             ProcurementNeedStatus     @default(IDENTIFIED)
+  discardedReason    String?                   @map("discarded_reason")
+  createdById        String                    @map("created_by_id")
+  updatedById        String                    @map("updated_by_id")
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  updatedAt          DateTime                  @updatedAt @map("updated_at")
+  organization       Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company            Company?                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  project            Project                   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  operatingUnit      ProjectOperatingUnit?     @relation(fields: [operatingUnitId], references: [id], onDelete: Restrict)
+  costCenter         CostCenter?               @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  economicItem       EconomicItem?             @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+  budgetLineItem     BudgetLineItem?           @relation(fields: [budgetLineItemId], references: [id], onDelete: Restrict)
+  scheduleActivity   ScheduleActivity?         @relation(fields: [scheduleActivityId], references: [id], onDelete: Restrict)
+  requisitionItems   PurchaseRequisitionItem[]
+
+  @@unique([projectId, code])
+  @@index([organizationId, projectId, status, requiredAt])
+  @@index([scheduleActivityId, requiredAt])
+  @@map("procurement_needs")
+}
+
+model PurchaseRequisition {
+  id                 String                     @id @default(cuid())
+  organizationId     String                     @map("organization_id")
+  companyId          String?                    @map("company_id")
+  projectId          String                     @map("project_id")
+  number             String
+  title              String
+  justification      String?                    @db.Text
+  status             PurchaseRequisitionStatus  @default(DRAFT)
+  requesterId        String                     @map("requester_id")
+  buyerId            String?                    @map("buyer_id")
+  technicalOwnerId   String?                    @map("technical_owner_id")
+  requestedAt        DateTime?                  @map("requested_at")
+  approvedAt         DateTime?                  @map("approved_at")
+  approvedById       String?                    @map("approved_by_id")
+  cancelledAt        DateTime?                  @map("cancelled_at")
+  cancellationReason String?                    @map("cancellation_reason")
+  createdById        String                     @map("created_by_id")
+  updatedById        String                     @map("updated_by_id")
+  createdAt          DateTime                   @default(now()) @map("created_at")
+  updatedAt          DateTime                   @updatedAt @map("updated_at")
+  organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company            Company?                   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  project            Project                    @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  items              PurchaseRequisitionItem[]
+  specifications     ProcurementSpecification[]
+  quotationProcesses QuotationProcess[]
+
+  @@unique([projectId, number])
+  @@index([organizationId, projectId, status])
+  @@map("purchase_requisitions")
+}
+
+model PurchaseRequisitionItem {
+  id                 String                 @id @default(cuid())
+  requisitionId      String                 @map("requisition_id")
+  needId             String?                @map("need_id")
+  economicItemId     String?                @map("economic_item_id")
+  budgetLineItemId   String?                @map("budget_line_item_id")
+  costCenterId       String?                @map("cost_center_id")
+  description        String
+  quantity           Decimal                @db.Decimal(18, 4)
+  unit               String
+  estimatedUnitPrice Decimal?               @map("estimated_unit_price") @db.Decimal(20, 2)
+  requiredAt         DateTime?              @map("required_at") @db.Date
+  sortOrder          Int                    @default(0) @map("sort_order")
+  requisition        PurchaseRequisition    @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  need               ProcurementNeed?       @relation(fields: [needId], references: [id], onDelete: Restrict)
+  economicItem       EconomicItem?          @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+  budgetLineItem     BudgetLineItem?        @relation(fields: [budgetLineItemId], references: [id], onDelete: Restrict)
+  costCenter         CostCenter?            @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  proposalItems      SupplierProposalItem[]
+
+  @@unique([requisitionId, needId])
+  @@index([economicItemId])
+  @@map("purchase_requisition_items")
+}
+
+model ProcurementSpecification {
+  id                 String              @id @default(cuid())
+  requisitionId      String              @map("requisition_id")
+  version            Int
+  title              String
+  scope              String              @db.Text
+  requirements       Json
+  deliveryLocation   String?             @map("delivery_location")
+  deliveryTerm       String?             @map("delivery_term")
+  checksum           String
+  isFrozen           Boolean             @default(false) @map("is_frozen")
+  createdById        String              @map("created_by_id")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  requisition        PurchaseRequisition @relation(fields: [requisitionId], references: [id], onDelete: Restrict)
+  quotationProcesses QuotationProcess[]
+
+  @@unique([requisitionId, version])
+  @@unique([requisitionId, checksum])
+  @@map("procurement_specifications")
+}
+
+model QuotationProcess {
+  id               String                   @id @default(cuid())
+  organizationId   String                   @map("organization_id")
+  projectId        String                   @map("project_id")
+  requisitionId    String                   @map("requisition_id")
+  specificationId  String                   @map("specification_id")
+  number           String
+  title            String
+  status           QuotationStatus          @default(PREPARING)
+  responseDeadline DateTime?                @map("response_deadline")
+  buyerId          String                   @map("buyer_id")
+  openedAt         DateTime?                @map("opened_at")
+  decidedAt        DateTime?                @map("decided_at")
+  notes            String?                  @db.Text
+  createdById      String                   @map("created_by_id")
+  updatedById      String                   @map("updated_by_id")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  updatedAt        DateTime                 @updatedAt @map("updated_at")
+  organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project          Project                  @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  requisition      PurchaseRequisition      @relation(fields: [requisitionId], references: [id], onDelete: Restrict)
+  specification    ProcurementSpecification @relation(fields: [specificationId], references: [id], onDelete: Restrict)
+  invitations      QuotationInvitation[]
+  proposals        SupplierProposal[]
+  decision         ProcurementDecision?
+  purchaseOrders   PurchaseOrder[]
+  contracts        OperationalContract[]
+
+  @@unique([projectId, number])
+  @@index([organizationId, projectId, status])
+  @@map("quotation_processes")
+}
+
+model QuotationInvitation {
+  id                 String                    @id @default(cuid())
+  quotationProcessId String                    @map("quotation_process_id")
+  supplierId         String                    @map("supplier_id")
+  status             QuotationInvitationStatus @default(INVITED)
+  invitedAt          DateTime                  @default(now()) @map("invited_at")
+  respondedAt        DateTime?                 @map("responded_at")
+  invitedById        String                    @map("invited_by_id")
+  notes              String?
+  quotationProcess   QuotationProcess          @relation(fields: [quotationProcessId], references: [id], onDelete: Cascade)
+  supplier           Supplier                  @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  @@unique([quotationProcessId, supplierId])
+  @@index([supplierId, status])
+  @@map("quotation_invitations")
+}
+
+model SupplierProposal {
+  id                 String                      @id @default(cuid())
+  quotationProcessId String                      @map("quotation_process_id")
+  supplierId         String                      @map("supplier_id")
+  previousProposalId String?                     @map("previous_proposal_id")
+  version            Int
+  status             SupplierProposalStatus      @default(DRAFT)
+  currency           String                      @default("BRL") @db.Char(3)
+  itemsSubtotal      Decimal                     @map("items_subtotal") @db.Decimal(20, 2)
+  taxAmount          Decimal                     @default(0) @map("tax_amount") @db.Decimal(20, 2)
+  freightAmount      Decimal                     @default(0) @map("freight_amount") @db.Decimal(20, 2)
+  discountAmount     Decimal                     @default(0) @map("discount_amount") @db.Decimal(20, 2)
+  totalAmount        Decimal                     @map("total_amount") @db.Decimal(20, 2)
+  validityUntil      DateTime?                   @map("validity_until") @db.Date
+  deliveryTermDays   Int?                        @map("delivery_term_days")
+  paymentTerms       String?                     @map("payment_terms")
+  warrantyTerms      String?                     @map("warranty_terms")
+  inclusions         Json?
+  exclusions         Json?
+  notes              String?                     @db.Text
+  checksum           String
+  submittedAt        DateTime?                   @map("submitted_at")
+  createdById        String                      @map("created_by_id")
+  createdAt          DateTime                    @default(now()) @map("created_at")
+  quotationProcess   QuotationProcess            @relation(fields: [quotationProcessId], references: [id], onDelete: Restrict)
+  supplier           Supplier                    @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  previousProposal   SupplierProposal?           @relation("SupplierProposalVersions", fields: [previousProposalId], references: [id], onDelete: Restrict)
+  revisions          SupplierProposal[]          @relation("SupplierProposalVersions")
+  items              SupplierProposalItem[]
+  comparisonFindings ProposalComparisonFinding[]
+  selectedInDecision ProcurementDecision?        @relation("SelectedProposal")
+  purchaseOrders     PurchaseOrder[]
+  contracts          OperationalContract[]
+
+  @@unique([quotationProcessId, supplierId, version])
+  @@unique([quotationProcessId, checksum])
+  @@index([quotationProcessId, status])
+  @@map("supplier_proposals")
+}
+
+model SupplierProposalItem {
+  id                    String                      @id @default(cuid())
+  proposalId            String                      @map("proposal_id")
+  requisitionItemId     String                      @map("requisition_item_id")
+  description           String
+  quantity              Decimal                     @db.Decimal(18, 4)
+  unit                  String
+  unitPrice             Decimal                     @map("unit_price") @db.Decimal(20, 2)
+  taxAmount             Decimal                     @default(0) @map("tax_amount") @db.Decimal(20, 2)
+  freightAmount         Decimal                     @default(0) @map("freight_amount") @db.Decimal(20, 2)
+  discountAmount        Decimal                     @default(0) @map("discount_amount") @db.Decimal(20, 2)
+  totalAmount           Decimal                     @map("total_amount") @db.Decimal(20, 2)
+  normalizedTotalAmount Decimal?                    @map("normalized_total_amount") @db.Decimal(20, 2)
+  comparability         ProposalComparability       @default(COMPARABLE)
+  inclusions            Json?
+  exclusions            Json?
+  technicalNotes        String?                     @map("technical_notes") @db.Text
+  sortOrder             Int                         @default(0) @map("sort_order")
+  proposal              SupplierProposal            @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  requisitionItem       PurchaseRequisitionItem     @relation(fields: [requisitionItemId], references: [id], onDelete: Restrict)
+  findings              ProposalComparisonFinding[]
+
+  @@unique([proposalId, requisitionItemId])
+  @@index([requisitionItemId])
+  @@map("supplier_proposal_items")
+}
+
+model ProposalComparisonFinding {
+  id               String                @id @default(cuid())
+  proposalId       String                @map("proposal_id")
+  proposalItemId   String?               @map("proposal_item_id")
+  category         String
+  description      String                @db.Text
+  adjustmentAmount Decimal?              @map("adjustment_amount") @db.Decimal(20, 2)
+  blocksComparison Boolean               @default(false) @map("blocks_comparison")
+  createdById      String                @map("created_by_id")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  proposal         SupplierProposal      @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalItem     SupplierProposalItem? @relation(fields: [proposalItemId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId, blocksComparison])
+  @@map("proposal_comparison_findings")
+}
+
+model ProcurementDecision {
+  id                  String            @id @default(cuid())
+  quotationProcessId  String            @unique @map("quotation_process_id")
+  selectedProposalId  String            @unique @map("selected_proposal_id")
+  technicalOpinion    String            @map("technical_opinion") @db.Text
+  commercialRationale String            @map("commercial_rationale") @db.Text
+  exceptions          Json?
+  decidedById         String            @map("decided_by_id")
+  approvedById        String?           @map("approved_by_id")
+  decidedAt           DateTime          @default(now()) @map("decided_at")
+  approvedAt          DateTime?         @map("approved_at")
+  quotationProcess    QuotationProcess  @relation(fields: [quotationProcessId], references: [id], onDelete: Restrict)
+  selectedProposal    SupplierProposal  @relation("SelectedProposal", fields: [selectedProposalId], references: [id], onDelete: Restrict)
+  savings             ValidatedSaving[]
+
+  @@map("procurement_decisions")
+}
+
+model ValidatedSaving {
+  id                         String               @id @default(cuid())
+  decisionId                 String               @map("decision_id")
+  economicItemId             String?              @map("economic_item_id")
+  classification             SavingClassification
+  referenceType              String               @map("reference_type")
+  referenceDescription       String               @map("reference_description")
+  referenceAmount            Decimal              @map("reference_amount") @db.Decimal(20, 2)
+  contractedComparableAmount Decimal              @map("contracted_comparable_amount") @db.Decimal(20, 2)
+  nominalAmount              Decimal              @map("nominal_amount") @db.Decimal(20, 2)
+  percentage                 Decimal              @db.Decimal(9, 6)
+  scopeComparable            Boolean              @map("scope_comparable")
+  technicalValidation        String?              @map("technical_validation") @db.Text
+  validatedById              String?              @map("validated_by_id")
+  validatedAt                DateTime?            @map("validated_at")
+  createdById                String               @map("created_by_id")
+  createdAt                  DateTime             @default(now()) @map("created_at")
+  decision                   ProcurementDecision  @relation(fields: [decisionId], references: [id], onDelete: Restrict)
+  economicItem               EconomicItem?        @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+
+  @@index([decisionId, classification])
+  @@index([economicItemId])
+  @@map("validated_savings")
+}
+
+model ApprovalPolicy {
+  id                  String            @id @default(cuid())
+  organizationId      String            @map("organization_id")
+  name                String
+  version             Int
+  actType             ApprovalActType   @map("act_type")
+  companyId           String?           @map("company_id")
+  projectId           String?           @map("project_id")
+  category            String?
+  minimumAmount       Decimal           @default(0) @map("minimum_amount") @db.Decimal(20, 2)
+  maximumAmount       Decimal?          @map("maximum_amount") @db.Decimal(20, 2)
+  requiredRole        MembershipRole    @default(ADMIN) @map("required_role")
+  requiredApprovals   Int               @default(1) @map("required_approvals")
+  segregationRequired Boolean           @default(true) @map("segregation_required")
+  isActive            Boolean           @default(true) @map("is_active")
+  createdById         String            @map("created_by_id")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  organization        Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requests            ApprovalRequest[]
+
+  @@unique([organizationId, name, version])
+  @@index([organizationId, actType, isActive])
+  @@map("approval_policies")
+}
+
+model ApprovalRequest {
+  id             String                   @id @default(cuid())
+  organizationId String                   @map("organization_id")
+  policyId       String?                  @map("policy_id")
+  actType        ApprovalActType          @map("act_type")
+  entityType     String                   @map("entity_type")
+  entityId       String                   @map("entity_id")
+  entityVersion  Int                      @default(1) @map("entity_version")
+  companyId      String?                  @map("company_id")
+  projectId      String?                  @map("project_id")
+  amount         Decimal                  @default(0) @db.Decimal(20, 2)
+  category       String?
+  snapshot       Json
+  status         ApprovalRequestStatus    @default(PENDING)
+  requestedById  String                   @map("requested_by_id")
+  requestedAt    DateTime                 @default(now()) @map("requested_at")
+  completedAt    DateTime?                @map("completed_at")
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  policy         ApprovalPolicy?          @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  decisions      ApprovalDecisionRecord[]
+
+  @@unique([organizationId, entityType, entityId, entityVersion, actType])
+  @@index([organizationId, status, actType])
+  @@map("approval_requests")
+}
+
+model ApprovalDecisionRecord {
+  id                String               @id @default(cuid())
+  approvalRequestId String               @map("approval_request_id")
+  decision          ApprovalDecisionKind
+  decidedById       String               @map("decided_by_id")
+  justification     String?              @db.Text
+  decidedAt         DateTime             @default(now()) @map("decided_at")
+  approvalRequest   ApprovalRequest      @relation(fields: [approvalRequestId], references: [id], onDelete: Restrict)
+
+  @@unique([approvalRequestId, decidedById])
+  @@map("approval_decision_records")
+}
+
+model PurchaseOrder {
+  id                     String               @id @default(cuid())
+  organizationId         String               @map("organization_id")
+  companyId              String               @map("company_id")
+  projectId              String               @map("project_id")
+  supplierId             String               @map("supplier_id")
+  quotationProcessId     String?              @map("quotation_process_id")
+  selectedProposalId     String?              @map("selected_proposal_id")
+  number                 String
+  title                  String
+  scope                  String               @db.Text
+  currency               String               @default("BRL") @db.Char(3)
+  originalAmount         Decimal              @map("original_amount") @db.Decimal(20, 2)
+  deliveryAt             DateTime?            @map("delivery_at") @db.Date
+  paymentTerms           String?              @map("payment_terms")
+  status                 PurchaseOrderStatus  @default(DRAFT)
+  approvedById           String?              @map("approved_by_id")
+  approvedAt             DateTime?            @map("approved_at")
+  issuedAt               DateTime?            @map("issued_at")
+  cancelledAt            DateTime?            @map("cancelled_at")
+  cancellationReason     String?              @map("cancellation_reason")
+  supersededByContractId String?              @unique @map("superseded_by_contract_id")
+  createdById            String               @map("created_by_id")
+  updatedById            String               @map("updated_by_id")
+  createdAt              DateTime             @default(now()) @map("created_at")
+  updatedAt              DateTime             @updatedAt @map("updated_at")
+  organization           Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company                Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  project                Project              @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  supplier               Supplier             @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  quotationProcess       QuotationProcess?    @relation(fields: [quotationProcessId], references: [id], onDelete: Restrict)
+  selectedProposal       SupplierProposal?    @relation(fields: [selectedProposalId], references: [id], onDelete: Restrict)
+  items                  PurchaseOrderItem[]
+  supersededByContract   OperationalContract? @relation("OrderSupersededByContract", fields: [supersededByContractId], references: [id], onDelete: Restrict)
+
+  @@unique([projectId, number])
+  @@index([organizationId, projectId, status])
+  @@index([supplierId, status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id                 String                @id @default(cuid())
+  purchaseOrderId    String                @map("purchase_order_id")
+  economicItemId     String?               @map("economic_item_id")
+  budgetLineItemId   String?               @map("budget_line_item_id")
+  costCenterId       String?               @map("cost_center_id")
+  operatingUnitId    String?               @map("operating_unit_id")
+  scheduleActivityId String?               @map("schedule_activity_id")
+  description        String
+  quantity           Decimal               @db.Decimal(18, 4)
+  unit               String
+  unitPrice          Decimal               @map("unit_price") @db.Decimal(20, 2)
+  totalAmount        Decimal               @map("total_amount") @db.Decimal(20, 2)
+  sortOrder          Int                   @default(0) @map("sort_order")
+  purchaseOrder      PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  economicItem       EconomicItem?         @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+  budgetLineItem     BudgetLineItem?       @relation(fields: [budgetLineItemId], references: [id], onDelete: Restrict)
+  costCenter         CostCenter?           @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  operatingUnit      ProjectOperatingUnit? @relation(fields: [operatingUnitId], references: [id], onDelete: Restrict)
+  scheduleActivity   ScheduleActivity?     @relation(fields: [scheduleActivityId], references: [id], onDelete: Restrict)
+
+  @@index([purchaseOrderId])
+  @@index([economicItemId])
+  @@map("purchase_order_items")
+}
+
+model OperationalContract {
+  id                    String                    @id @default(cuid())
+  organizationId        String                    @map("organization_id")
+  companyId             String                    @map("company_id")
+  projectId             String                    @map("project_id")
+  supplierId            String                    @map("supplier_id")
+  quotationProcessId    String?                   @map("quotation_process_id")
+  selectedProposalId    String?                   @map("selected_proposal_id")
+  sourcePurchaseOrderId String?                   @map("source_purchase_order_id")
+  number                String
+  title                 String
+  type                  OperationalContractType
+  billingModel          ContractBillingModel      @map("billing_model")
+  scope                 String                    @db.Text
+  currency              String                    @default("BRL") @db.Char(3)
+  originalAmount        Decimal                   @map("original_amount") @db.Decimal(20, 2)
+  startsAt              DateTime                  @map("starts_at") @db.Date
+  endsAt                DateTime                  @map("ends_at") @db.Date
+  responsibleId         String                    @map("responsible_id")
+  paymentTerms          String?                   @map("payment_terms")
+  readjustmentRuleId    String?                   @map("readjustment_rule_id")
+  retentionRate         Decimal                   @default(0) @map("retention_rate") @db.Decimal(9, 6)
+  warrantyTerms         String?                   @map("warranty_terms")
+  status                OperationalContractStatus @default(DRAFT)
+  approvedById          String?                   @map("approved_by_id")
+  approvedAt            DateTime?                 @map("approved_at")
+  activatedAt           DateTime?                 @map("activated_at")
+  cancelledAt           DateTime?                 @map("cancelled_at")
+  cancellationReason    String?                   @map("cancellation_reason")
+  createdById           String                    @map("created_by_id")
+  updatedById           String                    @map("updated_by_id")
+  createdAt             DateTime                  @default(now()) @map("created_at")
+  updatedAt             DateTime                  @updatedAt @map("updated_at")
+  organization          Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company               Company                   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  project               Project                   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  supplier              Supplier                  @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  quotationProcess      QuotationProcess?         @relation(fields: [quotationProcessId], references: [id], onDelete: Restrict)
+  selectedProposal      SupplierProposal?         @relation(fields: [selectedProposalId], references: [id], onDelete: Restrict)
+  sourcePurchaseOrder   PurchaseOrder?            @relation("OrderSupersededByContract")
+  readjustmentRule      CorrectionRule?           @relation(fields: [readjustmentRuleId], references: [id], onDelete: Restrict)
+  items                 OperationalContractItem[]
+  amendments            ContractAmendment[]
+  advances              ContractAdvance[]
+  measurements          MeasurementCertificate[]
+
+  @@unique([projectId, number])
+  @@index([organizationId, projectId, status])
+  @@index([supplierId, status])
+  @@index([endsAt, status])
+  @@map("operational_contracts")
+}
+
+model OperationalContractItem {
+  id                 String                @id @default(cuid())
+  contractId         String                @map("contract_id")
+  economicItemId     String?               @map("economic_item_id")
+  budgetLineItemId   String?               @map("budget_line_item_id")
+  costCenterId       String?               @map("cost_center_id")
+  operatingUnitId    String?               @map("operating_unit_id")
+  scheduleActivityId String?               @map("schedule_activity_id")
+  code               String
+  description        String
+  quantity           Decimal               @db.Decimal(18, 4)
+  unit               String
+  unitPrice          Decimal               @map("unit_price") @db.Decimal(20, 2)
+  originalAmount     Decimal               @map("original_amount") @db.Decimal(20, 2)
+  sortOrder          Int                   @default(0) @map("sort_order")
+  contract           OperationalContract   @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  economicItem       EconomicItem?         @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+  budgetLineItem     BudgetLineItem?       @relation(fields: [budgetLineItemId], references: [id], onDelete: Restrict)
+  costCenter         CostCenter?           @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  operatingUnit      ProjectOperatingUnit? @relation(fields: [operatingUnitId], references: [id], onDelete: Restrict)
+  scheduleActivity   ScheduleActivity?     @relation(fields: [scheduleActivityId], references: [id], onDelete: Restrict)
+  measurementLines   MeasurementLine[]
+
+  @@unique([contractId, code])
+  @@index([economicItemId])
+  @@map("operational_contract_items")
+}
+
+model ContractAmendment {
+  id               String                  @id @default(cuid())
+  contractId       String                  @map("contract_id")
+  number           Int
+  type             ContractAmendmentType
+  status           ContractAmendmentStatus @default(DRAFT)
+  reason           String                  @db.Text
+  deviationCause   DeviationCause          @map("deviation_cause")
+  scopeDescription String?                 @map("scope_description") @db.Text
+  value            Decimal                 @default(0) @db.Decimal(20, 2)
+  termDays         Int                     @default(0) @map("term_days")
+  effectiveAt      DateTime?               @map("effective_at") @db.Date
+  approvedById     String?                 @map("approved_by_id")
+  approvedAt       DateTime?               @map("approved_at")
+  createdById      String                  @map("created_by_id")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  contract         OperationalContract     @relation(fields: [contractId], references: [id], onDelete: Restrict)
+
+  @@unique([contractId, number])
+  @@index([contractId, status])
+  @@map("contract_amendments")
+}
+
+model ContractAdvance {
+  id             String                @id @default(cuid())
+  contractId     String                @map("contract_id")
+  description    String
+  originalAmount Decimal               @map("original_amount") @db.Decimal(20, 2)
+  releasedAmount Decimal               @default(0) @map("released_amount") @db.Decimal(20, 2)
+  status         ContractAdvanceStatus @default(PLANNED)
+  dueAt          DateTime?             @map("due_at") @db.Date
+  releasedAt     DateTime?             @map("released_at") @db.Date
+  createdById    String                @map("created_by_id")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  contract       OperationalContract   @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  amortizations  AdvanceAmortization[]
+
+  @@index([contractId, status])
+  @@map("contract_advances")
+}
+
+model MeasurementCertificate {
+  id                        String                      @id @default(cuid())
+  organizationId            String                      @map("organization_id")
+  projectId                 String                      @map("project_id")
+  contractId                String                      @map("contract_id")
+  number                    Int
+  version                   Int                         @default(1)
+  competenceDate            DateTime                    @map("competence_date") @db.Date
+  periodStart               DateTime                    @map("period_start") @db.Date
+  periodEnd                 DateTime                    @map("period_end") @db.Date
+  issuedAt                  DateTime                    @map("issued_at") @db.Date
+  dueDate                   DateTime                    @map("due_date") @db.Date
+  responsibleId             String                      @map("responsible_id")
+  grossAmount               Decimal                     @map("gross_amount") @db.Decimal(20, 2)
+  retentionAmount           Decimal                     @default(0) @map("retention_amount") @db.Decimal(20, 2)
+  discountAmount            Decimal                     @default(0) @map("discount_amount") @db.Decimal(20, 2)
+  advanceAmortizationAmount Decimal                     @default(0) @map("advance_amortization_amount") @db.Decimal(20, 2)
+  netAmount                 Decimal                     @map("net_amount") @db.Decimal(20, 2)
+  physicalProgress          Decimal?                    @map("physical_progress") @db.Decimal(9, 6)
+  status                    MeasurementStatus           @default(DRAFT)
+  technicalApprovedById     String?                     @map("technical_approved_by_id")
+  technicalApprovedAt       DateTime?                   @map("technical_approved_at")
+  approvedById              String?                     @map("approved_by_id")
+  approvedAt                DateTime?                   @map("approved_at")
+  reversedAt                DateTime?                   @map("reversed_at")
+  reversalReason            String?                     @map("reversal_reason")
+  createdById               String                      @map("created_by_id")
+  updatedById               String                      @map("updated_by_id")
+  createdAt                 DateTime                    @default(now()) @map("created_at")
+  updatedAt                 DateTime                    @updatedAt @map("updated_at")
+  organization              Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project                   Project                     @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  contract                  OperationalContract         @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  lines                     MeasurementLine[]
+  adjustments               MeasurementAdjustment[]
+  advanceAmortizations      AdvanceAmortization[]
+  financialEvents           FinancialIntegrationEvent[]
+
+  @@unique([contractId, number, version])
+  @@index([organizationId, projectId, status])
+  @@index([contractId, competenceDate])
+  @@map("measurement_certificates")
+}
+
+model MeasurementLine {
+  id                 String                  @id @default(cuid())
+  measurementId      String                  @map("measurement_id")
+  contractItemId     String                  @map("contract_item_id")
+  economicItemId     String?                 @map("economic_item_id")
+  budgetLineItemId   String?                 @map("budget_line_item_id")
+  scheduleActivityId String?                 @map("schedule_activity_id")
+  description        String
+  unit               String
+  contractedQuantity Decimal                 @map("contracted_quantity") @db.Decimal(18, 4)
+  previousQuantity   Decimal                 @default(0) @map("previous_quantity") @db.Decimal(18, 4)
+  periodQuantity     Decimal                 @map("period_quantity") @db.Decimal(18, 4)
+  cumulativeQuantity Decimal                 @map("cumulative_quantity") @db.Decimal(18, 4)
+  remainingQuantity  Decimal                 @map("remaining_quantity") @db.Decimal(18, 4)
+  unitPrice          Decimal                 @map("unit_price") @db.Decimal(20, 2)
+  amount             Decimal                 @db.Decimal(20, 2)
+  sortOrder          Int                     @default(0) @map("sort_order")
+  measurement        MeasurementCertificate  @relation(fields: [measurementId], references: [id], onDelete: Restrict)
+  contractItem       OperationalContractItem @relation(fields: [contractItemId], references: [id], onDelete: Restrict)
+  economicItem       EconomicItem?           @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+  budgetLineItem     BudgetLineItem?         @relation(fields: [budgetLineItemId], references: [id], onDelete: Restrict)
+  scheduleActivity   ScheduleActivity?       @relation(fields: [scheduleActivityId], references: [id], onDelete: Restrict)
+  costCenter         CostCenter?             @relation(fields: [costCenterId], references: [id])
+  costCenterId       String?
+
+  @@unique([measurementId, contractItemId])
+  @@index([contractItemId])
+  @@map("measurement_lines")
+}
+
+model MeasurementAdjustment {
+  id                String                    @id @default(cuid())
+  measurementId     String                    @map("measurement_id")
+  type              MeasurementAdjustmentType
+  description       String
+  baseAmount        Decimal                   @map("base_amount") @db.Decimal(20, 2)
+  rate              Decimal?                  @db.Decimal(9, 6)
+  amount            Decimal                   @db.Decimal(20, 2)
+  expectedReleaseAt DateTime?                 @map("expected_release_at") @db.Date
+  releasedAmount    Decimal                   @default(0) @map("released_amount") @db.Decimal(20, 2)
+  createdById       String                    @map("created_by_id")
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  measurement       MeasurementCertificate    @relation(fields: [measurementId], references: [id], onDelete: Restrict)
+
+  @@index([measurementId, type])
+  @@map("measurement_adjustments")
+}
+
+model AdvanceAmortization {
+  id            String                 @id @default(cuid())
+  advanceId     String                 @map("advance_id")
+  measurementId String                 @map("measurement_id")
+  amount        Decimal                @db.Decimal(20, 2)
+  createdById   String                 @map("created_by_id")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  advance       ContractAdvance        @relation(fields: [advanceId], references: [id], onDelete: Restrict)
+  measurement   MeasurementCertificate @relation(fields: [measurementId], references: [id], onDelete: Restrict)
+
+  @@unique([advanceId, measurementId])
+  @@map("advance_amortizations")
+}
+
+model FinancialIntegrationEvent {
+  id                    String                          @id @default(cuid())
+  organizationId        String                          @map("organization_id")
+  projectId             String                          @map("project_id")
+  measurementId         String?                         @map("measurement_id")
+  financialObligationId String?                         @unique @map("financial_obligation_id")
+  payableAccountId      String?                         @unique @map("payable_account_id")
+  eventType             FinancialIntegrationEventType   @map("event_type")
+  sourceType            String                          @map("source_type")
+  sourceId              String                          @map("source_id")
+  sourceVersion         Int                             @map("source_version")
+  schemaVersion         Int                             @default(1) @map("schema_version")
+  eventId               String                          @unique @map("event_id")
+  idempotencyKey        String                          @unique @map("idempotency_key")
+  payloadChecksum       String                          @map("payload_checksum")
+  payload               Json
+  status                FinancialIntegrationEventStatus @default(PENDING)
+  attemptCount          Int                             @default(0) @map("attempt_count")
+  lastError             String?                         @map("last_error") @db.Text
+  processedAt           DateTime?                       @map("processed_at")
+  createdAt             DateTime                        @default(now()) @map("created_at")
+  updatedAt             DateTime                        @updatedAt @map("updated_at")
+  organization          Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project               Project                         @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  measurement           MeasurementCertificate?         @relation(fields: [measurementId], references: [id], onDelete: Restrict)
+  financialObligation   FinancialObligation?            @relation(fields: [financialObligationId], references: [id], onDelete: Restrict)
+  payableAccount        PayableAccount?                 @relation(fields: [payableAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, sourceType, sourceId, sourceVersion, eventType])
+  @@index([organizationId, status, createdAt])
+  @@map("financial_integration_events")
+}
+
+model ProcurementDocumentLink {
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  entityType     String       @map("entity_type")
+  entityId       String       @map("entity_id")
+  documentType   String       @map("document_type")
+  fileName       String       @map("file_name")
+  mimeType       String       @map("mime_type")
+  storageKey     String       @map("storage_key")
+  checksum       String
+  version        Int          @default(1)
+  isPrivate      Boolean      @default(true) @map("is_private")
+  metadata       Json?
+  createdById    String       @map("created_by_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, entityType, entityId, documentType, version])
+  @@index([organizationId, entityType, entityId])
+  @@map("procurement_document_links")
 }

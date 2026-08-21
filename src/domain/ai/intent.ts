@@ -87,6 +87,11 @@ export function planAIIntent(question: string): AIIntentPlan {
   if (/contas? a receber|recebiv|inadimplen|cliente/.test(text)) calls.push({ name: "getReceivablesDue", arguments: {} });
   if (/projecao atualizada|por que.*(?:caixa|projecao).*mudou|necessidade de capital/.test(text)) calls.push({ name: "getUpdatedCashProjection", arguments: {} });
   if (/conciliac|sem conciliar|intercompany|spe.*falta/.test(text)) calls.push({ name: "getReconciliationStatus", arguments: {} });
+  if (/quanto falta contratar|saldo a contratar|orcado.*contratado|contratado.*medido|medido.*pago/.test(text)) calls.push({ name: "getProcurementStages", arguments: {} });
+  if (/compra.*critic|compra.*ameaca|contratacao.*atras/.test(text)) calls.push({ name: "getCriticalPurchases", arguments: {} });
+  if (/contrato.*(?:aditivo|saldo)|mais aditivos|maior saldo contratual/.test(text)) calls.push({ name: "getContractsAndAmendments", arguments: {} });
+  if (/quanto econom|saving|economia validada/.test(text)) calls.push({ name: "getValidatedSaving", arguments: {} });
+  if (/medic.*(?:aguarda|pendente|aprova)/.test(text)) calls.push({ name: "getPendingMeasurements", arguments: {} });
   if (/fluxo|exposicao|vgv|margem|roi|tir|vpl|econom|financeir/.test(text)) calls.push({ name: "getEngineResults", arguments: { ...(financialScenario ? { scenario: financialScenario } : {}) } });
   if (/acao|prioridade|hoje|semana/.test(text)) calls.push({ name: "getActionCenter", arguments: {} });
   if (/caminho critico|marco|atrasando/.test(text)) calls.push({ name: "getCriticalPath", arguments: {} });
@@ -106,4 +111,5 @@ export const DEFAULT_AI_SUGGESTIONS = [
   ["DESIGN", "O que você mudaria neste projeto?"], ["DESIGN", "O quadro de áreas fecha?"], ["DESIGN", "Quais são as cinco maiores oportunidades?"],
   ["OPERATIONS", "Quanto o Orçamento Oficial está acima da Base Aprovada?"], ["OPERATIONS", "Quanto desembolsaremos nos próximos 90 dias?"],
   ["FINANCE", "Quanto temos de caixa livre?"], ["FINANCE", "O que vence nos próximos 7 dias?"], ["FINANCE", "Quais transações estão sem conciliação?"],
+  ["OPERATIONS", "Quanto ainda falta contratar?"], ["OPERATIONS", "Quais compras ameaçam o cronograma?"], ["FINANCE", "Quais medições aguardam aprovação?"],
 ].map(([category, prompt]) => ({ category, prompt }));

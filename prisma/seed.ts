@@ -29,6 +29,25 @@ import {
   transitionPayableInstallment,
   transitionReceivableInstallment,
 } from "../src/application/financial-ops/financial-service";
+import {
+  approveContractAmendment,
+  approveMeasurementAndGenerateObligation,
+  approvePurchaseOrder,
+  createContractAmendment,
+  createMeasurement,
+  createOperationalContract,
+  createProcurementNeed,
+  createPurchaseOrder,
+  createPurchaseRequisition,
+  createQuotationProcess,
+  decideQuotation,
+  qualifySupplier,
+  submitSupplierProposal,
+  transitionMeasurement,
+  transitionOperationalContract,
+  transitionPurchaseRequisition,
+  validateProcurementNeed,
+} from "../src/application/procurement/procurement-service";
 
 async function main() {
   const passwordHash = await hash("Rede@2026", 12);
@@ -249,6 +268,51 @@ async function main() {
   }
   if (intercompanyTransaction.status === "PENDING") await approveIntercompanyTransaction(context, intercompanyTransaction.id);
 
+  // --- Fase 9C: suprimentos, contratos, aditivos e medições (aditivo e idempotente) ---
+  await qualifySupplier(context, { supplierId: supplier.id, category: "Estrutura e fundações", status: "QUALIFIED", validUntil: new Date("2027-12-31T00:00:00.000Z"), evidence: { source: "seed", certificates: ["CREA", "Seguro RC", "Regularidade fiscal"] } });
+  let materialsSupplier = await prisma.supplier.findFirst({ where: { organizationId: organization.id, taxId: "45.678.901/0001-22" } });
+  if (!materialsSupplier) materialsSupplier = await createSupplier(context, { name: "Materiais Urbanos Brasil", legalName: "Materiais Urbanos Brasil S.A.", taxId: "45.678.901/0001-22", email: "propostas@materiaisurbanos.com.br" });
+  await qualifySupplier(context, { supplierId: materialsSupplier.id, category: "Materiais de construção", status: "QUALIFIED_WITH_RESTRICTIONS", validUntil: new Date("2027-06-30T00:00:00.000Z"), evidence: { source: "seed", restriction: "Renovar seguro antes da mobilização" } });
+
+  const officialLine = await prisma.budgetLineItem.findFirst({ where: { budgetId: officialBudget.id, totalCost: { gt: 0 } }, orderBy: { totalCost: "desc" } });
+  if (!officialLine) throw new Error("Orçamento Oficial precisa de ao menos uma verba para o seed da Fase 9C.");
+  let procurementNeed = await prisma.procurementNeed.findUnique({ where: { projectId_code: { projectId: butantaStudy.projectId, code: "SUP-001" } } });
+  if (!procurementNeed) procurementNeed = await createProcurementNeed(context, { projectId: butantaStudy.projectId, companyId: company.id, costCenterId: officialLine.costCenterId, economicItemId: officialLine.economicItemId, budgetLineItemId: officialLine.id, scheduleActivityId: firstScheduleActivity?.id ?? null, code: "SUP-001", description: "Execução de fundações e estrutura", specification: "Fornecimento de mão de obra, equipamentos, formas e execução integral das fundações e estrutura conforme revisão aprovada.", quantity: "1", unit: "lote", requiredAt: new Date("2026-09-01T00:00:00.000Z"), expectedLeadDays: 75, bufferDays: 15, priority: "CRITICAL", origin: "SCHEDULE", originReference: firstScheduleActivity?.id ?? null });
+  if (procurementNeed.status === "IDENTIFIED") procurementNeed = await validateProcurementNeed(context, procurementNeed.id);
+
+  let requisition = await prisma.purchaseRequisition.findUnique({ where: { projectId_number: { projectId: butantaStudy.projectId, number: "RC-2026-001" } }, include: { items: true } });
+  if (!requisition) requisition = await createPurchaseRequisition(context, { projectId: butantaStudy.projectId, companyId: company.id, number: "RC-2026-001", title: "Contratação de fundações e estrutura", justification: "Pacote crítico do caminho de obra do START BUTANTÃ.", buyerId: user.id, technicalOwnerId: user.id, needIds: [procurementNeed.id] });
+  for (const next of ["REQUESTED", "IN_APPROVAL", "APPROVED_FOR_QUOTATION"] as const) if (requisition.status !== "APPROVED_FOR_QUOTATION" && requisition.status !== "IN_QUOTATION" && requisition.status !== "FULFILLED") requisition = { ...requisition, ...(await transitionPurchaseRequisition(context, requisition.id, next)) };
+
+  let quotation = await prisma.quotationProcess.findUnique({ where: { projectId_number: { projectId: butantaStudy.projectId, number: "CQ-2026-001" } }, include: { requisition: { include: { items: true } }, proposals: true } });
+  if (!quotation) {
+    await createQuotationProcess(context, { requisitionId: requisition.id, number: "CQ-2026-001", title: "Cotação — fundações e estrutura", scope: "Execução integral, incluindo instalação, mobilização, segurança, formas e desmobilização.", requirements: { designRevision: "R02", includesInstallation: true, technicalCapacity: "obras residenciais verticais" }, deliveryLocation: "START BUTANTÃ — São Paulo/SP", deliveryTerm: "Mobilização em até 30 dias", responseDeadline: new Date("2026-08-25T00:00:00.000Z"), supplierIds: [supplier.id, materialsSupplier.id] });
+    quotation = await prisma.quotationProcess.findUniqueOrThrow({ where: { projectId_number: { projectId: butantaStudy.projectId, number: "CQ-2026-001" } }, include: { requisition: { include: { items: true } }, proposals: true } });
+  }
+  const requisitionItem = await prisma.purchaseRequisitionItem.findFirstOrThrow({ where: { requisitionId: requisition.id } });
+  let selectedProposal = await prisma.supplierProposal.findUnique({ where: { quotationProcessId_supplierId_version: { quotationProcessId: quotation.id, supplierId: supplier.id, version: 1 } } });
+  if (!selectedProposal) selectedProposal = await submitSupplierProposal(context, { quotationProcessId: quotation.id, supplierId: supplier.id, version: 1, taxAmount: "0", freightAmount: "0", discountAmount: "20000", validityUntil: new Date("2026-09-30T00:00:00.000Z"), deliveryTermDays: 30, paymentTerms: "10% mobilização, 80% por medição, 10% entrega", warrantyTerms: "5 anos", inclusions: ["Instalação", "Equipamentos", "Segurança"], exclusions: [], notes: "Proposta comercial demonstrativa estruturada.", items: [{ requisitionItemId: requisitionItem.id, description: "Fundações e estrutura completas", quantity: "1", unit: "lote", unitPrice: "950000", taxAmount: "0", freightAmount: "0", discountAmount: "0", comparability: "COMPARABLE", inclusions: ["Instalação"], exclusions: [] }] });
+  let procurementDecision = await prisma.procurementDecision.findUnique({ where: { quotationProcessId: quotation.id } });
+  if (!procurementDecision) procurementDecision = await decideQuotation(context, { quotationProcessId: quotation.id, selectedProposalId: selectedProposal.id, technicalOpinion: "Escopo tecnicamente equivalente à referência, incluindo instalação e equipamentos.", commercialRationale: "Melhor combinação entre preço, prazo, capacidade e escopo; não selecionado apenas pelo menor preço.", referenceAmount: "1000000", scopeComparable: true });
+
+  let purchaseOrder = await prisma.purchaseOrder.findUnique({ where: { projectId_number: { projectId: butantaStudy.projectId, number: "PC-2026-001" } } });
+  if (!purchaseOrder) purchaseOrder = await createPurchaseOrder(context, { projectId: butantaStudy.projectId, companyId: company.id, supplierId: materialsSupplier.id, number: "PC-2026-001", title: "Aço para mobilização inicial", scope: "Lote inicial de aço conforme especificação estrutural R02.", deliveryAt: new Date("2026-09-10T00:00:00.000Z"), paymentTerms: "30 dias", items: [{ economicItemId: officialLine.economicItemId, budgetLineItemId: officialLine.id, costCenterId: officialLine.costCenterId, scheduleActivityId: firstScheduleActivity?.id ?? null, description: "Aço CA-50/CA-60", quantity: "25", unit: "t", unitPrice: "3000" }] });
+  if (["DRAFT", "IN_APPROVAL"].includes(purchaseOrder.status)) purchaseOrder = await approvePurchaseOrder(context, purchaseOrder.id);
+
+  let operationalContract = await prisma.operationalContract.findUnique({ where: { projectId_number: { projectId: butantaStudy.projectId, number: "CT-2026-001" } }, include: { items: true } });
+  if (!operationalContract) operationalContract = await createOperationalContract(context, { projectId: butantaStudy.projectId, companyId: company.id, supplierId: supplier.id, quotationProcessId: quotation.id, selectedProposalId: selectedProposal.id, number: "CT-2026-001", title: "Contrato de fundações e estrutura", type: "CONSTRUCTION", billingModel: "MEASUREMENT", scope: "Execução integral das fundações e estrutura do START BUTANTÃ.", startsAt: new Date("2026-09-01T00:00:00.000Z"), endsAt: new Date("2027-08-31T00:00:00.000Z"), responsibleId: user.id, paymentTerms: "Medição mensal, vencimento em 15 dias", retentionRate: "0.05", warrantyTerms: "5 anos", items: [{ code: "01", economicItemId: officialLine.economicItemId, budgetLineItemId: officialLine.id, costCenterId: officialLine.costCenterId, scheduleActivityId: firstScheduleActivity?.id ?? null, description: "Fundações e estrutura completas", quantity: "930", unit: "unidade de serviço", unitPrice: "1000" }] });
+  for (const next of ["UNDER_REVIEW", "IN_APPROVAL", "APPROVED", "ACTIVE"] as const) if (!["ACTIVE", "SUSPENDED", "CLOSED"].includes(operationalContract.status)) operationalContract = { ...operationalContract, ...(await transitionOperationalContract(context, operationalContract.id, next)) };
+  let amendment = await prisma.contractAmendment.findUnique({ where: { contractId_number: { contractId: operationalContract.id, number: 1 } } });
+  if (!amendment) amendment = await createContractAmendment(context, { contractId: operationalContract.id, number: 1, type: "INCREASE", reason: "Reforço localizado decorrente de condição geotécnica imprevista.", deviationCause: "UNFORESEEN_CONDITION", scopeDescription: "Reforço de estacas em setor identificado no relatório geotécnico complementar.", value: "50000", termDays: 10, effectiveAt: new Date("2026-10-01T00:00:00.000Z") });
+  if (amendment.status !== "APPROVED") amendment = await approveContractAmendment(context, amendment.id);
+  const contractItem = await prisma.operationalContractItem.findFirstOrThrow({ where: { contractId: operationalContract.id } });
+  let measurement = await prisma.measurementCertificate.findUnique({ where: { contractId_number_version: { contractId: operationalContract.id, number: 1, version: 1 } } });
+  if (!measurement) measurement = await createMeasurement(context, { contractId: operationalContract.id, number: 1, version: 1, competenceDate: new Date("2026-10-01T00:00:00.000Z"), periodStart: new Date("2026-09-01T00:00:00.000Z"), periodEnd: new Date("2026-09-30T00:00:00.000Z"), issuedAt: new Date("2026-10-01T00:00:00.000Z"), dueDate: new Date("2026-10-15T00:00:00.000Z"), physicalProgress: "0.215054", retentionAmount: "10000", discountAmount: "0", advanceAmortizationAmount: "0", lines: [{ contractItemId: contractItem.id, periodQuantity: "200" }] });
+  for (const next of ["SUBMITTED", "IN_TECHNICAL_REVIEW", "TECHNICALLY_APPROVED", "IN_APPROVAL"] as const) if (!["SENT_TO_FINANCE", "APPROVED"].includes(measurement.status)) measurement = { ...measurement, ...(await transitionMeasurement(context, measurement.id, next)) };
+  if (measurement.status === "IN_APPROVAL") await approveMeasurementAndGenerateObligation(context, measurement.id);
+
+  await prisma.approvalPolicy.upsert({ where: { organizationId_name_version: { organizationId: organization.id, name: "Alçada padrão de suprimentos", version: 1 } }, update: { isActive: true }, create: { organizationId: organization.id, name: "Alçada padrão de suprimentos", version: 1, actType: "CONTRACT", companyId: company.id, projectId: butantaStudy.projectId, minimumAmount: "0", requiredRole: "ADMIN", requiredApprovals: 1, segregationRequired: true, createdById: user.id } });
+
   await prisma.viabilityStudy.update({ where: { id: study.studyId }, data: { updatedById: user.id } });
   const landStudy = await ensureDemoLandStudy({ userId: user.id, organizationId: organization.id });
   const investmentCase = await ensureInvestmentCase({ userId: user.id, organizationId: organization.id });
@@ -275,7 +339,7 @@ async function main() {
   });
 
   await prisma.session.deleteMany({ where: { expiresAt: { lt: new Date() } } });
-  console.info(`Seed concluído: ${organization.name} · ${user.email} · viabilidade v${study.versionNumber} · START BUTANTÃ v${butantaStudy.versionNumber} · Orçamento ${butantaBudget.id} · Base Aprovada v${operationalBaseline.version} · Orçamento Oficial v${officialBudget.version} (${officialBudget.totalBudget}) · Cronograma v${operationalSchedule.version} · Financeiro: ${operationalBankAccount.id === fundingBankAccount.id ? 1 : 2} contas bancárias, Conta a Pagar ${payableAccount.id}, Conta a Receber ${receivableAccount.id}, Intercompany ${intercompanyTransaction.id} · Land v${landStudy.versionNumber} · Investment Case ${investmentCase.id} · Design ${designWorkspace.revision.label} (${designWorkspace.findings.length} findings derivados) · Dossiê ${demoMasterReport.reportId} (${demoMasterReport.pageCount} páginas) · REDE AI ${AI_PROMPT_VERSION} (${aiTasks.length} políticas)`);
+  console.info(`Seed concluído: ${organization.name} · ${user.email} · viabilidade v${study.versionNumber} · START BUTANTÃ v${butantaStudy.versionNumber} · Orçamento ${butantaBudget.id} · Base Aprovada v${operationalBaseline.version} · Orçamento Oficial v${officialBudget.version} (${officialBudget.totalBudget}) · Cronograma v${operationalSchedule.version} · Financeiro: ${operationalBankAccount.id === fundingBankAccount.id ? 1 : 2} contas bancárias, Conta a Pagar ${payableAccount.id}, Conta a Receber ${receivableAccount.id}, Intercompany ${intercompanyTransaction.id} · Suprimentos: ${requisition.number}, ${quotation.number}, ${purchaseOrder.number}, ${operationalContract.number}, BM ${measurement.number} · Land v${landStudy.versionNumber} · Investment Case ${investmentCase.id} · Design ${designWorkspace.revision.label} (${designWorkspace.findings.length} findings derivados) · Dossiê ${demoMasterReport.reportId} (${demoMasterReport.pageCount} páginas) · REDE AI ${AI_PROMPT_VERSION} (${aiTasks.length} políticas)`);
 }
 
 main()
