@@ -23,6 +23,7 @@ import {
   FolderArchive,
   Presentation,
   PanelLeftClose,
+  Plug,
   Plus,
   Radar,
   Scale,
@@ -53,6 +54,7 @@ import { LegalView } from "./legal-view";
 import { SalesView } from "./sales-view";
 import { PeoplePerformanceView } from "./people-performance-view";
 import { AccountingView } from "./accounting-view";
+import { IntegrationsView } from "./integrations-view";
 import { logoutAction } from "@/app/actions/auth";
 import { createStudyAction, createStudyVersionAction } from "@/app/actions/studies";
 import { reassessInvestmentCaseAction } from "@/app/actions/investment";
@@ -69,13 +71,14 @@ import type { LegalWorkspaceView } from "@/application/legal/legal-service";
 import type { SalesWorkspaceView } from "@/application/sales/sales-service";
 import type { PeoplePerformanceWorkspaceView } from "@/application/people-performance/people-performance-service";
 import type { AccountingWorkspaceView } from "@/application/accounting/accounting-service";
+import type { IntegrationsWorkspaceView } from "@/application/integrations/integrations-service";
 import { DEMO_PROJECT } from "@/domain/financial/demo";
 import { calculateAllScenarios } from "@/domain/financial/engine";
 import { SCENARIOS } from "@/domain/financial/scenarios";
 import type { ProjectAssumptions, ScenarioKey } from "@/domain/financial/types";
 import { analyzeRisk, type FindingSeverity } from "@/domain/risk/rules";
 
-type ViewKey = "overview" | "assumptions" | "land" | "design" | "budget" | "procurement" | "legal" | "financial" | "accounting" | "sales" | "people" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit";
+type ViewKey = "overview" | "assumptions" | "land" | "design" | "budget" | "procurement" | "legal" | "financial" | "accounting" | "integrations" | "sales" | "people" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit";
 type EditorMode = "create" | "version";
 
 const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
@@ -88,6 +91,7 @@ const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
   { key: "legal", label: "Jurídico e Diligência", icon: Scale },
   { key: "financial", label: "Financeiro", icon: Landmark },
   { key: "accounting", label: "Contabilidade e Controladoria", icon: BookOpenCheck },
+  { key: "integrations", label: "Central de Integrações", icon: Plug },
   { key: "sales", label: "Vendas e Recebíveis", icon: HandCoins },
   { key: "people", label: "Pessoas e Eficiência", icon: Users },
   { key: "scenarios", label: "Cenários", icon: BarChart3 },
@@ -154,12 +158,13 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "RE";
 }
 
-export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, initialSales, initialPeoplePerformance, initialAccounting, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; initialOperations: OperationsWorkspaceView; initialFinancial: FinancialWorkspaceView; initialProcurement: ProcurementWorkspaceView; initialLegal: LegalWorkspaceView; initialSales: SalesWorkspaceView; initialPeoplePerformance: PeoplePerformanceWorkspaceView; initialAccounting: AccountingWorkspaceView; identity: WorkspaceIdentity }) {
+export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, initialSales, initialPeoplePerformance, initialAccounting, initialIntegrations, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; initialOperations: OperationsWorkspaceView; initialFinancial: FinancialWorkspaceView; initialProcurement: ProcurementWorkspaceView; initialLegal: LegalWorkspaceView; initialSales: SalesWorkspaceView; initialPeoplePerformance: PeoplePerformanceWorkspaceView; initialAccounting: AccountingWorkspaceView; initialIntegrations: IntegrationsWorkspaceView; identity: WorkspaceIdentity }) {
   const [study, setStudy] = useState<PersistedStudyView>(initialStudy);
   const [landWorkspace, setLandWorkspace] = useState<LandWorkspaceView>(initialLand);
   const [investmentWorkspace, setInvestmentWorkspace] = useState<InvestmentCaseWorkspace>(initialInvestment);
   const [designWorkspace, setDesignWorkspace] = useState<DesignWorkspaceView>(initialDesign);
   const [budgetWorkspace, setBudgetWorkspace] = useState<BudgetWorkspaceView | null>(initialBudget);
+  const [integrationsWorkspace, setIntegrationsWorkspace] = useState<IntegrationsWorkspaceView>(initialIntegrations);
   const [project, setProject] = useState<ProjectAssumptions>(initialStudy.assumptions);
   const [scenario, setScenario] = useState<ScenarioKey>("base");
   const [view, setView] = useState<ViewKey>("overview");
@@ -332,6 +337,11 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
               </section>
 
               <section className="panel scenario-strip">
+                <div className="panel-heading"><div><span className="eyebrow">CENTRAL DE INTEGRAÇÕES</span><h2>Conectores, proveniência e sincronização</h2></div><button className="text-button" onClick={() => setView("integrations")}>Abrir integrações <ArrowRight size={15} /></button></div>
+                <div className="scenario-table compact-table"><div className="table-row table-head"><span>Instalações</span><span>Críticas</span><span>Atenção</span><span>Conflitos abertos</span><span>Quarentena</span><span>Credenciais expirando</span></div><div className="table-row"><strong>{integrationsWorkspace.summary.installations}</strong><strong>{integrationsWorkspace.summary.criticalInstallations}</strong><strong>{integrationsWorkspace.summary.attentionInstallations}</strong><strong>{integrationsWorkspace.summary.openConflicts}</strong><strong>{integrationsWorkspace.summary.pendingQuarantine}</strong><strong>{integrationsWorkspace.summary.expiringCredentials}</strong></div></div>
+              </section>
+
+              <section className="panel scenario-strip">
                 <div className="panel-heading"><div><span className="eyebrow">DOWNSIDE × UPSIDE</span><h2>Comparação rápida de cenários</h2></div><button className="text-button" onClick={() => setView("scenarios")}>Abrir análise <ArrowRight size={15} /></button></div>
                 <div className="scenario-table compact-table"><div className="table-row table-head"><span>Cenário</span><span>VGV</span><span>Lucro</span><span>Margem</span><span>TIR</span><span>Exposição</span></div>{(["conservative", "base", "aggressive"] as ScenarioKey[]).map((key) => { const item = results[key]; return <button key={key} onClick={() => setScenario(key)} className={`table-row ${scenario === key ? "selected" : ""}`}><span><i className={`scenario-dot dot-${key}`} />{SCENARIOS[key].label}</span><strong>{compactBrl(item.metrics.vgv)}</strong><strong>{compactBrl(item.metrics.profit)}</strong><strong>{percentage(item.metrics.marginOnVgv)}</strong><strong>{percentage(item.metrics.annualIrr)}</strong><strong>{compactBrl(item.metrics.maximumCashExposure)}</strong></button>; })}</div>
               </section>
@@ -375,6 +385,13 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
             <div className="view-stack">
               <SectionTitle eyebrow="CONTÁBIL, FISCAL E CONTROLADORIA" title="Fato operacional → Política → Razão → Resultado" description="Competência e caixa separados, partidas dobradas, estoque, tributos e consolidação sem criar uma segunda verdade financeira." />
               <AccountingView workspace={initialAccounting} />
+            </div>
+          )}
+
+          {view === "integrations" && (
+            <div className="view-stack">
+              <SectionTitle eyebrow="CENTRAL DE INTEGRAÇÕES" title="Conectores, sincronização e proveniência" description="Grupo, empresa, SPE e empreendimento em uma visão só: quem é o dono do dado, de onde veio, quando foi atualizado e se está em conflito." />
+              <IntegrationsView initialWorkspace={integrationsWorkspace} projectId={study.projectId} onWorkspaceChange={setIntegrationsWorkspace} />
             </div>
           )}
 

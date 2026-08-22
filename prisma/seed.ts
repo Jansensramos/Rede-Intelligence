@@ -58,6 +58,7 @@ import {
 } from "../src/application/sales/sales-service";
 import { allocateAdministrativeCost, calculateEfficiencyVariance, simulateIncentivePool } from "../src/domain/people-performance";
 import { seedAccountingDemo } from "./seed-accounting";
+import { seedIntegrationsDemo } from "./seed-integrations";
 
 async function main() {
   const passwordHash = await hash("Rede@2026", 12);
@@ -524,6 +525,15 @@ async function main() {
     salesUnits: [salesUnitSold, salesUnitBlocked, salesUnitAvailable].map((unit) => ({ id: unit.id, code: unit.code, privateAreaM2: unit.privateAreaM2.toString() })),
   });
 
+  const integrationsDemo = await seedIntegrationsDemo(prisma, {
+    organizationId: organization.id,
+    userId: user.id,
+    projectId: butantaStudy.projectId,
+    companyId: company.id,
+    supplierId: supplier.id,
+    supplierTaxId: supplier.taxId!,
+  });
+
   await prisma.viabilityStudy.update({ where: { id: study.studyId }, data: { updatedById: user.id } });
   const landStudy = legalLandWorkspace;
   const investmentCase = await ensureInvestmentCase({ userId: user.id, organizationId: organization.id });
@@ -550,7 +560,7 @@ async function main() {
   });
 
   await prisma.session.deleteMany({ where: { expiresAt: { lt: new Date() } } });
-  console.info(`Seed concluído: ${organization.name} · ${user.email} · viabilidade v${study.versionNumber} · START BUTANTÃ v${butantaStudy.versionNumber} · Orçamento ${butantaBudget.id} · Base Aprovada v${operationalBaseline.version} · Orçamento Oficial v${officialBudget.version} (${officialBudget.totalBudget}) · Cronograma v${operationalSchedule.version} · Financeiro: ${operationalBankAccount.id === fundingBankAccount.id ? 1 : 2} contas bancárias, Conta a Pagar ${payableAccount.id}, Conta a Receber ${receivableAccount.id}, Intercompany ${intercompanyTransaction.id} · Suprimentos: ${requisition.number}, ${quotation.number}, ${purchaseOrder.number}, ${operationalContract.number}, BM ${measurement.number} · Jurídico: ${diligence.code}, ${landContract.number}, ${legalObligation.code} · Vendas: ${salesUnitSold.code} (${deliveredUnit.status}), ${salesUnitBlocked.code} (bloqueada), ${salesUnitAvailable.code} (disponível), venda ${sale.id} (${sale.status}), comissão ${salesCommission.status}, pós-venda ${postSaleRequest.id} · Pessoas 9F: ${relationships.length} profissionais, ${projectTeam.name}, desvio ${varianceCase.code} (economia=${varianceCase.savingEligible}), ação ${correctiveAction.status}, incentivo somente simulado · Contabilidade 9G: plano ${accountingDemo.chartVersion.version}, período ${accountingDemo.october.status}, estoque ${accountingDemo.pool.totalAmount}, receita ${accountingDemo.revenueRun.recognizedRevenue}, tributo configurado ${accountingDemo.taxAssessment.assessedAmount}, consolidado ${accountingDemo.consolidation.consolidatedAmount} · Land v${landStudy.versionNumber} · Investment Case ${investmentCase.id} · Design ${designWorkspace.revision.label} (${designWorkspace.findings.length} findings derivados) · Dossiê ${demoMasterReport.reportId} (${demoMasterReport.pageCount} páginas) · REDE AI ${AI_PROMPT_VERSION} (${aiTasks.length} políticas)`);
+  console.info(`Seed concluído: ${organization.name} · ${user.email} · viabilidade v${study.versionNumber} · START BUTANTÃ v${butantaStudy.versionNumber} · Orçamento ${butantaBudget.id} · Base Aprovada v${operationalBaseline.version} · Orçamento Oficial v${officialBudget.version} (${officialBudget.totalBudget}) · Cronograma v${operationalSchedule.version} · Financeiro: ${operationalBankAccount.id === fundingBankAccount.id ? 1 : 2} contas bancárias, Conta a Pagar ${payableAccount.id}, Conta a Receber ${receivableAccount.id}, Intercompany ${intercompanyTransaction.id} · Suprimentos: ${requisition.number}, ${quotation.number}, ${purchaseOrder.number}, ${operationalContract.number}, BM ${measurement.number} · Jurídico: ${diligence.code}, ${landContract.number}, ${legalObligation.code} · Vendas: ${salesUnitSold.code} (${deliveredUnit.status}), ${salesUnitBlocked.code} (bloqueada), ${salesUnitAvailable.code} (disponível), venda ${sale.id} (${sale.status}), comissão ${salesCommission.status}, pós-venda ${postSaleRequest.id} · Pessoas 9F: ${relationships.length} profissionais, ${projectTeam.name}, desvio ${varianceCase.code} (economia=${varianceCase.savingEligible}), ação ${correctiveAction.status}, incentivo somente simulado · Contabilidade 9G: plano ${accountingDemo.chartVersion.version}, período ${accountingDemo.october.status}, estoque ${accountingDemo.pool.totalAmount}, receita ${accountingDemo.revenueRun.recognizedRevenue}, tributo configurado ${accountingDemo.taxAssessment.assessedAmount}, consolidado ${accountingDemo.consolidation.consolidatedAmount} · Integrações 9H: ${integrationsDemo.driveInstallation.name} (sync ${integrationsDemo.driveSyncRun.status}, ${integrationsDemo.driveSyncRun.itemsApplied} aplicados), webhook deduplicado=${integrationsDemo.inboxDedupCount === 1}, fornecedor único por CNPJ=${integrationsDemo.supplierCountForTaxId === 1}, conflito ${integrationsDemo.conflict.status}, quarentena ${integrationsDemo.quarantineItem.status}, dead-letter ${integrationsDemo.deadLetter.errorClass}, preço observado R$${integrationsDemo.priceObservation.price} · Land v${landStudy.versionNumber} · Investment Case ${investmentCase.id} · Design ${designWorkspace.revision.label} (${designWorkspace.findings.length} findings derivados) · Dossiê ${demoMasterReport.reportId} (${demoMasterReport.pageCount} páginas) · REDE AI ${AI_PROMPT_VERSION} (${aiTasks.length} políticas)`);
 }
 
 main()

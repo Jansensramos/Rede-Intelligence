@@ -977,6 +977,21 @@ model Organization {
   performanceVarianceCases   PerformanceVarianceCase[]
   incentivePolicies          IncentivePolicy[]
   incentiveSimulations       IncentiveSimulation[]
+  connectorInstallations     ConnectorInstallation[]
+  credentialReferences       CredentialReference[]
+  dataOwnershipPolicies      DataOwnershipPolicy[]
+  externalEntityReferences   ExternalEntityReference[]
+  mappingProfiles            MappingProfile[]
+  integrationConflicts       IntegrationConflict[]
+  integrationSyncRuns        IntegrationSyncRun[]
+  integrationOutboxEvents    IntegrationOutboxEvent[]
+  webhookSubscriptions       WebhookSubscription[]
+  integrationJobs            IntegrationJob[]
+  integrationDeadLetters     IntegrationDeadLetter[]
+  integrationQuarantineItems IntegrationQuarantineItem[]
+  connectorDocumentReferences ConnectorDocumentReference[]
+  externalPriceObservations  ExternalPriceObservation[]
+  apiClients                 ApiClient[]
 
   @@map("organizations")
 }
@@ -1154,6 +1169,7 @@ model Project {
   efficiencyAnalysisRuns       EfficiencyAnalysisRun[]
   incentiveSimulations         IncentiveSimulation[]
   administrativeAllocations    AdministrativeCostAllocationLine[]
+  connectorInstallations       ConnectorInstallation[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -1275,6 +1291,7 @@ model EconomicGroup {
   organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   companies                Company[]
   intercompanyTransactions IntercompanyTransaction[]
+  connectorInstallations   ConnectorInstallation[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -1321,6 +1338,7 @@ model Company {
   employmentRelationships      EmploymentRelationship[]
   teams                        Team[]
   administrativeCostPlans      AdministrativeCostPlan[]
+  connectorInstallations       ConnectorInstallation[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, taxId])
@@ -8780,4 +8798,769 @@ model ConsolidatedBalanceSnapshot {
   run            ConsolidationRun @relation(fields: [runId], references: [id], onDelete: Restrict)
 
   @@map("consolidated_balance_snapshots")
+}
+
+// ============================================================================
+// FASE 9H — Central de Integrações, Conectores e Sincronização
+// ============================================================================
+
+enum ConnectorCategory {
+  STORAGE
+  ERP
+  CRM
+  BANKING
+  GOVERNMENT
+  REGISTRY
+  ACCOUNTING
+  CONSTRUCTION_CDE
+  PRICE_INTELLIGENCE
+  OTHER
+}
+
+enum ConnectorAuthMethod {
+  OAUTH2
+  API_KEY
+  SERVICE_ACCOUNT
+  CERTIFICATE
+  MANUAL
+  NONE
+}
+
+enum IntegrationLifecycleStatus {
+  ACTIVE
+  DEPRECATED
+  RETIRED
+}
+
+enum IntegrationDirection {
+  INBOUND
+  OUTBOUND
+  BIDIRECTIONAL
+}
+
+enum ConnectorInstallationStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ERROR
+  REVOKED
+}
+
+enum IntegrationHealthStatus {
+  HEALTHY
+  DEGRADED
+  DOWN
+  UNKNOWN
+}
+
+enum CredentialStatus {
+  PENDING
+  ACTIVE
+  EXPIRING
+  EXPIRED
+  REVOKED
+  ERROR
+}
+
+enum OAuthGrantState {
+  PENDING_CONSENT
+  ACTIVE
+  EXPIRING
+  EXPIRED
+  REVOKED
+  ERROR
+}
+
+enum ConflictPolicyType {
+  EXTERNAL_WINS
+  REDE_WINS
+  NEWEST_WINS
+  MANUAL_REVIEW
+  FIELD_OWNER_WINS
+  MERGE_BY_RULE
+}
+
+enum OwnershipRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum MappingProfileStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum IntegrationConflictStatus {
+  OPEN
+  RESOLVED_AUTO
+  RESOLVED_MANUAL
+  IGNORED
+}
+
+enum SyncRunMode {
+  MANUAL
+  SCHEDULED
+  WEBHOOK
+  INCREMENTAL
+  FULL
+  REPLAY
+}
+
+enum SyncRunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  PARTIAL
+  CANCELLED
+}
+
+enum SyncItemResult {
+  APPLIED
+  SKIPPED
+  CONFLICT
+  ERROR
+  QUARANTINED
+}
+
+enum InboxEventStatus {
+  RECEIVED
+  VALIDATED
+  REJECTED
+  PROCESSING
+  PROCESSED
+  FAILED
+  QUARANTINED
+}
+
+enum OutboxEventStatus {
+  PENDING
+  DELIVERING
+  DELIVERED
+  FAILED
+  DEAD_LETTER
+}
+
+enum WebhookSubscriptionStatus {
+  ACTIVE
+  PAUSED
+  REVOKED
+}
+
+enum EventClassification {
+  INTERNAL
+  PARTNER
+  PUBLIC
+}
+
+enum JobPriority {
+  CRITICAL
+  NORMAL
+  LOW
+}
+
+enum IntegrationJobStatus {
+  QUEUED
+  LEASED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  DEAD_LETTER
+}
+
+enum IntegrationErrorClass {
+  AUTHENTICATION
+  AUTHORIZATION
+  RATE_LIMIT
+  VALIDATION
+  MAPPING
+  DUPLICATE
+  CONFLICT
+  NETWORK
+  PROVIDER
+  BUSINESS_RULE
+  STORAGE
+  UNKNOWN
+}
+
+enum DeadLetterSourceType {
+  JOB
+  INBOX_EVENT
+  SYNC_ITEM
+  OUTBOX_EVENT
+}
+
+enum QuarantineStatus {
+  PENDING
+  REVIEWED
+  REPROCESSED
+  DISCARDED
+}
+
+enum DocumentReferenceMode {
+  REFERENCE
+  COPY
+}
+
+model ConnectorDefinition {
+  id                   String                      @id @default(cuid())
+  code                 String                      @unique
+  name                 String
+  provider             String
+  category             ConnectorCategory
+  authMethod           ConnectorAuthMethod         @map("auth_method")
+  capabilities         Json
+  sourceOfTruthDefault Json?                       @map("source_of_truth_default")
+  adapterVersion       String                      @map("adapter_version")
+  contractVersion      String                      @map("contract_version")
+  sandboxAvailable     Boolean                     @default(true) @map("sandbox_available")
+  deprecationStatus    IntegrationLifecycleStatus  @default(ACTIVE) @map("deprecation_status")
+  documentationUrl     String?                     @map("documentation_url")
+  metadata             Json?
+  createdAt            DateTime                    @default(now()) @map("created_at")
+  updatedAt            DateTime                    @updatedAt @map("updated_at")
+  installations        ConnectorInstallation[]
+
+  @@index([category])
+  @@map("connector_definitions")
+}
+
+model ConnectorInstallation {
+  id                    String                      @id @default(cuid())
+  organizationId        String                      @map("organization_id")
+  connectorDefinitionId String                      @map("connector_definition_id")
+  economicGroupId       String?                     @map("economic_group_id")
+  companyId             String?                     @map("company_id")
+  projectId             String?                     @map("project_id")
+  name                  String
+  status                ConnectorInstallationStatus @default(DRAFT)
+  direction             IntegrationDirection
+  configuration         Json                        @default("{}")
+  healthStatus          IntegrationHealthStatus     @default(UNKNOWN) @map("health_status")
+  lastSyncAt            DateTime?                   @map("last_sync_at")
+  nextSyncAt            DateTime?                   @map("next_sync_at")
+  createdById           String                      @map("created_by_id")
+  createdAt             DateTime                    @default(now()) @map("created_at")
+  updatedAt             DateTime                    @updatedAt @map("updated_at")
+  organization          Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  connectorDefinition   ConnectorDefinition          @relation(fields: [connectorDefinitionId], references: [id], onDelete: Restrict)
+  economicGroup         EconomicGroup?              @relation(fields: [economicGroupId], references: [id], onDelete: Restrict)
+  company               Company?                    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  project               Project?                    @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  credential            CredentialReference?
+  externalReferences    ExternalEntityReference[]
+  mappingProfiles       MappingProfile[]
+  syncRuns              IntegrationSyncRun[]
+  cursors               IntegrationCursor[]
+  inboxEvents           IntegrationInboxEvent[]
+  conflicts             IntegrationConflict[]
+  quarantineItems       IntegrationQuarantineItem[]
+  healthSnapshots       IntegrationHealthSnapshot[]
+  documentReferences    ConnectorDocumentReference[]
+  jobs                  IntegrationJob[]
+
+  @@index([organizationId, connectorDefinitionId])
+  @@index([organizationId, status])
+  @@map("connector_installations")
+}
+
+model CredentialReference {
+  id             String                @id @default(cuid())
+  organizationId String                @map("organization_id")
+  installationId String                @unique @map("installation_id")
+  provider       String
+  method         ConnectorAuthMethod
+  secretRef      String                @unique @map("secret_ref")
+  fingerprint    String?
+  status         CredentialStatus      @default(PENDING)
+  scopes         Json?
+  expiresAt      DateTime?             @map("expires_at")
+  lastRotatedAt  DateTime?             @map("last_rotated_at")
+  rotatedFromId  String?               @unique @map("rotated_from_id")
+  metadata       Json?
+  createdById    String                @map("created_by_id")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  installation   ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict)
+  rotatedFrom    CredentialReference?  @relation("CredentialRotation", fields: [rotatedFromId], references: [id], onDelete: SetNull)
+  rotatedTo      CredentialReference?  @relation("CredentialRotation")
+  oauthGrants    OAuthGrant[]
+
+  @@index([organizationId, status])
+  @@map("credential_references")
+}
+
+model OAuthGrant {
+  id                   String               @id @default(cuid())
+  credentialReferenceId String              @map("credential_reference_id")
+  subject              String
+  externalTenant       String?              @map("external_tenant")
+  scopes               Json
+  state                OAuthGrantState      @default(PENDING_CONSENT)
+  consentedAt          DateTime?            @map("consented_at")
+  lastRefreshedAt      DateTime?            @map("last_refreshed_at")
+  revokedAt            DateTime?            @map("revoked_at")
+  metadata             Json?
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+  credentialReference  CredentialReference  @relation(fields: [credentialReferenceId], references: [id], onDelete: Cascade)
+
+  @@index([credentialReferenceId, state])
+  @@map("oauth_grants")
+}
+
+model DataOwnershipPolicy {
+  id             String                @id @default(cuid())
+  organizationId String                @map("organization_id")
+  domain         String
+  entityType     String                @map("entity_type")
+  fieldPattern   String?               @map("field_pattern")
+  masterSystem   String                @map("master_system")
+  allowedSources Json                  @map("allowed_sources")
+  consumers      Json
+  direction      IntegrationDirection
+  conflictPolicy ConflictPolicyType    @map("conflict_policy")
+  riskLevel      OwnershipRiskLevel    @default(MEDIUM) @map("risk_level")
+  version        Int                   @default(1)
+  effectiveFrom  DateTime              @map("effective_from")
+  effectiveTo    DateTime?             @map("effective_to")
+  approvedById   String?               @map("approved_by_id")
+  createdById    String                @map("created_by_id")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, domain, entityType])
+  @@map("data_ownership_policies")
+}
+
+model ExternalEntityReference {
+  id             String                @id @default(cuid())
+  organizationId String                @map("organization_id")
+  installationId String                @map("installation_id")
+  entityType     String                @map("entity_type")
+  entityId       String                @map("entity_id")
+  externalType   String                @map("external_type")
+  externalId     String                @map("external_id")
+  externalVersion String?              @map("external_version")
+  companyId      String?               @map("company_id")
+  projectId      String?               @map("project_id")
+  metadata       Json?
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  installation   ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict)
+  documentReferences ConnectorDocumentReference[]
+
+  @@unique([installationId, externalType, externalId])
+  @@index([organizationId, entityType, entityId])
+  @@map("external_entity_references")
+}
+
+model MappingProfile {
+  id             String                @id @default(cuid())
+  organizationId String                @map("organization_id")
+  installationId String                @map("installation_id")
+  capability     String
+  version        Int                   @default(1)
+  status         MappingProfileStatus  @default(DRAFT)
+  rules          Json
+  identityRules  Json?                 @map("identity_rules")
+  createdById    String                @map("created_by_id")
+  approvedById   String?               @map("approved_by_id")
+  approvedAt     DateTime?             @map("approved_at")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  installation   ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict)
+
+  @@unique([installationId, capability, version])
+  @@map("mapping_profiles")
+}
+
+model IntegrationConflict {
+  id                 String                     @id @default(cuid())
+  organizationId     String                     @map("organization_id")
+  installationId     String                     @map("installation_id")
+  externalReferenceId String?                   @map("external_reference_id")
+  entityType         String                     @map("entity_type")
+  entityId           String                     @map("entity_id")
+  fieldName          String                     @map("field_name")
+  localValue         Json?                      @map("local_value")
+  externalValue      Json?                      @map("external_value")
+  localUpdatedAt     DateTime?                  @map("local_updated_at")
+  externalUpdatedAt  DateTime?                  @map("external_updated_at")
+  policyApplied      ConflictPolicyType         @map("policy_applied")
+  status             IntegrationConflictStatus  @default(OPEN)
+  resolution         Json?
+  resolvedById       String?                    @map("resolved_by_id")
+  resolvedAt         DateTime?                  @map("resolved_at")
+  syncRunId          String?                    @map("sync_run_id")
+  createdAt          DateTime                   @default(now()) @map("created_at")
+  organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  installation       ConnectorInstallation      @relation(fields: [installationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, status])
+  @@index([installationId])
+  @@map("integration_conflicts")
+}
+
+model IntegrationSyncRun {
+  id             String                @id @default(cuid())
+  organizationId String                @map("organization_id")
+  installationId String                @map("installation_id")
+  mode           SyncRunMode
+  direction      IntegrationDirection
+  status         SyncRunStatus         @default(PENDING)
+  startedAt      DateTime              @default(now()) @map("started_at")
+  finishedAt     DateTime?             @map("finished_at")
+  cursorBefore   String?               @map("cursor_before")
+  cursorAfter    String?               @map("cursor_after")
+  itemsRead      Int                   @default(0) @map("items_read")
+  itemsApplied   Int                   @default(0) @map("items_applied")
+  itemsIgnored   Int                   @default(0) @map("items_ignored")
+  itemsErrored   Int                   @default(0) @map("items_errored")
+  itemsConflicted Int                  @default(0) @map("items_conflicted")
+  correlationId  String                @unique @map("correlation_id")
+  triggeredById  String?               @map("triggered_by_id")
+  errorSummary   String?               @map("error_summary") @db.Text
+  createdAt      DateTime              @default(now()) @map("created_at")
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  installation   ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict)
+  items          IntegrationSyncItem[]
+
+  @@index([organizationId, installationId, createdAt])
+  @@map("integration_sync_runs")
+}
+
+model IntegrationSyncItem {
+  id                 String              @id @default(cuid())
+  organizationId     String              @map("organization_id")
+  syncRunId          String              @map("sync_run_id")
+  externalType       String              @map("external_type")
+  externalId         String              @map("external_id")
+  resolvedEntityType String?             @map("resolved_entity_type")
+  resolvedEntityId   String?             @map("resolved_entity_id")
+  result             SyncItemResult
+  errorMessage       String?             @map("error_message") @db.Text
+  checksum           String?
+  createdAt          DateTime            @default(now()) @map("created_at")
+  syncRun            IntegrationSyncRun  @relation(fields: [syncRunId], references: [id], onDelete: Cascade)
+
+  @@index([syncRunId])
+  @@index([organizationId, externalType, externalId])
+  @@map("integration_sync_items")
+}
+
+model IntegrationCursor {
+  id             String                @id @default(cuid())
+  organizationId String                @map("organization_id")
+  installationId String                @map("installation_id")
+  capability     String
+  partitionKey   String                @default("default") @map("partition_key")
+  cursorValue    String?               @map("cursor_value")
+  lastSuccessAt  DateTime?             @map("last_success_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  installation   ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict)
+
+  @@unique([installationId, capability, partitionKey])
+  @@map("integration_cursors")
+}
+
+model IntegrationInboxEvent {
+  id              String                @id @default(cuid())
+  organizationId  String                @map("organization_id")
+  installationId  String                @map("installation_id")
+  provider        String
+  eventId         String                @map("event_id")
+  signatureValid  Boolean               @default(false) @map("signature_valid")
+  payloadChecksum String                @map("payload_checksum")
+  payload         Json?
+  receivedAt      DateTime              @default(now()) @map("received_at")
+  status          InboxEventStatus      @default(RECEIVED)
+  processedAt     DateTime?             @map("processed_at")
+  errorMessage    String?               @map("error_message") @db.Text
+  syncRunId       String?               @map("sync_run_id")
+  installation    ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict)
+
+  @@unique([installationId, provider, eventId])
+  @@index([organizationId, status])
+  @@map("integration_inbox_events")
+}
+
+model IntegrationOutboxEvent {
+  id             String             @id @default(cuid())
+  organizationId String             @map("organization_id")
+  eventName      String             @map("event_name")
+  eventVersion   Int                @default(1) @map("event_version")
+  entityType     String             @map("entity_type")
+  entityId       String             @map("entity_id")
+  payload        Json
+  status         OutboxEventStatus  @default(PENDING)
+  attemptCount   Int                @default(0) @map("attempt_count")
+  nextAttemptAt  DateTime?          @map("next_attempt_at")
+  deliveredAt    DateTime?          @map("delivered_at")
+  subscriptionId String?            @map("subscription_id")
+  idempotencyKey String             @unique @map("idempotency_key")
+  correlationId  String             @map("correlation_id")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, status, createdAt])
+  @@map("integration_outbox_events")
+}
+
+model WebhookSubscription {
+  id             String                     @id @default(cuid())
+  organizationId String                     @map("organization_id")
+  endpointUrl    String                     @map("endpoint_url")
+  secretRef      String                     @map("secret_ref")
+  events         Json
+  status         WebhookSubscriptionStatus  @default(ACTIVE)
+  createdById    String                     @map("created_by_id")
+  createdAt      DateTime                   @default(now()) @map("created_at")
+  updatedAt      DateTime                   @updatedAt @map("updated_at")
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, status])
+  @@map("webhook_subscriptions")
+}
+
+model EventCatalogEntry {
+  id                String                      @id @default(cuid())
+  name              String
+  version           Int                         @default(1)
+  owner             String
+  schema            Json
+  classification    EventClassification         @default(INTERNAL)
+  containsPII       Boolean                     @default(false) @map("contains_pii")
+  guarantees        String?                     @db.Text
+  orderingGuarantee String?                     @map("ordering_guarantee")
+  deprecationStatus IntegrationLifecycleStatus  @default(ACTIVE) @map("deprecation_status")
+  createdAt         DateTime                    @default(now()) @map("created_at")
+
+  @@unique([name, version])
+  @@map("event_catalog_entries")
+}
+
+model IntegrationJob {
+  id             String                @id @default(cuid())
+  organizationId String                @map("organization_id")
+  installationId String?               @map("installation_id")
+  jobType        String                @map("job_type")
+  priority       JobPriority           @default(NORMAL)
+  status         IntegrationJobStatus  @default(QUEUED)
+  payload        Json
+  attemptCount   Int                   @default(0) @map("attempt_count")
+  maxAttempts    Int                   @default(5) @map("max_attempts")
+  leaseOwner     String?               @map("lease_owner")
+  leaseExpiresAt DateTime?             @map("lease_expires_at")
+  scheduledAt    DateTime              @default(now()) @map("scheduled_at")
+  startedAt      DateTime?             @map("started_at")
+  finishedAt     DateTime?             @map("finished_at")
+  lastError      String?               @map("last_error") @db.Text
+  correlationId  String                @map("correlation_id")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  installation   ConnectorInstallation? @relation(fields: [installationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, status, scheduledAt])
+  @@map("integration_jobs")
+}
+
+model IntegrationDeadLetter {
+  id               String                 @id @default(cuid())
+  organizationId   String                 @map("organization_id")
+  sourceType       DeadLetterSourceType   @map("source_type")
+  sourceId         String                 @map("source_id")
+  installationId   String?                @map("installation_id")
+  reason           String                 @db.Text
+  errorClass       IntegrationErrorClass  @map("error_class")
+  payload          Json?
+  occurredAt       DateTime               @default(now()) @map("occurred_at")
+  resolvedAt       DateTime?              @map("resolved_at")
+  resolvedById     String?                @map("resolved_by_id")
+  resolutionNotes  String?                @map("resolution_notes") @db.Text
+  organization     Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, sourceType])
+  @@map("integration_dead_letters")
+}
+
+model IntegrationQuarantineItem {
+  id                   String                @id @default(cuid())
+  organizationId       String                @map("organization_id")
+  installationId       String                @map("installation_id")
+  capability           String
+  externalType         String?               @map("external_type")
+  externalId           String?               @map("external_id")
+  reason               String                @db.Text
+  errorClass           IntegrationErrorClass @map("error_class")
+  payload              Json?
+  status               QuarantineStatus      @default(PENDING)
+  reviewedById         String?               @map("reviewed_by_id")
+  reviewedAt           DateTime?             @map("reviewed_at")
+  reprocessedSyncRunId String?               @map("reprocessed_sync_run_id")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  installation         ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, status])
+  @@map("integration_quarantine_items")
+}
+
+model IntegrationHealthSnapshot {
+  id              String                @id @default(cuid())
+  organizationId  String                @map("organization_id")
+  installationId  String                @map("installation_id")
+  capturedAt      DateTime              @default(now()) @map("captured_at")
+  availability    Float?
+  successRate     Float?                @map("success_rate")
+  avgLatencyMs    Int?                  @map("avg_latency_ms")
+  freshnessSeconds Int?                 @map("freshness_seconds")
+  backlogCount    Int                   @default(0) @map("backlog_count")
+  healthScore     Float                 @map("health_score")
+  components      Json
+  createdAt       DateTime              @default(now()) @map("created_at")
+  installation    ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict)
+
+  @@index([installationId, capturedAt])
+  @@map("integration_health_snapshots")
+}
+
+model ConnectorDocumentReference {
+  id                  String                     @id @default(cuid())
+  organizationId      String                     @map("organization_id")
+  installationId      String                     @map("installation_id")
+  externalReferenceId String?                    @map("external_reference_id")
+  provider            String
+  externalFileId      String                     @map("external_file_id")
+  externalVersionId   String?                    @map("external_version_id")
+  name                String
+  mimeType            String?                    @map("mime_type")
+  size                Int?
+  webUrl              String?                    @map("web_url")
+  checksum            String?
+  modifiedAtSource    DateTime?                  @map("modified_at_source")
+  referenceMode       DocumentReferenceMode      @default(REFERENCE) @map("reference_mode")
+  copiedDocumentLinkId String?                   @map("copied_document_link_id")
+  companyId           String?                    @map("company_id")
+  projectId           String?                    @map("project_id")
+  createdAt           DateTime                   @default(now()) @map("created_at")
+  updatedAt           DateTime                   @updatedAt @map("updated_at")
+  organization        Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  installation        ConnectorInstallation      @relation(fields: [installationId], references: [id], onDelete: Restrict)
+  externalReference    ExternalEntityReference?  @relation(fields: [externalReferenceId], references: [id], onDelete: SetNull)
+
+  @@unique([installationId, externalFileId])
+  @@index([organizationId, projectId])
+  @@map("connector_document_references")
+}
+
+model ExternalPriceObservation {
+  id                  String        @id @default(cuid())
+  organizationId      String        @map("organization_id")
+  itemCode            String?       @map("item_code")
+  itemDescription     String        @map("item_description")
+  specification       String?       @db.Text
+  region              String?
+  observedAt          DateTime      @map("observed_at")
+  quantity            Decimal?      @db.Decimal(18, 4)
+  unit                String?
+  price               Decimal       @db.Decimal(18, 4)
+  freight             Decimal?      @db.Decimal(18, 4)
+  taxes               Decimal?      @db.Decimal(18, 4)
+  currency            String        @default("BRL") @db.Char(3)
+  supplierName        String?       @map("supplier_name")
+  sourceProvider      String        @map("source_provider")
+  sourceUrl           String?       @map("source_url")
+  evidenceChecksum    String?       @map("evidence_checksum")
+  confidence          Float?
+  licenseNote         String?       @map("license_note") @db.Text
+  mappedEconomicItemId String?      @map("mapped_economic_item_id")
+  createdById         String        @map("created_by_id")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  organization        Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, itemCode, observedAt])
+  @@map("external_price_observations")
+}
+
+// ============================================================================
+// FASE 9H — API foundation, rate limit e circuit breaker (persistidos)
+// ============================================================================
+
+enum ApiClientStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum CircuitBreakerStatusDb {
+  CLOSED
+  OPEN
+  HALF_OPEN
+}
+
+model ApiClient {
+  id             String              @id @default(cuid())
+  organizationId String              @map("organization_id")
+  name           String
+  scopes         Json
+  apiKeyHash     String              @unique @map("api_key_hash")
+  fingerprint    String?
+  status         ApiClientStatus     @default(ACTIVE)
+  createdById    String              @map("created_by_id")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  revokedAt      DateTime?           @map("revoked_at")
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  idempotencyRecords ApiIdempotencyRecord[]
+
+  @@index([organizationId, status])
+  @@map("api_clients")
+}
+
+model ApiIdempotencyRecord {
+  id               String     @id @default(cuid())
+  organizationId   String     @map("organization_id")
+  apiClientId      String     @map("api_client_id")
+  idempotencyKey   String     @map("idempotency_key")
+  requestChecksum  String     @map("request_checksum")
+  responseSnapshot Json       @map("response_snapshot")
+  statusCode       Int        @map("status_code")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  apiClient        ApiClient  @relation(fields: [apiClientId], references: [id], onDelete: Restrict)
+
+  @@unique([apiClientId, idempotencyKey])
+  @@index([organizationId, createdAt])
+  @@map("api_idempotency_records")
+}
+
+model IntegrationRateLimitState {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  scopeKey       String    @map("scope_key")
+  windowStart    DateTime  @map("window_start")
+  requestCount   Int       @default(0) @map("request_count")
+  blockedUntil   DateTime? @map("blocked_until")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@unique([organizationId, scopeKey])
+  @@map("integration_rate_limit_states")
+}
+
+model IntegrationCircuitBreakerState {
+  id                   String                  @id @default(cuid())
+  organizationId       String                  @map("organization_id")
+  scopeKey             String                  @map("scope_key")
+  status               CircuitBreakerStatusDb  @default(CLOSED)
+  consecutiveFailures  Int                     @default(0) @map("consecutive_failures")
+  openedAt             DateTime?               @map("opened_at")
+  halfOpenProbeInFlight Boolean                @default(false) @map("half_open_probe_in_flight")
+  updatedAt            DateTime                @updatedAt @map("updated_at")
+
+  @@unique([organizationId, scopeKey])
+  @@map("integration_circuit_breaker_states")
 }
