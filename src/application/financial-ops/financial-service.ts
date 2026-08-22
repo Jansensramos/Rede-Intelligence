@@ -280,6 +280,20 @@ export async function applyPayableInstallmentCorrection(context: AuthContext, ra
   });
 }
 
+export async function applyReceivableInstallmentCorrection(context: AuthContext, raw: ApplyCorrectionInput) {
+  assertMutable(context);
+  const input = applyCorrectionSchema.parse(raw);
+  const installment = await prisma.receivableInstallment.findFirst({ where: { id: input.installmentId, receivableAccount: { organizationId: context.organizationId } }, include: { receivableAccount: true } });
+  if (!installment) throw new Error("Parcela de conta a receber não encontrada nesta organização.");
+  const result = engine.applyInstallmentCorrection({ baseAmount: Number(installment.currentAmount), indexPercentage: input.indexPercentage, interestRatePerMonth: input.interestRatePerMonth, monthsLate: input.monthsLate, fineRate: input.fineRate, discountAmount: input.discountAmount });
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.receivableInstallment.update({ where: { id: installment.id }, data: { currentAmount: result.resultingAmount, interestAmount: result.interestAmount, fineAmount: result.fineAmount, discountAmount: result.discountAmount } });
+    await tx.installmentAdjustment.create({ data: { receivableInstallmentId: installment.id, previousAmount: Number(installment.currentAmount), resultingAmount: result.resultingAmount, indexName: input.indexName ?? null, indexPercentageApplied: input.indexPercentage, interestAmount: result.interestAmount, fineAmount: result.fineAmount, discountAmount: result.discountAmount, referencePeriod: input.referencePeriod, appliedById: context.userId } });
+    await tx.auditLog.create({ data: auditData(context, installment.receivableAccount.projectId, "RECEIVABLE_INSTALLMENT_ADJUSTED", "ReceivableInstallment", installment.id, result, { previousAmount: Number(installment.currentAmount) }) });
+    return updated;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Transações bancárias e conciliação
 // ---------------------------------------------------------------------------

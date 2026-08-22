@@ -94,6 +94,17 @@ export function planAIIntent(question: string): AIIntentPlan {
   if (/contrato.*(?:aditivo|saldo)|mais aditivos|maior saldo contratual/.test(text)) calls.push({ name: "getContractsAndAmendments", arguments: {} });
   if (/quanto econom|saving|economia validada/.test(text)) calls.push({ name: "getValidatedSaving", arguments: {} });
   if (/medic.*(?:aguarda|pendente|aprova)/.test(text)) calls.push({ name: "getPendingMeasurements", arguments: {} });
+  if (/unidade.*dispon|estoque.*(?:vend|comercial)|quantas unidades/.test(text)) calls.push({ name: "getSalesInventory", arguments: {} });
+  if (/tipologia.*(?:vend|mais)/.test(text)) calls.push({ name: "getUnitTypologyPerformance", arguments: {} });
+  if (/preco.*m2|preco por metro|m2 realizado/.test(text)) calls.push({ name: "getPricePerSquareMeter", arguments: {} });
+  if (/desconto.*(?:concedid|medio|vendas)/.test(text)) calls.push({ name: "getDiscountGranted", arguments: {} });
+  if (/proposta.*vencendo|proposta.*expir/.test(text)) calls.push({ name: "getExpiringProposals", arguments: {} });
+  if (/cliente.*inadimplent|comprador.*inadimplent/.test(text)) calls.push({ name: "getDelinquentCustomers", arguments: {} });
+  if (/curva de recebiv|recebiv.*(?:curva|projec)/.test(text)) calls.push({ name: "getReceivableCurve", arguments: {} });
+  if (/unidade.*distrata|distrato/.test(text)) calls.push({ name: "getRescindedUnits", arguments: {} });
+  if (/comissao.*(?:devemos|pendente|corretor)/.test(text)) calls.push({ name: "getPendingCommissions", arguments: {} });
+  if (/unidade.*entrega|aguardando entrega|pos.?venda/.test(text)) calls.push({ name: "getUnitsAwaitingDelivery", arguments: {} });
+  if (/vgv|venda.*(?:mes|unidade)|plano de pagamento/.test(text) && !calls.some((call) => call.name === "getSalesInventory")) calls.push({ name: "getSalesInventory", arguments: {} });
   if (/fluxo|exposicao|vgv|margem|roi|tir|vpl|econom|financeir/.test(text)) calls.push({ name: "getEngineResults", arguments: { ...(financialScenario ? { scenario: financialScenario } : {}) } });
   if (/acao|prioridade|hoje|semana/.test(text)) calls.push({ name: "getActionCenter", arguments: {} });
   if (/caminho critico|marco|atrasando/.test(text)) calls.push({ name: "getCriticalPath", arguments: {} });
@@ -114,4 +125,6 @@ export const DEFAULT_AI_SUGGESTIONS = [
   ["OPERATIONS", "Quanto o Orçamento Oficial está acima da Base Aprovada?"], ["OPERATIONS", "Quanto desembolsaremos nos próximos 90 dias?"],
   ["FINANCE", "Quanto temos de caixa livre?"], ["FINANCE", "O que vence nos próximos 7 dias?"], ["FINANCE", "Quais transações estão sem conciliação?"],
   ["OPERATIONS", "Quanto ainda falta contratar?"], ["OPERATIONS", "Quais compras ameaçam o cronograma?"], ["FINANCE", "Quais medições aguardam aprovação?"],
+  ["SALES", "Quantas unidades ainda estão disponíveis?"], ["SALES", "Qual tipologia vende mais?"], ["SALES", "Quanto concedemos de desconto?"],
+  ["SALES", "Quais clientes estão inadimplentes?"], ["SALES", "Quais unidades foram distratadas?"], ["SALES", "Quanto devemos de comissão?"],
 ].map(([category, prompt]) => ({ category, prompt }));

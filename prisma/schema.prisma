@@ -956,6 +956,16 @@ model Organization {
   legalAuthorityProcesses    LegalAuthorityProcess[]
   legalTimelineEvents        LegalTimelineEvent[]
   legalFinancialEvents       LegalFinancialEvent[]
+  salesUnits                 SalesUnit[]
+  salesPriceTables           SalesPriceTable[]
+  salesLeads                 SalesLead[]
+  brokerProfiles             BrokerProfile[]
+  salesProposals             SalesProposal[]
+  salesReservations          SalesReservation[]
+  sales                      Sale[]
+  salesContracts             SalesContract[]
+  salesCommissionPolicies    SalesCommissionPolicy[]
+  postSaleRequests           PostSaleRequest[]
 
   @@map("organizations")
 }
@@ -1119,6 +1129,13 @@ model Project {
   legalAuthorityProcesses      LegalAuthorityProcess[]
   legalTimelineEvents          LegalTimelineEvent[]
   legalFinancialEvents         LegalFinancialEvent[]
+  salesUnits                   SalesUnit[]
+  salesPriceTables             SalesPriceTable[]
+  salesLeads                   SalesLead[]
+  salesProposals               SalesProposal[]
+  salesReservations            SalesReservation[]
+  sales                        Sale[]
+  salesContracts               SalesContract[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -1278,6 +1295,10 @@ model Company {
   purchaseRequisitions         PurchaseRequisition[]
   purchaseOrders               PurchaseOrder[]
   operationalContracts         OperationalContract[]
+  salesUnits                   SalesUnit[]
+  salesPriceTables             SalesPriceTable[]
+  sales                        Sale[]
+  salesContracts               SalesContract[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, taxId])
@@ -1307,6 +1328,7 @@ model ProjectOperatingUnit {
   procurementNeeds   ProcurementNeed[]
   contractItems      OperationalContractItem[]
   purchaseOrderItems PurchaseOrderItem[]
+  salesUnits         SalesUnit[]
 
   @@unique([projectId, code])
   @@index([parentId, sortOrder])
@@ -4534,6 +4556,11 @@ model Supplier {
   proposals            SupplierProposal[]
   purchaseOrders       PurchaseOrder[]
   contracts            OperationalContract[]
+  brokerProfile        BrokerProfile?
+  salesLeads           SalesLead[]
+  salesProposals       SalesProposal[]
+  sales                Sale[]
+  salesCommissions     SalesCommission[]
 
   @@unique([organizationId, taxId])
   @@index([organizationId, status])
@@ -4554,6 +4581,10 @@ model Customer {
   updatedAt          DateTime            @updatedAt @map("updated_at")
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   receivableAccounts ReceivableAccount[]
+  salesProposals     SalesProposal[]
+  salesReservations  SalesReservation[]
+  saleParties        SaleParty[]
+  postSaleRequests   PostSaleRequest[]
 
   @@unique([organizationId, taxId])
   @@index([organizationId, status])
@@ -4751,6 +4782,7 @@ model ReceivableAccount {
   customerId                String?          @map("customer_id")
   correctionRuleId          String?          @map("correction_rule_id")
   intercompanyTransactionId String?          @unique @map("intercompany_transaction_id")
+  saleId                    String?          @map("sale_id")
   unitReference             String?          @map("unit_reference")
   contractReference         String?          @map("contract_reference")
   documentNumber            String?          @map("document_number")
@@ -4766,19 +4798,22 @@ model ReceivableAccount {
   cancelledAt               DateTime?        @map("cancelled_at")
   cancelledReason           String?          @map("cancelled_reason")
 
-  organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  company                 Company?                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  project                 Project                  @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  costCenter              CostCenter?              @relation(fields: [costCenterId], references: [id], onDelete: SetNull)
-  economicItem            EconomicItem?            @relation(fields: [economicItemId], references: [id], onDelete: SetNull)
-  obligation              FinancialObligation?     @relation(fields: [obligationId], references: [id], onDelete: SetNull)
-  customer                Customer?                @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  correctionRule          CorrectionRule?          @relation(fields: [correctionRuleId], references: [id], onDelete: SetNull)
-  intercompanyTransaction IntercompanyTransaction? @relation("IntercompanyReceivable", fields: [intercompanyTransactionId], references: [id], onDelete: SetNull)
+  organization            Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company                 Company?                   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  project                 Project                    @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  costCenter              CostCenter?                @relation(fields: [costCenterId], references: [id], onDelete: SetNull)
+  economicItem            EconomicItem?              @relation(fields: [economicItemId], references: [id], onDelete: SetNull)
+  obligation              FinancialObligation?       @relation(fields: [obligationId], references: [id], onDelete: SetNull)
+  customer                Customer?                  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  correctionRule          CorrectionRule?            @relation(fields: [correctionRuleId], references: [id], onDelete: SetNull)
+  intercompanyTransaction IntercompanyTransaction?   @relation("IntercompanyReceivable", fields: [intercompanyTransactionId], references: [id], onDelete: SetNull)
+  sale                    Sale?                      @relation(fields: [saleId], references: [id], onDelete: SetNull)
   installments            ReceivableInstallment[]
+  salesIntegrationEvent   FinancialIntegrationEvent?
 
   @@index([organizationId, projectId])
   @@index([customerId])
+  @@index([saleId])
   @@map("receivable_accounts")
 }
 
@@ -4800,11 +4835,12 @@ model ReceivableInstallment {
   createdAt           DateTime                    @default(now()) @map("created_at")
   updatedAt           DateTime                    @updatedAt @map("updated_at")
 
-  receivableAccount ReceivableAccount       @relation(fields: [receivableAccountId], references: [id], onDelete: Cascade)
-  renegotiatedFrom  ReceivableInstallment?  @relation("InstallmentRenegotiation", fields: [renegotiatedFromId], references: [id], onDelete: Restrict)
-  renegotiatedTo    ReceivableInstallment?  @relation("InstallmentRenegotiation")
+  receivableAccount ReceivableAccount            @relation(fields: [receivableAccountId], references: [id], onDelete: Cascade)
+  renegotiatedFrom  ReceivableInstallment?       @relation("InstallmentRenegotiation", fields: [renegotiatedFromId], references: [id], onDelete: Restrict)
+  renegotiatedTo    ReceivableInstallment?       @relation("InstallmentRenegotiation")
   payments          ReceivablePayment[]
   adjustments       InstallmentAdjustment[]
+  salesInstallment  SalesPaymentPlanInstallment?
 
   @@unique([receivableAccountId, number])
   @@index([dueDate, status])
@@ -4989,10 +5025,11 @@ model CorrectionRule {
   createdAt      DateTime           @default(now()) @map("created_at")
   updatedAt      DateTime           @updatedAt @map("updated_at")
 
-  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  payableAccounts      PayableAccount[]
-  receivableAccounts   ReceivableAccount[]
-  operationalContracts OperationalContract[]
+  organization                 Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  payableAccounts              PayableAccount[]
+  receivableAccounts           ReceivableAccount[]
+  operationalContracts         OperationalContract[]
+  salesPaymentPlanInstallments SalesPaymentPlanInstallment[]
 
   @@unique([organizationId, name])
   @@index([organizationId, isActive])
@@ -5143,6 +5180,10 @@ enum ApprovalActType {
   EXCEPTION
   MEASUREMENT
   CANCELLATION
+  SALE
+  SALE_DISCOUNT
+  SALE_RESCISSION
+  COMMISSION
 }
 
 enum ApprovalRequestStatus {
@@ -5272,6 +5313,10 @@ enum FinancialIntegrationEventType {
   MEASUREMENT_REVERSED
   RETENTION_RELEASED
   CONTRACT_COMMITMENT_UPDATED
+  SALE_CONTRACT_SIGNED
+  SALE_PLAN_REVISED
+  SALE_RESCINDED
+  COMMISSION_APPROVED
 }
 
 enum FinancialIntegrationEventStatus {
@@ -5978,6 +6023,7 @@ model FinancialIntegrationEvent {
   measurementId         String?                         @map("measurement_id")
   financialObligationId String?                         @unique @map("financial_obligation_id")
   payableAccountId      String?                         @unique @map("payable_account_id")
+  receivableAccountId   String?                         @unique @map("receivable_account_id")
   eventType             FinancialIntegrationEventType   @map("event_type")
   sourceType            String                          @map("source_type")
   sourceId              String                          @map("source_id")
@@ -5998,6 +6044,7 @@ model FinancialIntegrationEvent {
   measurement           MeasurementCertificate?         @relation(fields: [measurementId], references: [id], onDelete: Restrict)
   financialObligation   FinancialObligation?            @relation(fields: [financialObligationId], references: [id], onDelete: Restrict)
   payableAccount        PayableAccount?                 @relation(fields: [payableAccountId], references: [id], onDelete: Restrict)
+  receivableAccount     ReceivableAccount?              @relation(fields: [receivableAccountId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, sourceType, sourceId, sourceVersion, eventType])
   @@index([organizationId, status, createdAt])
@@ -6488,4 +6535,599 @@ model LegalFinancialEvent {
   @@unique([legalObligationId, eventType, sourceVersion])
   @@index([organizationId, projectId, status])
   @@map("legal_financial_events")
+}
+
+// ============================================================================
+// FASE 9E — VENDAS, CLIENTES, UNIDADES, CONTRATOS DE VENDA, RECEBÍVEIS E PÓS-VENDA
+// ============================================================================
+// Cadeia: Unidade (estoque) -> Tabela de Preços -> Cliente -> Proposta -> Reserva
+//   -> Venda -> Contrato de Venda -> Plano de Pagamento comercial
+//   -> createExternalReceivableObligation (9E->9B, idempotente, espelha 9C->9B)
+//   -> ReceivableAccount/Installment (9B, cobrança/recebimento/conciliação já existentes)
+//   -> Renegociação / Distrato -> Entrega -> Vistoria -> Pós-venda.
+// Customer/Supplier (9B) e ApprovalPolicy/Request/DecisionRecord/ProcurementDocumentLink (9C)
+// são reutilizados integralmente — nenhuma tabela paralela de cliente, corretor,
+// alçada ou documento é criada nesta fase.
+
+enum SalesUnitStatus {
+  DISPONIVEL
+  EM_RESERVA
+  RESERVADA
+  EM_PROPOSTA
+  VENDIDA
+  BLOQUEADA
+  PERMUTA
+  DISTRATADA
+  ENTREGUE
+}
+
+enum SalesBlockOrigin {
+  PERMUTA
+  JURIDICO
+  DIRETORIA
+  INCORPORACAO
+  COMERCIAL
+  TECNICA
+  OUTRO
+}
+
+enum SalesPriceTableStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+  EXPIRED
+}
+
+enum SalesLeadStage {
+  NOVO
+  EM_ATENDIMENTO
+  PROPOSTA
+  PERDIDO
+  CONVERTIDO
+}
+
+enum SalesProposalStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_APPROVAL
+  APPROVED
+  REJECTED
+  EXPIRED
+  CONVERTED
+}
+
+enum SalesReservationStatus {
+  ACTIVE
+  CONFIRMED
+  EXPIRED
+  CANCELLED
+  CONVERTED
+}
+
+enum SaleStatus {
+  DRAFT
+  UNDER_APPROVAL
+  APPROVED
+  CANCELLED
+}
+
+enum SalePartyRole {
+  BUYER
+  CO_BUYER
+  REPRESENTATIVE
+  GUARANTOR
+}
+
+enum SalesContractSignatureStatus {
+  PENDING
+  PARTIALLY_SIGNED
+  SIGNED
+}
+
+enum SalesContractStatus {
+  DRAFT
+  ACTIVE
+  AMENDED
+  RESCINDED
+}
+
+enum SalesPaymentPlanStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+  CANCELLED
+}
+
+enum SalesInstallmentNature {
+  DOWN_PAYMENT
+  MONTHLY
+  INTERMEDIATE
+  ANNUAL
+  KEYS
+  FINANCING
+  BALANCE
+  REINFORCEMENT
+  CUSTOM
+}
+
+enum SalesCommissionBasis {
+  SOLD_PRICE
+  RECEIVED_AMOUNT
+}
+
+enum SalesCommissionTrigger {
+  SIGNATURE
+  DOWN_PAYMENT_PAID
+  RECEIPT
+  MILESTONE
+  OTHER
+}
+
+enum SalesCommissionStatus {
+  PENDING
+  APPROVED
+  PAYABLE_GENERATED
+  PAID
+  CANCELLED
+}
+
+enum SalesInspectionOutcome {
+  ACCEPTED
+  ACCEPTED_WITH_PENDING
+  REJECTED
+}
+
+enum PostSaleCategory {
+  GARANTIA
+  ASSISTENCIA
+  OCORRENCIA
+  OUTRO
+}
+
+enum PostSaleStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+model SalesUnit {
+  id              String          @id @default(cuid())
+  organizationId  String          @map("organization_id")
+  projectId       String          @map("project_id")
+  companyId       String          @map("company_id")
+  operatingUnitId String?         @map("operating_unit_id")
+  detectedUnitId  String?         @map("detected_unit_id")
+  code            String
+  floor           String?
+  typology        String
+  privateAreaM2   Decimal         @map("private_area_m2") @db.Decimal(12, 4)
+  totalAreaM2     Decimal?        @map("total_area_m2") @db.Decimal(12, 4)
+  parkingSpaces   Int             @default(0) @map("parking_spaces")
+  storageUnits    Int             @default(0) @map("storage_units")
+  position        String?
+  characteristics Json?
+  status          SalesUnitStatus @default(DISPONIVEL)
+  createdById     String          @map("created_by_id")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project          Project               @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  company          Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  operatingUnit    ProjectOperatingUnit? @relation(fields: [operatingUnitId], references: [id], onDelete: SetNull)
+  blocks           SalesUnitBlock[]
+  priceLines       SalesPriceTableLine[]
+  proposals        SalesProposal[]
+  reservations     SalesReservation[]
+  sales            Sale[]
+  inspections      SalesUnitInspection[]
+  postSaleRequests PostSaleRequest[]
+
+  @@unique([projectId, code])
+  @@index([organizationId, status])
+  @@index([operatingUnitId])
+  @@map("sales_units")
+}
+
+model SalesUnitBlock {
+  id            String           @id @default(cuid())
+  salesUnitId   String           @map("sales_unit_id")
+  origin        SalesBlockOrigin
+  responsibleId String           @map("responsible_id")
+  reason        String
+  startedAt     DateTime         @default(now()) @map("started_at")
+  endedAt       DateTime?        @map("ended_at")
+  createdById   String           @map("created_by_id")
+  createdAt     DateTime         @default(now()) @map("created_at")
+
+  salesUnit SalesUnit @relation(fields: [salesUnitId], references: [id], onDelete: Cascade)
+
+  @@index([salesUnitId, endedAt])
+  @@map("sales_unit_blocks")
+}
+
+model SalesPriceTable {
+  id             String                @id @default(cuid())
+  organizationId String                @map("organization_id")
+  projectId      String                @map("project_id")
+  companyId      String                @map("company_id")
+  version        Int
+  validFrom      DateTime              @map("valid_from") @db.Date
+  validUntil     DateTime?             @map("valid_until") @db.Date
+  responsibleId  String                @map("responsible_id")
+  status         SalesPriceTableStatus @default(DRAFT)
+  notes          String?
+  createdById    String                @map("created_by_id")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project      Project               @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  company      Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  lines        SalesPriceTableLine[]
+  proposals    SalesProposal[]
+  sales        Sale[]
+
+  @@unique([projectId, version])
+  @@index([projectId, status])
+  @@map("sales_price_tables")
+}
+
+model SalesPriceTableLine {
+  id                     String   @id @default(cuid())
+  priceTableId           String   @map("price_table_id")
+  salesUnitId            String   @map("sales_unit_id")
+  listPrice              Decimal  @map("list_price") @db.Decimal(20, 2)
+  minimumAuthorizedPrice Decimal? @map("minimum_authorized_price") @db.Decimal(20, 2)
+
+  priceTable SalesPriceTable @relation(fields: [priceTableId], references: [id], onDelete: Cascade)
+  salesUnit  SalesUnit       @relation(fields: [salesUnitId], references: [id], onDelete: Restrict)
+
+  @@unique([priceTableId, salesUnitId])
+  @@index([salesUnitId])
+  @@map("sales_price_table_lines")
+}
+
+model SalesLead {
+  id             String         @id @default(cuid())
+  organizationId String         @map("organization_id")
+  projectId      String?        @map("project_id")
+  name           String
+  contact        String
+  source         String
+  channel        String?
+  brokerId       String?        @map("broker_id")
+  stage          SalesLeadStage @default(NOVO)
+  lostReason     String?        @map("lost_reason")
+  customerId     String?        @map("customer_id")
+  createdById    String         @map("created_by_id")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  broker       Supplier?    @relation(fields: [brokerId], references: [id], onDelete: SetNull)
+  project      Project?     @relation(fields: [projectId], references: [id])
+
+  @@index([organizationId, stage])
+  @@map("sales_leads")
+}
+
+model BrokerProfile {
+  id                    String      @id @default(cuid())
+  organizationId        String      @map("organization_id")
+  supplierId            String      @unique @map("supplier_id")
+  creci                 String?
+  parentAgencyId        String?     @map("parent_agency_id")
+  defaultCommissionRate Decimal?    @map("default_commission_rate") @db.Decimal(9, 6)
+  channel               String?
+  status                PartyStatus @default(ACTIVE)
+  createdById           String      @map("created_by_id")
+  createdAt             DateTime    @default(now()) @map("created_at")
+  updatedAt             DateTime    @updatedAt @map("updated_at")
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  supplier     Supplier        @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  parentAgency BrokerProfile?  @relation("BrokerAgency", fields: [parentAgencyId], references: [id], onDelete: Restrict)
+  brokers      BrokerProfile[] @relation("BrokerAgency")
+
+  @@index([organizationId, status])
+  @@map("broker_profiles")
+}
+
+model SalesProposal {
+  id                      String              @id @default(cuid())
+  organizationId          String              @map("organization_id")
+  projectId               String              @map("project_id")
+  salesUnitId             String              @map("sales_unit_id")
+  customerId              String              @map("customer_id")
+  brokerId                String?             @map("broker_id")
+  priceTableId            String              @map("price_table_id")
+  proposedPrice           Decimal             @map("proposed_price") @db.Decimal(20, 2)
+  discountAmount          Decimal             @default(0) @map("discount_amount") @db.Decimal(20, 2)
+  paymentConditionSummary Json                @map("payment_condition_summary")
+  validUntil              DateTime            @map("valid_until")
+  status                  SalesProposalStatus @default(DRAFT)
+  approvalRequestId       String?             @map("approval_request_id")
+  createdById             String              @map("created_by_id")
+  createdAt               DateTime            @default(now()) @map("created_at")
+  updatedAt               DateTime            @updatedAt @map("updated_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  salesUnit    SalesUnit          @relation(fields: [salesUnitId], references: [id], onDelete: Restrict)
+  customer     Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  broker       Supplier?          @relation(fields: [brokerId], references: [id], onDelete: SetNull)
+  priceTable   SalesPriceTable    @relation(fields: [priceTableId], references: [id], onDelete: Restrict)
+  reservations SalesReservation[]
+  sale         Sale?
+
+  @@index([organizationId, status])
+  @@index([salesUnitId])
+  @@map("sales_proposals")
+}
+
+model SalesReservation {
+  id              String                 @id @default(cuid())
+  organizationId  String                 @map("organization_id")
+  projectId       String                 @map("project_id")
+  salesUnitId     String                 @map("sales_unit_id")
+  customerId      String                 @map("customer_id")
+  proposalId      String?                @map("proposal_id")
+  startedAt       DateTime               @default(now()) @map("started_at")
+  expiresAt       DateTime               @map("expires_at")
+  responsibleId   String                 @map("responsible_id")
+  condition       Json?
+  status          SalesReservationStatus @default(ACTIVE)
+  cancelledAt     DateTime?              @map("cancelled_at")
+  cancelledReason String?                @map("cancelled_reason")
+  createdById     String                 @map("created_by_id")
+  createdAt       DateTime               @default(now()) @map("created_at")
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  salesUnit    SalesUnit      @relation(fields: [salesUnitId], references: [id], onDelete: Restrict)
+  customer     Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  proposal     SalesProposal? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  sale         Sale?
+
+  @@index([organizationId, status])
+  @@index([salesUnitId, status])
+  @@map("sales_reservations")
+}
+
+model Sale {
+  id                          String     @id @default(cuid())
+  organizationId              String     @map("organization_id")
+  projectId                   String     @map("project_id")
+  companyId                   String     @map("company_id")
+  salesUnitId                 String     @map("sales_unit_id")
+  priceTableId                String     @map("price_table_id")
+  proposalId                  String?    @unique @map("proposal_id")
+  reservationId               String?    @unique @map("reservation_id")
+  brokerId                    String?    @map("broker_id")
+  soldPrice                   Decimal    @map("sold_price") @db.Decimal(20, 2)
+  discountAmount              Decimal    @default(0) @map("discount_amount") @db.Decimal(20, 2)
+  incentiveAmount             Decimal    @default(0) @map("incentive_amount") @db.Decimal(20, 2)
+  tradeInValue                Decimal?   @map("trade_in_value") @db.Decimal(20, 2)
+  commercialConditionSnapshot Json       @map("commercial_condition_snapshot")
+  version                     Int        @default(1)
+  status                      SaleStatus @default(DRAFT)
+  approvalRequestId           String?    @map("approval_request_id")
+  approvedById                String?    @map("approved_by_id")
+  approvedAt                  DateTime?  @map("approved_at")
+  cancelledAt                 DateTime?  @map("cancelled_at")
+  cancelledReason             String?    @map("cancelled_reason")
+  externalId                  String?    @map("external_id")
+  externalSource              String?    @map("external_source")
+  createdById                 String     @map("created_by_id")
+  createdAt                   DateTime   @default(now()) @map("created_at")
+  updatedAt                   DateTime   @updatedAt @map("updated_at")
+
+  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project            Project               @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  company            Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  salesUnit          SalesUnit             @relation(fields: [salesUnitId], references: [id], onDelete: Restrict)
+  priceTable         SalesPriceTable       @relation(fields: [priceTableId], references: [id], onDelete: Restrict)
+  proposal           SalesProposal?        @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  reservation        SalesReservation?     @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  broker             Supplier?             @relation(fields: [brokerId], references: [id], onDelete: SetNull)
+  parties            SaleParty[]
+  contract           SalesContract?
+  paymentPlans       SalesPaymentPlan[]
+  commissions        SalesCommission[]
+  inspections        SalesUnitInspection[]
+  postSaleRequests   PostSaleRequest[]
+  receivableAccounts ReceivableAccount[]
+
+  @@index([organizationId, status])
+  @@index([salesUnitId, status])
+  @@map("sales")
+}
+
+model SaleParty {
+  id                  String        @id @default(cuid())
+  saleId              String        @map("sale_id")
+  customerId          String        @map("customer_id")
+  role                SalePartyRole
+  ownershipPercentage Decimal?      @map("ownership_percentage") @db.Decimal(7, 4)
+
+  sale     Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@unique([saleId, customerId, role])
+  @@index([customerId])
+  @@map("sale_parties")
+}
+
+model SalesContract {
+  id                  String                       @id @default(cuid())
+  organizationId      String                       @map("organization_id")
+  projectId           String                       @map("project_id")
+  companyId           String                       @map("company_id")
+  saleId              String                       @unique @map("sale_id")
+  number              String
+  title               String
+  soldPrice           Decimal                      @map("sold_price") @db.Decimal(20, 2)
+  commercialCondition Json                         @map("commercial_condition")
+  signatureStatus     SalesContractSignatureStatus @default(PENDING) @map("signature_status")
+  effectiveFrom       DateTime?                    @map("effective_from")
+  status              SalesContractStatus          @default(DRAFT)
+  version             Int                          @default(1)
+  createdById         String                       @map("created_by_id")
+  createdAt           DateTime                     @default(now()) @map("created_at")
+  updatedAt           DateTime                     @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  sale         Sale         @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@unique([projectId, number])
+  @@index([organizationId, status])
+  @@map("sales_contracts")
+}
+
+model SalesPaymentPlan {
+  id             String                 @id @default(cuid())
+  saleId         String                 @map("sale_id")
+  version        Int
+  status         SalesPaymentPlanStatus @default(DRAFT)
+  previousPlanId String?                @unique @map("previous_plan_id")
+  createdById    String                 @map("created_by_id")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  activatedAt    DateTime?              @map("activated_at")
+  supersededAt   DateTime?              @map("superseded_at")
+
+  sale         Sale                          @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  previousPlan SalesPaymentPlan?             @relation("PaymentPlanRevisions", fields: [previousPlanId], references: [id], onDelete: Restrict)
+  nextPlan     SalesPaymentPlan?             @relation("PaymentPlanRevisions")
+  installments SalesPaymentPlanInstallment[]
+
+  @@unique([saleId, version])
+  @@index([saleId, status])
+  @@map("sales_payment_plans")
+}
+
+model SalesPaymentPlanInstallment {
+  id                      String                 @id @default(cuid())
+  planId                  String                 @map("plan_id")
+  number                  Int
+  nature                  SalesInstallmentNature
+  dueDate                 DateTime               @map("due_date") @db.Date
+  amount                  Decimal                @db.Decimal(20, 2)
+  correctionRuleId        String?                @map("correction_rule_id")
+  receivableInstallmentId String?                @unique @map("receivable_installment_id")
+  cancelledAt             DateTime?              @map("cancelled_at")
+  cancelledReason         String?                @map("cancelled_reason")
+  createdAt               DateTime               @default(now()) @map("created_at")
+
+  plan                  SalesPaymentPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
+  correctionRule        CorrectionRule?        @relation(fields: [correctionRuleId], references: [id], onDelete: SetNull)
+  receivableInstallment ReceivableInstallment? @relation(fields: [receivableInstallmentId], references: [id], onDelete: SetNull)
+
+  @@unique([planId, number])
+  @@map("sales_payment_plan_installments")
+}
+
+model SalesCommissionPolicy {
+  id             String                 @id @default(cuid())
+  organizationId String                 @map("organization_id")
+  projectId      String?                @map("project_id")
+  triggerEvent   SalesCommissionTrigger @default(SIGNATURE) @map("trigger_event")
+  percentage     Decimal                @db.Decimal(9, 6)
+  basis          SalesCommissionBasis   @default(SOLD_PRICE)
+  isActive       Boolean                @default(true) @map("is_active")
+  createdById    String                 @map("created_by_id")
+  createdAt      DateTime               @default(now()) @map("created_at")
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  commissions  SalesCommission[]
+
+  @@index([organizationId, projectId, isActive])
+  @@map("sales_commission_policies")
+}
+
+model SalesCommission {
+  id                String                 @id @default(cuid())
+  saleId            String                 @map("sale_id")
+  brokerId          String                 @map("broker_id")
+  policyId          String?                @map("policy_id")
+  basis             SalesCommissionBasis
+  percentage        Decimal                @db.Decimal(9, 6)
+  amount            Decimal                @db.Decimal(20, 2)
+  triggerEvent      SalesCommissionTrigger @map("trigger_event")
+  status            SalesCommissionStatus  @default(PENDING)
+  approvalRequestId String?                @map("approval_request_id")
+  approvedById      String?                @map("approved_by_id")
+  approvedAt        DateTime?              @map("approved_at")
+  createdById       String                 @map("created_by_id")
+  createdAt         DateTime               @default(now()) @map("created_at")
+
+  sale   Sale                   @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  broker Supplier               @relation(fields: [brokerId], references: [id], onDelete: Restrict)
+  policy SalesCommissionPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+
+  @@index([saleId])
+  @@index([brokerId, status])
+  @@map("sales_commissions")
+}
+
+model SalesUnitInspection {
+  id               String                  @id @default(cuid())
+  salesUnitId      String                  @map("sales_unit_id")
+  saleId           String                  @map("sale_id")
+  scheduledAt      DateTime                @map("scheduled_at")
+  responsibleId    String                  @map("responsible_id")
+  checklist        Json?
+  pendingIssues    Json?                   @map("pending_issues")
+  outcome          SalesInspectionOutcome?
+  nextInspectionAt DateTime?               @map("next_inspection_at")
+  createdById      String                  @map("created_by_id")
+  createdAt        DateTime                @default(now()) @map("created_at")
+
+  salesUnit SalesUnit @relation(fields: [salesUnitId], references: [id], onDelete: Restrict)
+  sale      Sale      @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@index([salesUnitId, scheduledAt])
+  @@map("sales_unit_inspections")
+}
+
+model PostSaleRequest {
+  id             String           @id @default(cuid())
+  organizationId String           @map("organization_id")
+  salesUnitId    String           @map("sales_unit_id")
+  saleId         String           @map("sale_id")
+  customerId     String           @map("customer_id")
+  category       PostSaleCategory
+  description    String
+  responsibleId  String?          @map("responsible_id")
+  slaDueAt       DateTime?        @map("sla_due_at")
+  status         PostSaleStatus   @default(OPEN)
+  createdById    String           @map("created_by_id")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  salesUnit    SalesUnit        @relation(fields: [salesUnitId], references: [id], onDelete: Restrict)
+  sale         Sale             @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  customer     Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  updates      PostSaleUpdate[]
+
+  @@index([organizationId, status])
+  @@map("post_sale_requests")
+}
+
+model PostSaleUpdate {
+  id        String   @id @default(cuid())
+  requestId String   @map("request_id")
+  authorId  String   @map("author_id")
+  note      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  request PostSaleRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt])
+  @@map("post_sale_updates")
 }

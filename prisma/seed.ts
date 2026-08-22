@@ -50,6 +50,12 @@ import {
 } from "../src/application/procurement/procurement-service";
 import { refreshLegalDeadlines, sendLegalObligationToFinance } from "../src/application/legal/legal-service";
 import { DEFAULT_LEGAL_MILESTONES } from "../src/domain/legal/engine";
+import {
+  activateSalesPriceTable, addPostSaleUpdate, approveSale, approveSalesCommission, blockSalesUnit, confirmSalesReservation,
+  convertSalesLead, createPostSaleRequest, createSale, createSalesCommission, createSalesCommissionPolicy, createSalesLead,
+  createSalesPriceTable, createSalesProposal, createSalesReservation, createSalesUnit, markUnitDelivered, recordInspectionOutcome,
+  scheduleInspection, upsertBrokerProfile,
+} from "../src/application/sales/sales-service";
 
 async function main() {
   const passwordHash = await hash("Rede@2026", 12);
@@ -350,6 +356,82 @@ async function main() {
 
   await prisma.approvalPolicy.upsert({ where: { organizationId_name_version: { organizationId: organization.id, name: "Alçada padrão de suprimentos", version: 1 } }, update: { isActive: true }, create: { organizationId: organization.id, name: "Alçada padrão de suprimentos", version: 1, actType: "CONTRACT", companyId: company.id, projectId: butantaStudy.projectId, minimumAmount: "0", requiredRole: "ADMIN", requiredApprovals: 1, segregationRequired: true, createdById: user.id } });
 
+  // --- Fase 9E: vendas, clientes, unidades, contratos de venda, recebíveis e pós-venda (aditivo e idempotente) ---
+  const towerAOperatingUnit = await prisma.projectOperatingUnit.findFirst({ where: { projectId: butantaStudy.projectId, code: "TOR-A" } });
+  let salesUnitSold = await prisma.salesUnit.findUnique({ where: { projectId_code: { projectId: butantaStudy.projectId, code: "TOR-A-1301" } } });
+  if (!salesUnitSold) salesUnitSold = await createSalesUnit(context, { projectId: butantaStudy.projectId, companyId: company.id, operatingUnitId: towerAOperatingUnit?.id ?? null, code: "TOR-A-1301", floor: "13", typology: "2 dormitórios", privateAreaM2: "55.4", parkingSpaces: 1, storageUnits: 1, position: "Leste" });
+  let salesUnitBlocked = await prisma.salesUnit.findUnique({ where: { projectId_code: { projectId: butantaStudy.projectId, code: "TOR-A-1302" } } });
+  if (!salesUnitBlocked) salesUnitBlocked = await createSalesUnit(context, { projectId: butantaStudy.projectId, companyId: company.id, operatingUnitId: towerAOperatingUnit?.id ?? null, code: "TOR-A-1302", floor: "13", typology: "3 dormitórios", privateAreaM2: "72.1", parkingSpaces: 2, storageUnits: 1, position: "Oeste — vista parque" });
+  let salesUnitAvailable = await prisma.salesUnit.findUnique({ where: { projectId_code: { projectId: butantaStudy.projectId, code: "TOR-A-1303" } } });
+  if (!salesUnitAvailable) salesUnitAvailable = await createSalesUnit(context, { projectId: butantaStudy.projectId, companyId: company.id, operatingUnitId: towerAOperatingUnit?.id ?? null, code: "TOR-A-1303", floor: "13", typology: "2 dormitórios", privateAreaM2: "55.4", parkingSpaces: 1, storageUnits: 1, position: "Leste" });
+
+  const salesPriceLine = await prisma.salesPriceTableLine.findFirst({ where: { salesUnitId: salesUnitSold.id } });
+  let salesPriceTable = salesPriceLine ? await prisma.salesPriceTable.findUnique({ where: { id: salesPriceLine.priceTableId } }) : null;
+  if (!salesPriceTable) {
+    salesPriceTable = await createSalesPriceTable(context, { projectId: butantaStudy.projectId, companyId: company.id, validFrom: new Date("2026-08-01T00:00:00.000Z"), responsibleId: user.id, notes: "Tabela demonstrativa START BUTANTÃ — v1", lines: [
+      { salesUnitId: salesUnitSold.id, listPrice: "620000", minimumAuthorizedPrice: "590000" },
+      { salesUnitId: salesUnitBlocked.id, listPrice: "780000", minimumAuthorizedPrice: "750000" },
+      { salesUnitId: salesUnitAvailable.id, listPrice: "615000", minimumAuthorizedPrice: "590000" },
+    ] });
+  }
+  if (salesPriceTable.status === "DRAFT") salesPriceTable = await activateSalesPriceTable(context, salesPriceTable.id);
+
+  let broker = await prisma.supplier.findFirst({ where: { organizationId: organization.id, taxId: "111.222.333-44" } });
+  if (!broker) broker = await createSupplier(context, { name: "Patrícia Nogueira — Corretora", legalName: "Patrícia Nogueira", taxId: "111.222.333-44", personType: "INDIVIDUAL", email: "patricia.nogueira@corretora.demo" });
+  await upsertBrokerProfile(context, { supplierId: broker.id, creci: "SP-123456-F", channel: "Plantão de vendas" });
+
+  let buyerCustomer = await prisma.customer.findFirst({ where: { organizationId: organization.id, taxId: "234.567.890-11" } });
+  if (!buyerCustomer) buyerCustomer = await createCustomer(context, { name: "João Ricardo Ferreira", taxId: "234.567.890-11", email: "joao.ferreira@example.com" });
+
+  let salesLead = await prisma.salesLead.findFirst({ where: { organizationId: organization.id, name: "João Ricardo Ferreira" } });
+  if (!salesLead) salesLead = await createSalesLead(context, { projectId: butantaStudy.projectId, name: "João Ricardo Ferreira", contact: "(11) 98888-7777", source: "Portal imobiliário", channel: "Digital", brokerId: broker.id });
+  if (salesLead.stage !== "CONVERTIDO") salesLead = await convertSalesLead(context, { leadId: salesLead.id, customerId: buyerCustomer.id });
+
+  let salesProposal = await prisma.salesProposal.findFirst({ where: { salesUnitId: salesUnitSold.id, customerId: buyerCustomer.id } });
+  if (!salesProposal) salesProposal = await createSalesProposal(context, { salesUnitId: salesUnitSold.id, customerId: buyerCustomer.id, brokerId: broker.id, priceTableId: salesPriceTable.id, proposedPrice: "610000", discountAmount: "10000", validUntil: new Date("2026-09-15T00:00:00.000Z"), paymentConditionSummary: { entrada: "10%", saldo: "financiamento + mensais" } });
+
+  let salesReservation = await prisma.salesReservation.findFirst({ where: { salesUnitId: salesUnitSold.id, customerId: buyerCustomer.id } });
+  if (!salesReservation) salesReservation = await createSalesReservation(context, { salesUnitId: salesUnitSold.id, customerId: buyerCustomer.id, proposalId: salesProposal.id, expiresAt: new Date("2026-09-05T00:00:00.000Z"), responsibleId: user.id, condition: { sinal: "R$ 5.000" } });
+  if (salesReservation.status === "ACTIVE") salesReservation = await confirmSalesReservation(context, salesReservation.id);
+
+  let sale = await prisma.sale.findFirst({ where: { salesUnitId: salesUnitSold.id, status: { not: "CANCELLED" } } });
+  if (!sale) sale = await createSale(context, { salesUnitId: salesUnitSold.id, priceTableId: salesPriceTable.id, proposalId: salesProposal.id, reservationId: salesReservation.id, brokerId: broker.id, soldPrice: "610000", commercialConditionSnapshot: { formaPagamento: "Entrada + mensal + saldo" }, parties: [{ customerId: buyerCustomer.id, role: "BUYER", ownershipPercentage: "100" }] });
+  if (sale.status === "DRAFT") {
+    const approved = await approveSale(context, { saleId: sale.id, contract: { number: "CV-2026-1301", title: "Contrato de Compra e Venda — Torre A, Unidade 1301", effectiveFrom: new Date("2026-09-10T00:00:00.000Z") }, installments: [
+      { number: 1, nature: "DOWN_PAYMENT", dueDate: new Date("2026-09-10T00:00:00.000Z"), amount: "61000" },
+      { number: 2, nature: "MONTHLY", dueDate: new Date("2026-10-10T00:00:00.000Z"), amount: "274500" },
+      { number: 3, nature: "BALANCE", dueDate: new Date("2027-03-10T00:00:00.000Z"), amount: "274500" },
+    ] });
+    sale = approved.sale;
+  }
+
+  const salePlan = await prisma.salesPaymentPlan.findFirstOrThrow({ where: { saleId: sale.id, status: "ACTIVE" }, include: { installments: { orderBy: { number: "asc" } } } });
+  const [downPaymentInstallment] = salePlan.installments;
+  if (downPaymentInstallment?.receivableInstallmentId) {
+    const downPaymentReceivable = await prisma.receivableInstallment.findUnique({ where: { id: downPaymentInstallment.receivableInstallmentId } });
+    if (downPaymentReceivable?.status === "EMITIDA") await registerReceivablePayment(context, { installmentId: downPaymentReceivable.id, bankAccountId: operationalBankAccount.id, amount: "61000", method: "PIX", receivedAt: new Date("2026-09-10T00:00:00.000Z") });
+  }
+
+  let salesCommissionPolicy = await prisma.salesCommissionPolicy.findFirst({ where: { organizationId: organization.id, projectId: butantaStudy.projectId } });
+  if (!salesCommissionPolicy) salesCommissionPolicy = await createSalesCommissionPolicy(context, { projectId: butantaStudy.projectId, triggerEvent: "SIGNATURE", percentage: "0.04", basis: "SOLD_PRICE" });
+  let salesCommission = await prisma.salesCommission.findFirst({ where: { saleId: sale.id } });
+  if (!salesCommission) salesCommission = await createSalesCommission(context, { saleId: sale.id, brokerId: broker.id, policyId: salesCommissionPolicy.id, basis: "SOLD_PRICE", percentage: "0.04", triggerEvent: "SIGNATURE" });
+  if (salesCommission.status === "PENDING") salesCommission = await approveSalesCommission(context, salesCommission.id);
+
+  let salesInspection = await prisma.salesUnitInspection.findFirst({ where: { salesUnitId: salesUnitSold.id, saleId: sale.id } });
+  if (!salesInspection) salesInspection = await scheduleInspection(context, { salesUnitId: salesUnitSold.id, saleId: sale.id, scheduledAt: new Date("2026-09-20T00:00:00.000Z"), responsibleId: user.id, checklist: { pintura: "ok", hidraulica: "ok", eletrica: "ok" } });
+  if (!salesInspection.outcome) salesInspection = await recordInspectionOutcome(context, { inspectionId: salesInspection.id, outcome: "ACCEPTED", pendingIssues: [] });
+
+  let deliveredUnit = await prisma.salesUnit.findUniqueOrThrow({ where: { id: salesUnitSold.id } });
+  if (deliveredUnit.status === "VENDIDA") deliveredUnit = await markUnitDelivered(context, salesUnitSold.id);
+
+  let postSaleRequest = await prisma.postSaleRequest.findFirst({ where: { saleId: sale.id } });
+  if (!postSaleRequest) postSaleRequest = await createPostSaleRequest(context, { salesUnitId: salesUnitSold.id, saleId: sale.id, customerId: buyerCustomer.id, category: "ASSISTENCIA", description: "Ajuste de esquadria da sala — porta não fecha corretamente.", responsibleId: user.id, slaDueAt: new Date("2026-10-15T00:00:00.000Z") });
+  if (postSaleRequest.status === "OPEN") await addPostSaleUpdate(context, { requestId: postSaleRequest.id, note: "Visita técnica agendada para a próxima semana." });
+
+  const salesUnitBlockedCurrent = await prisma.salesUnit.findUniqueOrThrow({ where: { id: salesUnitBlocked.id } });
+  if (salesUnitBlockedCurrent.status === "DISPONIVEL") await blockSalesUnit(context, { salesUnitId: salesUnitBlocked.id, origin: "COMERCIAL", responsibleId: user.id, reason: "Reservada para lançamento institucional — bloqueio demonstrativo." });
+
   await prisma.viabilityStudy.update({ where: { id: study.studyId }, data: { updatedById: user.id } });
   const landStudy = legalLandWorkspace;
   const investmentCase = await ensureInvestmentCase({ userId: user.id, organizationId: organization.id });
@@ -376,7 +458,7 @@ async function main() {
   });
 
   await prisma.session.deleteMany({ where: { expiresAt: { lt: new Date() } } });
-  console.info(`Seed concluído: ${organization.name} · ${user.email} · viabilidade v${study.versionNumber} · START BUTANTÃ v${butantaStudy.versionNumber} · Orçamento ${butantaBudget.id} · Base Aprovada v${operationalBaseline.version} · Orçamento Oficial v${officialBudget.version} (${officialBudget.totalBudget}) · Cronograma v${operationalSchedule.version} · Financeiro: ${operationalBankAccount.id === fundingBankAccount.id ? 1 : 2} contas bancárias, Conta a Pagar ${payableAccount.id}, Conta a Receber ${receivableAccount.id}, Intercompany ${intercompanyTransaction.id} · Suprimentos: ${requisition.number}, ${quotation.number}, ${purchaseOrder.number}, ${operationalContract.number}, BM ${measurement.number} · Jurídico: ${diligence.code}, ${landContract.number}, ${legalObligation.code} · Land v${landStudy.versionNumber} · Investment Case ${investmentCase.id} · Design ${designWorkspace.revision.label} (${designWorkspace.findings.length} findings derivados) · Dossiê ${demoMasterReport.reportId} (${demoMasterReport.pageCount} páginas) · REDE AI ${AI_PROMPT_VERSION} (${aiTasks.length} políticas)`);
+  console.info(`Seed concluído: ${organization.name} · ${user.email} · viabilidade v${study.versionNumber} · START BUTANTÃ v${butantaStudy.versionNumber} · Orçamento ${butantaBudget.id} · Base Aprovada v${operationalBaseline.version} · Orçamento Oficial v${officialBudget.version} (${officialBudget.totalBudget}) · Cronograma v${operationalSchedule.version} · Financeiro: ${operationalBankAccount.id === fundingBankAccount.id ? 1 : 2} contas bancárias, Conta a Pagar ${payableAccount.id}, Conta a Receber ${receivableAccount.id}, Intercompany ${intercompanyTransaction.id} · Suprimentos: ${requisition.number}, ${quotation.number}, ${purchaseOrder.number}, ${operationalContract.number}, BM ${measurement.number} · Jurídico: ${diligence.code}, ${landContract.number}, ${legalObligation.code} · Vendas: ${salesUnitSold.code} (${deliveredUnit.status}), ${salesUnitBlocked.code} (bloqueada), ${salesUnitAvailable.code} (disponível), venda ${sale.id} (${sale.status}), comissão ${salesCommission.status}, pós-venda ${postSaleRequest.id} · Land v${landStudy.versionNumber} · Investment Case ${investmentCase.id} · Design ${designWorkspace.revision.label} (${designWorkspace.findings.length} findings derivados) · Dossiê ${demoMasterReport.reportId} (${demoMasterReport.pageCount} páginas) · REDE AI ${AI_PROMPT_VERSION} (${aiTasks.length} políticas)`);
 }
 
 main()

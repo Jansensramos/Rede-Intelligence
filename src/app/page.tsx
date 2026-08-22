@@ -9,6 +9,7 @@ import { getOperationsWorkspace } from "@/application/operations/operations-serv
 import { getFinancialWorkspace } from "@/application/financial-ops/financial-service";
 import { getProcurementWorkspace } from "@/application/procurement/procurement-service";
 import { getLegalWorkspace } from "@/application/legal/legal-service";
+import { getSalesWorkspace } from "@/application/sales/sales-service";
 import { IntelligenceWorkspace } from "@/components/intelligence-workspace";
 import { START_BUTANTA_PROJECT } from "@/domain/financial/demo";
 import { calculateAllScenarios } from "@/domain/financial/engine";
@@ -37,7 +38,7 @@ export default async function Home() {
   const baseVgv = calculateAllScenarios(initialStudy.assumptions).base.metrics.vgv;
 
   const initialInvestment = await ensureInvestmentCase(context);
-  const [initialLand, initialDesign, initialAI, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal] = await Promise.all([
+  const [initialLand, initialDesign, initialAI, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, initialSales] = await Promise.all([
     getLatestLandStudyForOrganization(context.organizationId),
     ensureDesignWorkspace(context, initialStudy.projectId),
     getAIBootstrap(context),
@@ -46,6 +47,7 @@ export default async function Home() {
     getFinancialWorkspace(context, initialStudy.projectId),
     getProcurementWorkspace(context, initialStudy.projectId),
     getLegalWorkspace(context, initialStudy.projectId),
+    getSalesWorkspace(context, initialStudy.projectId),
   ]);
   if (!initialLand) throw new Error("Execute o seed para carregar o estudo territorial demonstrativo.");
 
@@ -61,6 +63,7 @@ export default async function Home() {
       initialFinancial={initialFinancial}
       initialProcurement={initialProcurement}
       initialLegal={initialLegal}
+      initialSales={initialSales}
       identity={{ userName: context.userName, organizationName: context.organizationName }}
     />
   );
