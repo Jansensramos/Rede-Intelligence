@@ -966,6 +966,17 @@ model Organization {
   salesContracts             SalesContract[]
   salesCommissionPolicies    SalesCommissionPolicy[]
   postSaleRequests           PostSaleRequest[]
+  departments                Department[]
+  positions                  Position[]
+  personProfiles             PersonProfile[]
+  employmentRelationships    EmploymentRelationship[]
+  teams                      Team[]
+  workAllocations            WorkAllocation[]
+  administrativeCostPlans    AdministrativeCostPlan[]
+  efficiencyAnalysisRuns     EfficiencyAnalysisRun[]
+  performanceVarianceCases   PerformanceVarianceCase[]
+  incentivePolicies          IncentivePolicy[]
+  incentiveSimulations       IncentiveSimulation[]
 
   @@map("organizations")
 }
@@ -1078,23 +1089,23 @@ model InvestmentPolicy {
 }
 
 model Project {
-  id                           String                      @id @default(cuid())
-  organizationId               String                      @map("organization_id")
-  companyId                    String?                     @map("company_id")
+  id                           String                             @id @default(cuid())
+  organizationId               String                             @map("organization_id")
+  companyId                    String?                            @map("company_id")
   name                         String
   city                         String
-  state                        String                      @db.Char(2)
+  state                        String                             @db.Char(2)
   address                      String?
-  currency                     String                      @default("BRL") @db.Char(3)
-  status                       ProjectStatus               @default(DRAFT)
-  createdById                  String                      @map("created_by_id")
-  updatedById                  String                      @map("updated_by_id")
-  createdAt                    DateTime                    @default(now()) @map("created_at")
-  updatedAt                    DateTime                    @updatedAt @map("updated_at")
-  organization                 Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  company                      Company?                    @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  createdBy                    User                        @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy                    User                        @relation("ProjectUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  currency                     String                             @default("BRL") @db.Char(3)
+  status                       ProjectStatus                      @default(DRAFT)
+  createdById                  String                             @map("created_by_id")
+  updatedById                  String                             @map("updated_by_id")
+  createdAt                    DateTime                           @default(now()) @map("created_at")
+  updatedAt                    DateTime                           @updatedAt @map("updated_at")
+  organization                 Organization                       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company                      Company?                           @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdBy                    User                               @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy                    User                               @relation("ProjectUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
   studies                      ViabilityStudy[]
   runs                         CalculationRun[]
   actualEntries                ActualEntry[]
@@ -1113,8 +1124,8 @@ model Project {
   financialObligations         FinancialObligation[]
   payableAccounts              PayableAccount[]
   receivableAccounts           ReceivableAccount[]
-  intercompanyTransactionsFrom IntercompanyTransaction[]   @relation("IntercompanyFromProject")
-  intercompanyTransactionsTo   IntercompanyTransaction[]   @relation("IntercompanyToProject")
+  intercompanyTransactionsFrom IntercompanyTransaction[]          @relation("IntercompanyFromProject")
+  intercompanyTransactionsTo   IntercompanyTransaction[]          @relation("IntercompanyToProject")
   procurementNeeds             ProcurementNeed[]
   purchaseRequisitions         PurchaseRequisition[]
   quotationProcesses           QuotationProcess[]
@@ -1136,6 +1147,13 @@ model Project {
   salesReservations            SalesReservation[]
   sales                        Sale[]
   salesContracts               SalesContract[]
+  teams                        Team[]
+  workAllocations              WorkAllocation[]
+  administrativeCostPlans      AdministrativeCostPlan[]
+  performanceVarianceCases     PerformanceVarianceCase[]
+  efficiencyAnalysisRuns       EfficiencyAnalysisRun[]
+  incentiveSimulations         IncentiveSimulation[]
+  administrativeAllocations    AdministrativeCostAllocationLine[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -1299,6 +1317,10 @@ model Company {
   salesPriceTables             SalesPriceTable[]
   sales                        Sale[]
   salesContracts               SalesContract[]
+  departments                  Department[]
+  employmentRelationships      EmploymentRelationship[]
+  teams                        Team[]
+  administrativeCostPlans      AdministrativeCostPlan[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, taxId])
@@ -1336,22 +1358,22 @@ model ProjectOperatingUnit {
 }
 
 model CostCenter {
-  id                   String                    @id @default(cuid())
-  organizationId       String                    @map("organization_id")
-  projectId            String?                   @map("project_id")
-  parentId             String?                   @map("parent_id")
+  id                   String                       @id @default(cuid())
+  organizationId       String                       @map("organization_id")
+  projectId            String?                      @map("project_id")
+  parentId             String?                      @map("parent_id")
   code                 String
   name                 String
-  responsibleId        String?                   @map("responsible_id")
-  managerialAccount    String?                   @map("managerial_account")
-  status               CompanyStatus             @default(ACTIVE)
-  createdById          String                    @map("created_by_id")
-  createdAt            DateTime                  @default(now()) @map("created_at")
-  updatedAt            DateTime                  @updatedAt @map("updated_at")
-  organization         Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project              Project?                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent               CostCenter?               @relation("CostCenterHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
-  children             CostCenter[]              @relation("CostCenterHierarchy")
+  responsibleId        String?                      @map("responsible_id")
+  managerialAccount    String?                      @map("managerial_account")
+  status               CompanyStatus                @default(ACTIVE)
+  createdById          String                       @map("created_by_id")
+  createdAt            DateTime                     @default(now()) @map("created_at")
+  updatedAt            DateTime                     @updatedAt @map("updated_at")
+  organization         Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project              Project?                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent               CostCenter?                  @relation("CostCenterHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children             CostCenter[]                 @relation("CostCenterHierarchy")
   economicItems        EconomicItem[]
   budgetLineItems      BudgetLineItem[]
   financialObligations FinancialObligation[]
@@ -1362,6 +1384,9 @@ model CostCenter {
   contractItems        OperationalContractItem[]
   purchaseOrderItems   PurchaseOrderItem[]
   measurementLines     MeasurementLine[]
+  workAllocations      WorkAllocation[]
+  administrativeLines  AdministrativeCostPlanLine[]
+  varianceCases        PerformanceVarianceCase[]
 
   @@unique([organizationId, projectId, code])
   @@index([organizationId, status])
@@ -1370,25 +1395,25 @@ model CostCenter {
 }
 
 model EconomicItem {
-  id                   String                    @id @default(cuid())
-  organizationId       String                    @map("organization_id")
-  projectId            String                    @map("project_id")
-  costCenterId         String?                   @map("cost_center_id")
-  operatingUnitId      String?                   @map("operating_unit_id")
+  id                   String                       @id @default(cuid())
+  organizationId       String                       @map("organization_id")
+  projectId            String                       @map("project_id")
+  costCenterId         String?                      @map("cost_center_id")
+  operatingUnitId      String?                      @map("operating_unit_id")
   code                 String
   description          String
   category             String
   subcategory          String?
   unit                 String
-  responsibleId        String?                   @map("responsible_id")
+  responsibleId        String?                      @map("responsible_id")
   metadata             Json?
-  createdById          String                    @map("created_by_id")
-  createdAt            DateTime                  @default(now()) @map("created_at")
-  updatedAt            DateTime                  @updatedAt @map("updated_at")
-  organization         Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project              Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  costCenter           CostCenter?               @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
-  operatingUnit        ProjectOperatingUnit?     @relation(fields: [operatingUnitId], references: [id], onDelete: Restrict)
+  createdById          String                       @map("created_by_id")
+  createdAt            DateTime                     @default(now()) @map("created_at")
+  updatedAt            DateTime                     @updatedAt @map("updated_at")
+  organization         Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project              Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  costCenter           CostCenter?                  @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  operatingUnit        ProjectOperatingUnit?        @relation(fields: [operatingUnitId], references: [id], onDelete: Restrict)
   baselineLines        OperationalBaselineLine[]
   budgetLineItems      BudgetLineItem[]
   scheduleActivities   ScheduleActivity[]
@@ -1400,6 +1425,9 @@ model EconomicItem {
   contractItems        OperationalContractItem[]
   purchaseOrderItems   PurchaseOrderItem[]
   measurementLines     MeasurementLine[]
+  workAllocations      WorkAllocation[]
+  administrativeLines  AdministrativeCostPlanLine[]
+  varianceCases        PerformanceVarianceCase[]
   validatedSavings     ValidatedSaving[]
 
   @@unique([projectId, code])
@@ -1588,6 +1616,8 @@ model ScheduleActivity {
   purchaseOrderItems   PurchaseOrderItem[]
   measurementLines     MeasurementLine[]
   legalTimelineEvents  LegalTimelineEvent[]
+  workAllocations      WorkAllocation[]
+  varianceCases        PerformanceVarianceCase[]
 
   @@unique([scheduleId, code])
   @@index([scheduleId, startDate, endDate])
@@ -5630,24 +5660,25 @@ model ProcurementDecision {
 }
 
 model ValidatedSaving {
-  id                         String               @id @default(cuid())
-  decisionId                 String               @map("decision_id")
-  economicItemId             String?              @map("economic_item_id")
+  id                         String                @id @default(cuid())
+  decisionId                 String                @map("decision_id")
+  economicItemId             String?               @map("economic_item_id")
   classification             SavingClassification
-  referenceType              String               @map("reference_type")
-  referenceDescription       String               @map("reference_description")
-  referenceAmount            Decimal              @map("reference_amount") @db.Decimal(20, 2)
-  contractedComparableAmount Decimal              @map("contracted_comparable_amount") @db.Decimal(20, 2)
-  nominalAmount              Decimal              @map("nominal_amount") @db.Decimal(20, 2)
-  percentage                 Decimal              @db.Decimal(9, 6)
-  scopeComparable            Boolean              @map("scope_comparable")
-  technicalValidation        String?              @map("technical_validation") @db.Text
-  validatedById              String?              @map("validated_by_id")
-  validatedAt                DateTime?            @map("validated_at")
-  createdById                String               @map("created_by_id")
-  createdAt                  DateTime             @default(now()) @map("created_at")
-  decision                   ProcurementDecision  @relation(fields: [decisionId], references: [id], onDelete: Restrict)
-  economicItem               EconomicItem?        @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+  referenceType              String                @map("reference_type")
+  referenceDescription       String                @map("reference_description")
+  referenceAmount            Decimal               @map("reference_amount") @db.Decimal(20, 2)
+  contractedComparableAmount Decimal               @map("contracted_comparable_amount") @db.Decimal(20, 2)
+  nominalAmount              Decimal               @map("nominal_amount") @db.Decimal(20, 2)
+  percentage                 Decimal               @db.Decimal(9, 6)
+  scopeComparable            Boolean               @map("scope_comparable")
+  technicalValidation        String?               @map("technical_validation") @db.Text
+  validatedById              String?               @map("validated_by_id")
+  validatedAt                DateTime?             @map("validated_at")
+  createdById                String                @map("created_by_id")
+  createdAt                  DateTime              @default(now()) @map("created_at")
+  decision                   ProcurementDecision   @relation(fields: [decisionId], references: [id], onDelete: Restrict)
+  economicItem               EconomicItem?         @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+  incentiveSimulations       IncentiveSimulation[]
 
   @@index([decisionId, classification])
   @@index([economicItemId])
@@ -7130,4 +7161,750 @@ model PostSaleUpdate {
 
   @@index([requestId, createdAt])
   @@map("post_sale_updates")
+}
+
+// -----------------------------------------------------------------------------
+// FASE 9F — Pessoas, administração, eficiência e análise de causa-raiz
+// -----------------------------------------------------------------------------
+
+enum ProfessionalProfileStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum EmploymentRelationshipType {
+  EMPLOYEE
+  CONTRACTOR
+  PARTNER
+  INTERN
+  TEMPORARY
+  OUTSOURCED
+}
+
+enum EmploymentRelationshipStatus {
+  PLANNED
+  ACTIVE
+  SUSPENDED
+  ENDED
+}
+
+enum TeamType {
+  CORPORATE
+  PROJECT
+  TEMPORARY
+}
+
+enum WorkAllocationCriterion {
+  PERCENTAGE
+  HOURS
+  FIXED_AMOUNT
+}
+
+enum AdministrativeCostPlanStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+  SUPERSEDED
+}
+
+enum AdministrativeAllocationDriver {
+  HEADCOUNT
+  REVENUE
+  DIRECT_COST
+  AREA
+  FIXED_PERCENTAGE
+  MANUAL
+}
+
+enum EfficiencyAnalysisStatus {
+  DRAFT
+  COMPLETED
+  SUPERSEDED
+}
+
+enum PerformanceVarianceType {
+  CASH
+  COMMITMENT
+  PHYSICAL
+  PRODUCTIVITY
+  QUALITY
+  DEADLINE
+}
+
+enum PerformanceVarianceStatus {
+  UNCLASSIFIED
+  UNDER_ANALYSIS
+  CLASSIFIED
+  VALIDATED
+  CLOSED
+}
+
+enum RootCauseConfidence {
+  LOW
+  MEDIUM
+  HIGH
+  CONFIRMED
+}
+
+enum CausalHypothesisStatus {
+  PROPOSED
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+}
+
+enum RootCauseCategory {
+  PROCESS
+  PEOPLE
+  PLANNING
+  SUPPLIER
+  TECHNICAL
+  COMMERCIAL
+  LEGAL
+  EXTERNAL
+  OTHER
+}
+
+enum ExternalDependencyStatus {
+  OPEN
+  MONITORED
+  RESOLVED
+  CANCELLED
+}
+
+enum CorrectiveActionStatus {
+  DRAFT
+  PENDING_APPROVAL
+  ACTIVE
+  BLOCKED
+  COMPLETED
+  VERIFIED
+  CANCELLED
+}
+
+enum CorrectiveActionPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncentivePolicyStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+}
+
+enum IncentiveSimulationStatus {
+  DRAFT
+  CALCULATED
+  APPROVED_FOR_REFERENCE
+  CANCELLED
+}
+
+model Department {
+  id             String                   @id @default(cuid())
+  organizationId String                   @map("organization_id")
+  companyId      String?                  @map("company_id")
+  parentId       String?                  @map("parent_id")
+  code           String
+  name           String
+  description    String?
+  costCenterCode String?                  @map("cost_center_code")
+  isActive       Boolean                  @default(true) @map("is_active")
+  createdById    String                   @map("created_by_id")
+  updatedById    String                   @map("updated_by_id")
+  createdAt      DateTime                 @default(now()) @map("created_at")
+  updatedAt      DateTime                 @updatedAt @map("updated_at")
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company        Company?                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  parent         Department?              @relation("DepartmentHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children       Department[]             @relation("DepartmentHierarchy")
+  positions      Position[]
+  relationships  EmploymentRelationship[]
+  teams          Team[]
+
+  @@unique([organizationId, code])
+  @@index([companyId, isActive])
+  @@index([parentId])
+  @@map("departments")
+}
+
+model Position {
+  id             String                   @id @default(cuid())
+  organizationId String                   @map("organization_id")
+  departmentId   String?                  @map("department_id")
+  code           String
+  title          String
+  description    String?
+  level          String?
+  isActive       Boolean                  @default(true) @map("is_active")
+  createdById    String                   @map("created_by_id")
+  updatedById    String                   @map("updated_by_id")
+  createdAt      DateTime                 @default(now()) @map("created_at")
+  updatedAt      DateTime                 @updatedAt @map("updated_at")
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  department     Department?              @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  relationships  EmploymentRelationship[]
+
+  @@unique([organizationId, code])
+  @@index([departmentId, isActive])
+  @@map("positions")
+}
+
+model PersonProfile {
+  id             String                    @id @default(cuid())
+  organizationId String                    @map("organization_id")
+  userId         String?                   @map("user_id")
+  fullName       String                    @map("full_name")
+  preferredName  String?                   @map("preferred_name")
+  professionalId String?                   @map("professional_id")
+  email          String?
+  phone          String?
+  status         ProfessionalProfileStatus @default(ACTIVE)
+  metadata       Json?
+  createdById    String                    @map("created_by_id")
+  updatedById    String                    @map("updated_by_id")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  updatedAt      DateTime                  @updatedAt @map("updated_at")
+  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  relationships  EmploymentRelationship[]
+
+  @@unique([organizationId, professionalId])
+  @@unique([organizationId, userId])
+  @@index([organizationId, status])
+  @@map("person_profiles")
+}
+
+model EmploymentRelationship {
+  id                   String                       @id @default(cuid())
+  organizationId       String                       @map("organization_id")
+  companyId            String                       @map("company_id")
+  personId             String                       @map("person_id")
+  positionId           String?                      @map("position_id")
+  departmentId         String?                      @map("department_id")
+  managerId            String?                      @map("manager_id")
+  type                 EmploymentRelationshipType
+  status               EmploymentRelationshipStatus @default(ACTIVE)
+  startDate            DateTime                     @map("start_date") @db.Date
+  endDate              DateTime?                    @map("end_date") @db.Date
+  weeklyHours          Decimal?                     @map("weekly_hours") @db.Decimal(8, 2)
+  createdById          String                       @map("created_by_id")
+  updatedById          String                       @map("updated_by_id")
+  createdAt            DateTime                     @default(now()) @map("created_at")
+  updatedAt            DateTime                     @updatedAt @map("updated_at")
+  organization         Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company              Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  person               PersonProfile                @relation(fields: [personId], references: [id], onDelete: Restrict)
+  position             Position?                    @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  department           Department?                  @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  manager              EmploymentRelationship?      @relation("EmploymentManagement", fields: [managerId], references: [id], onDelete: Restrict)
+  reports              EmploymentRelationship[]     @relation("EmploymentManagement")
+  teamMemberships      TeamMembership[]
+  allocations          WorkAllocation[]
+  costSnapshots        RelationshipCostSnapshot[]
+  incentiveAllocations IncentiveAllocation[]
+
+  @@index([organizationId, status])
+  @@index([companyId, departmentId])
+  @@index([personId, startDate])
+  @@index([managerId])
+  @@map("employment_relationships")
+}
+
+model Team {
+  id             String           @id @default(cuid())
+  organizationId String           @map("organization_id")
+  companyId      String?          @map("company_id")
+  projectId      String?          @map("project_id")
+  departmentId   String?          @map("department_id")
+  code           String
+  name           String
+  type           TeamType
+  startDate      DateTime?        @map("start_date") @db.Date
+  endDate        DateTime?        @map("end_date") @db.Date
+  isActive       Boolean          @default(true) @map("is_active")
+  createdById    String           @map("created_by_id")
+  updatedById    String           @map("updated_by_id")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company        Company?         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  project        Project?         @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  department     Department?      @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  memberships    TeamMembership[]
+  allocations    WorkAllocation[]
+
+  @@unique([organizationId, code])
+  @@index([projectId, isActive])
+  @@map("teams")
+}
+
+model TeamMembership {
+  id             String                 @id @default(cuid())
+  teamId         String                 @map("team_id")
+  relationshipId String                 @map("relationship_id")
+  role           String?
+  startDate      DateTime               @map("start_date") @db.Date
+  endDate        DateTime?              @map("end_date") @db.Date
+  allocationRate Decimal?               @map("allocation_rate") @db.Decimal(9, 6)
+  createdById    String                 @map("created_by_id")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  team           Team                   @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  relationship   EmploymentRelationship @relation(fields: [relationshipId], references: [id], onDelete: Restrict)
+
+  @@unique([teamId, relationshipId, startDate])
+  @@index([relationshipId, startDate, endDate])
+  @@map("team_memberships")
+}
+
+model WorkAllocation {
+  id                          String                  @id @default(cuid())
+  organizationId              String                  @map("organization_id")
+  projectId                   String                  @map("project_id")
+  relationshipId              String                  @map("relationship_id")
+  teamId                      String?                 @map("team_id")
+  costCenterId                String?                 @map("cost_center_id")
+  economicItemId              String?                 @map("economic_item_id")
+  scheduleActivityId          String?                 @map("schedule_activity_id")
+  criterion                   WorkAllocationCriterion @default(PERCENTAGE)
+  allocationRate              Decimal?                @map("allocation_rate") @db.Decimal(9, 6)
+  allocatedHours              Decimal?                @map("allocated_hours") @db.Decimal(12, 2)
+  allocatedAmount             Decimal?                @map("allocated_amount") @db.Decimal(20, 2)
+  startDate                   DateTime                @map("start_date") @db.Date
+  endDate                     DateTime?               @map("end_date") @db.Date
+  overAllocationJustification String?                 @map("over_allocation_justification") @db.Text
+  createdById                 String                  @map("created_by_id")
+  updatedById                 String                  @map("updated_by_id")
+  createdAt                   DateTime                @default(now()) @map("created_at")
+  updatedAt                   DateTime                @updatedAt @map("updated_at")
+  organization                Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project                     Project                 @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  relationship                EmploymentRelationship  @relation(fields: [relationshipId], references: [id], onDelete: Restrict)
+  team                        Team?                   @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  costCenter                  CostCenter?             @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  economicItem                EconomicItem?           @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+  scheduleActivity            ScheduleActivity?       @relation(fields: [scheduleActivityId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, projectId, startDate])
+  @@index([relationshipId, startDate, endDate])
+  @@map("work_allocations")
+}
+
+model RelationshipCostSnapshot {
+  id             String                 @id @default(cuid())
+  relationshipId String                 @map("relationship_id")
+  referenceMonth DateTime               @map("reference_month") @db.Date
+  baseCost       Decimal                @map("base_cost") @db.Decimal(20, 2)
+  burdenCost     Decimal                @default(0) @map("burden_cost") @db.Decimal(20, 2)
+  benefitsCost   Decimal                @default(0) @map("benefits_cost") @db.Decimal(20, 2)
+  otherCost      Decimal                @default(0) @map("other_cost") @db.Decimal(20, 2)
+  totalCost      Decimal                @map("total_cost") @db.Decimal(20, 2)
+  currency       String                 @default("BRL") @db.Char(3)
+  source         String
+  notes          String?
+  createdById    String                 @map("created_by_id")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  relationship   EmploymentRelationship @relation(fields: [relationshipId], references: [id], onDelete: Restrict)
+
+  @@unique([relationshipId, referenceMonth])
+  @@map("relationship_cost_snapshots")
+}
+
+model AdministrativeCostPlan {
+  id             String                                 @id @default(cuid())
+  organizationId String                                 @map("organization_id")
+  companyId      String?                                @map("company_id")
+  projectId      String?                                @map("project_id")
+  name           String
+  version        Int
+  status         AdministrativeCostPlanStatus           @default(DRAFT)
+  referenceFrom  DateTime                               @map("reference_from") @db.Date
+  referenceTo    DateTime                               @map("reference_to") @db.Date
+  currency       String                                 @default("BRL") @db.Char(3)
+  createdById    String                                 @map("created_by_id")
+  updatedById    String                                 @map("updated_by_id")
+  createdAt      DateTime                               @default(now()) @map("created_at")
+  updatedAt      DateTime                               @updatedAt @map("updated_at")
+  organization   Organization                           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company        Company?                               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  project        Project?                               @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  lines          AdministrativeCostPlanLine[]
+  rules          AdministrativeCostAllocationRule[]
+  snapshots      AdministrativeCostAllocationSnapshot[]
+
+  @@unique([organizationId, name, version])
+  @@index([companyId, status])
+  @@map("administrative_cost_plans")
+}
+
+model AdministrativeCostPlanLine {
+  id              String                             @id @default(cuid())
+  planId          String                             @map("plan_id")
+  costCenterId    String?                            @map("cost_center_id")
+  economicItemId  String?                            @map("economic_item_id")
+  code            String
+  description     String
+  plannedAmount   Decimal                            @map("planned_amount") @db.Decimal(20, 2)
+  actualAmount    Decimal                            @default(0) @map("actual_amount") @db.Decimal(20, 2)
+  committedAmount Decimal                            @default(0) @map("committed_amount") @db.Decimal(20, 2)
+  createdById     String                             @map("created_by_id")
+  createdAt       DateTime                           @default(now()) @map("created_at")
+  plan            AdministrativeCostPlan             @relation(fields: [planId], references: [id], onDelete: Restrict)
+  costCenter      CostCenter?                        @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  economicItem    EconomicItem?                      @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+  allocations     AdministrativeCostAllocationLine[]
+
+  @@unique([planId, code])
+  @@map("administrative_cost_plan_lines")
+}
+
+model AdministrativeCostAllocationRule {
+  id             String                                 @id @default(cuid())
+  planId         String                                 @map("plan_id")
+  name           String
+  driver         AdministrativeAllocationDriver
+  driverSnapshot Json                                   @map("driver_snapshot")
+  isActive       Boolean                                @default(true) @map("is_active")
+  createdById    String                                 @map("created_by_id")
+  createdAt      DateTime                               @default(now()) @map("created_at")
+  plan           AdministrativeCostPlan                 @relation(fields: [planId], references: [id], onDelete: Restrict)
+  snapshots      AdministrativeCostAllocationSnapshot[]
+
+  @@unique([planId, name])
+  @@map("administrative_cost_allocation_rules")
+}
+
+model AdministrativeCostAllocationSnapshot {
+  id              String                             @id @default(cuid())
+  planId          String                             @map("plan_id")
+  ruleId          String                             @map("rule_id")
+  referenceMonth  DateTime                           @map("reference_month") @db.Date
+  sourceAmount    Decimal                            @map("source_amount") @db.Decimal(20, 2)
+  allocatedAmount Decimal                            @map("allocated_amount") @db.Decimal(20, 2)
+  residualAmount  Decimal                            @map("residual_amount") @db.Decimal(20, 2)
+  proofZero       Boolean                            @map("proof_zero")
+  checksum        String
+  createdById     String                             @map("created_by_id")
+  createdAt       DateTime                           @default(now()) @map("created_at")
+  plan            AdministrativeCostPlan             @relation(fields: [planId], references: [id], onDelete: Restrict)
+  rule            AdministrativeCostAllocationRule   @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  lines           AdministrativeCostAllocationLine[]
+
+  @@unique([planId, ruleId, referenceMonth])
+  @@map("administrative_cost_allocation_snapshots")
+}
+
+model AdministrativeCostAllocationLine {
+  id              String                               @id @default(cuid())
+  snapshotId      String                               @map("snapshot_id")
+  planLineId      String                               @map("plan_line_id")
+  targetProjectId String                               @map("target_project_id")
+  driverValue     Decimal                              @map("driver_value") @db.Decimal(20, 6)
+  allocationRate  Decimal                              @map("allocation_rate") @db.Decimal(9, 6)
+  allocatedAmount Decimal                              @map("allocated_amount") @db.Decimal(20, 2)
+  snapshot        AdministrativeCostAllocationSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  planLine        AdministrativeCostPlanLine           @relation(fields: [planLineId], references: [id], onDelete: Restrict)
+  targetProject   Project                              @relation(fields: [targetProjectId], references: [id], onDelete: Restrict)
+
+  @@unique([snapshotId, planLineId, targetProjectId])
+  @@index([targetProjectId])
+  @@map("administrative_cost_allocation_lines")
+}
+
+model EfficiencyAnalysisRun {
+  id                 String                    @id @default(cuid())
+  organizationId     String                    @map("organization_id")
+  projectId          String                    @map("project_id")
+  referenceFrom      DateTime                  @map("reference_from") @db.Date
+  referenceTo        DateTime                  @map("reference_to") @db.Date
+  status             EfficiencyAnalysisStatus  @default(DRAFT)
+  methodologyVersion String                    @map("methodology_version")
+  inputSnapshot      Json                      @map("input_snapshot")
+  checksum           String
+  createdById        String                    @map("created_by_id")
+  completedAt        DateTime?                 @map("completed_at")
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  organization       Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project            Project                   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  metrics            EfficiencyMetricResult[]
+  varianceCases      PerformanceVarianceCase[]
+
+  @@index([organizationId, projectId, referenceTo])
+  @@map("efficiency_analysis_runs")
+}
+
+model EfficiencyMetricResult {
+  id             String                    @id @default(cuid())
+  runId          String                    @map("run_id")
+  metricKey      String                    @map("metric_key")
+  subjectType    String                    @map("subject_type")
+  subjectId      String                    @map("subject_id")
+  plannedValue   Decimal?                  @map("planned_value") @db.Decimal(20, 6)
+  committedValue Decimal?                  @map("committed_value") @db.Decimal(20, 6)
+  measuredValue  Decimal?                  @map("measured_value") @db.Decimal(20, 6)
+  actualValue    Decimal?                  @map("actual_value") @db.Decimal(20, 6)
+  forecastValue  Decimal?                  @map("forecast_value") @db.Decimal(20, 6)
+  resultValue    Decimal                   @map("result_value") @db.Decimal(20, 6)
+  unit           String
+  confidence     RootCauseConfidence       @default(MEDIUM)
+  evidenceRefs   Json                      @map("evidence_refs")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  run            EfficiencyAnalysisRun     @relation(fields: [runId], references: [id], onDelete: Restrict)
+  varianceCases  PerformanceVarianceCase[]
+
+  @@unique([runId, metricKey, subjectType, subjectId])
+  @@map("efficiency_metric_results")
+}
+
+model PerformanceVarianceCase {
+  id                     String                    @id @default(cuid())
+  organizationId         String                    @map("organization_id")
+  projectId              String                    @map("project_id")
+  analysisRunId          String                    @map("analysis_run_id")
+  metricResultId         String?                   @map("metric_result_id")
+  costCenterId           String?                   @map("cost_center_id")
+  economicItemId         String?                   @map("economic_item_id")
+  scheduleActivityId     String?                   @map("schedule_activity_id")
+  code                   String
+  title                  String
+  type                   PerformanceVarianceType
+  status                 PerformanceVarianceStatus @default(UNCLASSIFIED)
+  plannedAmount          Decimal                   @map("planned_amount") @db.Decimal(20, 2)
+  committedAmount        Decimal                   @default(0) @map("committed_amount") @db.Decimal(20, 2)
+  measuredAmount         Decimal                   @default(0) @map("measured_amount") @db.Decimal(20, 2)
+  actualAmount           Decimal                   @default(0) @map("actual_amount") @db.Decimal(20, 2)
+  forecastAmount         Decimal                   @default(0) @map("forecast_amount") @db.Decimal(20, 2)
+  plannedProgress        Decimal                   @default(0) @map("planned_progress") @db.Decimal(9, 6)
+  actualProgress         Decimal                   @default(0) @map("actual_progress") @db.Decimal(9, 6)
+  cashVariance           Decimal                   @map("cash_variance") @db.Decimal(20, 2)
+  commitmentVariance     Decimal                   @map("commitment_variance") @db.Decimal(20, 2)
+  physicalVariance       Decimal                   @map("physical_variance") @db.Decimal(9, 6)
+  expectedCostAtProgress Decimal                   @map("expected_cost_at_progress") @db.Decimal(20, 2)
+  savingEligible         Boolean                   @default(false) @map("saving_eligible")
+  ownerId                String?                   @map("owner_id")
+  dueDate                DateTime?                 @map("due_date") @db.Date
+  createdById            String                    @map("created_by_id")
+  updatedById            String                    @map("updated_by_id")
+  createdAt              DateTime                  @default(now()) @map("created_at")
+  updatedAt              DateTime                  @updatedAt @map("updated_at")
+  organization           Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project                Project                   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  analysisRun            EfficiencyAnalysisRun     @relation(fields: [analysisRunId], references: [id], onDelete: Restrict)
+  metricResult           EfficiencyMetricResult?   @relation(fields: [metricResultId], references: [id], onDelete: Restrict)
+  costCenter             CostCenter?               @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  economicItem           EconomicItem?             @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+  scheduleActivity       ScheduleActivity?         @relation(fields: [scheduleActivityId], references: [id], onDelete: Restrict)
+  investigation          RootCauseInvestigation?
+
+  @@unique([projectId, code])
+  @@index([organizationId, status, type])
+  @@map("performance_variance_cases")
+}
+
+model RootCauseInvestigation {
+  id               String                  @id @default(cuid())
+  varianceCaseId   String                  @unique @map("variance_case_id")
+  problemStatement String                  @map("problem_statement") @db.Text
+  scope            String?                 @db.Text
+  startedAt        DateTime                @default(now()) @map("started_at")
+  concludedAt      DateTime?               @map("concluded_at")
+  responsibleId    String                  @map("responsible_id")
+  createdById      String                  @map("created_by_id")
+  updatedById      String                  @map("updated_by_id")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+  varianceCase     PerformanceVarianceCase @relation(fields: [varianceCaseId], references: [id], onDelete: Restrict)
+  hypotheses       CausalHypothesis[]
+  causeAllocations RootCauseAllocation[]
+  dependencies     ExternalDependency[]
+  actions          CorrectiveAction[]
+
+  @@map("root_cause_investigations")
+}
+
+model CausalHypothesis {
+  id              String                 @id @default(cuid())
+  investigationId String                 @map("investigation_id")
+  category        RootCauseCategory
+  description     String                 @db.Text
+  status          CausalHypothesisStatus @default(PROPOSED)
+  confidence      RootCauseConfidence    @default(LOW)
+  createdById     String                 @map("created_by_id")
+  updatedById     String                 @map("updated_by_id")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+  investigation   RootCauseInvestigation @relation(fields: [investigationId], references: [id], onDelete: Restrict)
+  evidence        CausalEvidence[]
+  allocations     RootCauseAllocation[]
+
+  @@index([investigationId, status])
+  @@map("causal_hypotheses")
+}
+
+model CausalEvidence {
+  id            String           @id @default(cuid())
+  hypothesisId  String           @map("hypothesis_id")
+  evidenceType  String           @map("evidence_type")
+  title         String
+  description   String?          @db.Text
+  sourceRef     String           @map("source_ref")
+  sourceVersion String?          @map("source_version")
+  observedAt    DateTime?        @map("observed_at")
+  supports      Boolean          @default(true)
+  createdById   String           @map("created_by_id")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  hypothesis    CausalHypothesis @relation(fields: [hypothesisId], references: [id], onDelete: Restrict)
+
+  @@index([hypothesisId, supports])
+  @@map("causal_evidence")
+}
+
+model RootCauseAllocation {
+  id               String                 @id @default(cuid())
+  investigationId  String                 @map("investigation_id")
+  hypothesisId     String                 @map("hypothesis_id")
+  contributionRate Decimal                @map("contribution_rate") @db.Decimal(9, 6)
+  amountImpact     Decimal?               @map("amount_impact") @db.Decimal(20, 2)
+  rationale        String                 @db.Text
+  validatedById    String?                @map("validated_by_id")
+  validatedAt      DateTime?              @map("validated_at")
+  createdById      String                 @map("created_by_id")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  investigation    RootCauseInvestigation @relation(fields: [investigationId], references: [id], onDelete: Restrict)
+  hypothesis       CausalHypothesis       @relation(fields: [hypothesisId], references: [id], onDelete: Restrict)
+
+  @@unique([investigationId, hypothesisId])
+  @@map("root_cause_allocations")
+}
+
+model ExternalDependency {
+  id              String                   @id @default(cuid())
+  investigationId String                   @map("investigation_id")
+  name            String
+  description     String                   @db.Text
+  owner           String?
+  dueDate         DateTime?                @map("due_date") @db.Date
+  status          ExternalDependencyStatus @default(OPEN)
+  evidenceRef     String?                  @map("evidence_ref")
+  createdById     String                   @map("created_by_id")
+  updatedById     String                   @map("updated_by_id")
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  updatedAt       DateTime                 @updatedAt @map("updated_at")
+  investigation   RootCauseInvestigation   @relation(fields: [investigationId], references: [id], onDelete: Restrict)
+
+  @@index([investigationId, status])
+  @@map("external_dependencies")
+}
+
+model CorrectiveAction {
+  id                 String                     @id @default(cuid())
+  investigationId    String                     @map("investigation_id")
+  title              String
+  description        String                     @db.Text
+  priority           CorrectiveActionPriority   @default(MEDIUM)
+  status             CorrectiveActionStatus     @default(DRAFT)
+  responsibleId      String                     @map("responsible_id")
+  dueDate            DateTime?                  @map("due_date") @db.Date
+  expectedImpact     Decimal?                   @map("expected_impact") @db.Decimal(20, 2)
+  implementationCost Decimal?                   @map("implementation_cost") @db.Decimal(20, 2)
+  approvedById       String?                    @map("approved_by_id")
+  approvedAt         DateTime?                  @map("approved_at")
+  completedAt        DateTime?                  @map("completed_at")
+  verifiedById       String?                    @map("verified_by_id")
+  verifiedAt         DateTime?                  @map("verified_at")
+  createdById        String                     @map("created_by_id")
+  updatedById        String                     @map("updated_by_id")
+  createdAt          DateTime                   @default(now()) @map("created_at")
+  updatedAt          DateTime                   @updatedAt @map("updated_at")
+  investigation      RootCauseInvestigation     @relation(fields: [investigationId], references: [id], onDelete: Restrict)
+  evidence           CorrectiveActionEvidence[]
+
+  @@index([investigationId, status, priority])
+  @@map("corrective_actions")
+}
+
+model CorrectiveActionEvidence {
+  id          String           @id @default(cuid())
+  actionId    String           @map("action_id")
+  title       String
+  sourceRef   String           @map("source_ref")
+  notes       String?          @db.Text
+  createdById String           @map("created_by_id")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  action      CorrectiveAction @relation(fields: [actionId], references: [id], onDelete: Restrict)
+
+  @@index([actionId, createdAt])
+  @@map("corrective_action_evidence")
+}
+
+model IncentivePolicy {
+  id             String                @id @default(cuid())
+  organizationId String                @map("organization_id")
+  name           String
+  version        Int
+  status         IncentivePolicyStatus @default(DRAFT)
+  poolRate       Decimal               @map("pool_rate") @db.Decimal(9, 6)
+  reserveRate    Decimal               @default(0) @map("reserve_rate") @db.Decimal(9, 6)
+  minimumPool    Decimal?              @map("minimum_pool") @db.Decimal(20, 2)
+  maximumPool    Decimal?              @map("maximum_pool") @db.Decimal(20, 2)
+  rules          Json
+  effectiveFrom  DateTime              @map("effective_from") @db.Date
+  effectiveTo    DateTime?             @map("effective_to") @db.Date
+  createdById    String                @map("created_by_id")
+  approvedById   String?               @map("approved_by_id")
+  approvedAt     DateTime?             @map("approved_at")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  simulations    IncentiveSimulation[]
+
+  @@unique([organizationId, name, version])
+  @@index([organizationId, status])
+  @@map("incentive_policies")
+}
+
+model IncentiveSimulation {
+  id                    String                    @id @default(cuid())
+  organizationId        String                    @map("organization_id")
+  projectId             String                    @map("project_id")
+  policyId              String                    @map("policy_id")
+  validatedSavingId     String?                   @map("validated_saving_id")
+  name                  String
+  status                IncentiveSimulationStatus @default(DRAFT)
+  validatedSavingAmount Decimal                   @map("validated_saving_amount") @db.Decimal(20, 2)
+  implementationCost    Decimal                   @default(0) @map("implementation_cost") @db.Decimal(20, 2)
+  reversalAmount        Decimal                   @default(0) @map("reversal_amount") @db.Decimal(20, 2)
+  eligibleBase          Decimal                   @map("eligible_base") @db.Decimal(20, 2)
+  simulatedPool         Decimal                   @map("simulated_pool") @db.Decimal(20, 2)
+  inputSnapshot         Json                      @map("input_snapshot")
+  checksum              String
+  createdById           String                    @map("created_by_id")
+  approvedById          String?                   @map("approved_by_id")
+  approvedAt            DateTime?                 @map("approved_at")
+  createdAt             DateTime                  @default(now()) @map("created_at")
+  updatedAt             DateTime                  @updatedAt @map("updated_at")
+  organization          Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project               Project                   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  policy                IncentivePolicy           @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  validatedSaving       ValidatedSaving?          @relation(fields: [validatedSavingId], references: [id], onDelete: Restrict)
+  allocations           IncentiveAllocation[]
+
+  @@index([organizationId, projectId, status])
+  @@index([validatedSavingId])
+  @@map("incentive_simulations")
+}
+
+model IncentiveAllocation {
+  id               String                 @id @default(cuid())
+  simulationId     String                 @map("simulation_id")
+  relationshipId   String                 @map("relationship_id")
+  contributionRate Decimal                @map("contribution_rate") @db.Decimal(9, 6)
+  simulatedAmount  Decimal                @map("simulated_amount") @db.Decimal(20, 2)
+  evidenceRefs     Json                   @map("evidence_refs")
+  rationale        String                 @db.Text
+  simulation       IncentiveSimulation    @relation(fields: [simulationId], references: [id], onDelete: Restrict)
+  relationship     EmploymentRelationship @relation(fields: [relationshipId], references: [id], onDelete: Restrict)
+
+  @@unique([simulationId, relationshipId])
+  @@map("incentive_allocations")
 }

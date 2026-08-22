@@ -21,6 +21,8 @@ Acesse `http://localhost:3000` e use:
 
 Para usar outro PostgreSQL, ajuste `DATABASE_URL` e execute somente `pnpm db:setup`. O seed é idempotente.
 
+A arquitetura da frente de Pessoas, Administração, Eficiência e Causa-raiz está documentada em [`docs/PHASE_9F_PEOPLE_EFFICIENCY_IMPLEMENTED.md`](docs/PHASE_9F_PEOPLE_EFFICIENCY_IMPLEMENTED.md).
+
 ## Persistência e segurança
 
 - o token aleatório de sessão é armazenado somente como hash no banco;

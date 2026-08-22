@@ -33,6 +33,7 @@ import {
   ShoppingCart,
   TableProperties,
   TrendingUp,
+  Users,
 } from "lucide-react";
 import { CashFlowChart } from "./cash-flow-chart";
 import { ProjectEditor } from "./project-editor";
@@ -50,6 +51,7 @@ import { FinancialView } from "./financial-view";
 import { ProcurementView } from "./procurement-view";
 import { LegalView } from "./legal-view";
 import { SalesView } from "./sales-view";
+import { PeoplePerformanceView } from "./people-performance-view";
 import { logoutAction } from "@/app/actions/auth";
 import { createStudyAction, createStudyVersionAction } from "@/app/actions/studies";
 import { reassessInvestmentCaseAction } from "@/app/actions/investment";
@@ -64,13 +66,14 @@ import type { FinancialWorkspaceView } from "@/application/financial-ops/financi
 import type { ProcurementWorkspaceView } from "@/application/procurement/procurement-service";
 import type { LegalWorkspaceView } from "@/application/legal/legal-service";
 import type { SalesWorkspaceView } from "@/application/sales/sales-service";
+import type { PeoplePerformanceWorkspaceView } from "@/application/people-performance/people-performance-service";
 import { DEMO_PROJECT } from "@/domain/financial/demo";
 import { calculateAllScenarios } from "@/domain/financial/engine";
 import { SCENARIOS } from "@/domain/financial/scenarios";
 import type { ProjectAssumptions, ScenarioKey } from "@/domain/financial/types";
 import { analyzeRisk, type FindingSeverity } from "@/domain/risk/rules";
 
-type ViewKey = "overview" | "assumptions" | "land" | "design" | "budget" | "procurement" | "legal" | "financial" | "sales" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit";
+type ViewKey = "overview" | "assumptions" | "land" | "design" | "budget" | "procurement" | "legal" | "financial" | "sales" | "people" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit";
 type EditorMode = "create" | "version";
 
 const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
@@ -83,6 +86,7 @@ const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
   { key: "legal", label: "Jurídico e Diligência", icon: Scale },
   { key: "financial", label: "Financeiro", icon: Landmark },
   { key: "sales", label: "Vendas e Recebíveis", icon: HandCoins },
+  { key: "people", label: "Pessoas e Eficiência", icon: Users },
   { key: "scenarios", label: "Cenários", icon: BarChart3 },
   { key: "sensitivity", label: "Sensibilidade", icon: SlidersHorizontal },
   { key: "redteam", label: "REDE Red Team", icon: Radar },
@@ -147,7 +151,7 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "RE";
 }
 
-export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, initialSales, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; initialOperations: OperationsWorkspaceView; initialFinancial: FinancialWorkspaceView; initialProcurement: ProcurementWorkspaceView; initialLegal: LegalWorkspaceView; initialSales: SalesWorkspaceView; identity: WorkspaceIdentity }) {
+export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, initialSales, initialPeoplePerformance, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; initialOperations: OperationsWorkspaceView; initialFinancial: FinancialWorkspaceView; initialProcurement: ProcurementWorkspaceView; initialLegal: LegalWorkspaceView; initialSales: SalesWorkspaceView; initialPeoplePerformance: PeoplePerformanceWorkspaceView; identity: WorkspaceIdentity }) {
   const [study, setStudy] = useState<PersistedStudyView>(initialStudy);
   const [landWorkspace, setLandWorkspace] = useState<LandWorkspaceView>(initialLand);
   const [investmentWorkspace, setInvestmentWorkspace] = useState<InvestmentCaseWorkspace>(initialInvestment);
@@ -315,6 +319,11 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
               <RedTeamSummary report={study.redTeam} onOpen={() => setView("redteam")} />
 
               <section className="panel scenario-strip">
+                <div className="panel-heading"><div><span className="eyebrow">PESSOAS E EFICIÊNCIA</span><h2>Capacidade, desvios e ações do empreendimento</h2></div><button className="text-button" onClick={() => setView("people")}>Abrir gestão <ArrowRight size={15} /></button></div>
+                <div className="scenario-table compact-table"><div className="table-row table-head"><span>Profissionais</span><span>Equipes</span><span>Alocações</span><span>Desvios ativos</span><span>Ações ativas</span><span>Custo mensal</span></div><div className="table-row"><strong>{initialPeoplePerformance.summary.people}</strong><strong>{initialPeoplePerformance.summary.teams}</strong><strong>{initialPeoplePerformance.summary.allocations}</strong><strong>{initialPeoplePerformance.summary.activeVarianceCases}</strong><strong>{initialPeoplePerformance.summary.activeActions}</strong><strong>{initialPeoplePerformance.summary.totalMonthlyCost === null ? "Restrito" : currency.format(initialPeoplePerformance.summary.totalMonthlyCost)}</strong></div></div>
+              </section>
+
+              <section className="panel scenario-strip">
                 <div className="panel-heading"><div><span className="eyebrow">DOWNSIDE × UPSIDE</span><h2>Comparação rápida de cenários</h2></div><button className="text-button" onClick={() => setView("scenarios")}>Abrir análise <ArrowRight size={15} /></button></div>
                 <div className="scenario-table compact-table"><div className="table-row table-head"><span>Cenário</span><span>VGV</span><span>Lucro</span><span>Margem</span><span>TIR</span><span>Exposição</span></div>{(["conservative", "base", "aggressive"] as ScenarioKey[]).map((key) => { const item = results[key]; return <button key={key} onClick={() => setScenario(key)} className={`table-row ${scenario === key ? "selected" : ""}`}><span><i className={`scenario-dot dot-${key}`} />{SCENARIOS[key].label}</span><strong>{compactBrl(item.metrics.vgv)}</strong><strong>{compactBrl(item.metrics.profit)}</strong><strong>{percentage(item.metrics.marginOnVgv)}</strong><strong>{percentage(item.metrics.annualIrr)}</strong><strong>{compactBrl(item.metrics.maximumCashExposure)}</strong></button>; })}</div>
               </section>
@@ -372,6 +381,13 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
             <div className="view-stack">
               <SectionTitle eyebrow="VENDAS, CLIENTES E RECEBÍVEIS" title="Unidade → Tabela → Proposta → Reserva → Venda → Contrato → Recebíveis" description="Estoque, preço, comissão, entrega e pós-venda conectados ao Financeiro (9B) sem financeiro paralelo nem dupla contagem." />
               <SalesView workspace={initialSales} />
+            </div>
+          )}
+
+          {view === "people" && (
+            <div className="view-stack">
+              <SectionTitle eyebrow="PESSOAS, ADMINISTRAÇÃO E EFICIÊNCIA" title="Estrutura → Capacidade → Desempenho → Causa-raiz → Ação" description="Leitura integrada ao orçamento, cronograma, medições e realizado, com remuneração restrita e economia somente quando validada." />
+              <PeoplePerformanceView workspace={initialPeoplePerformance} />
             </div>
           )}
 

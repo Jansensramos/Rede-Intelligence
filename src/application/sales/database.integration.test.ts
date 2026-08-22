@@ -45,13 +45,16 @@ describe.skipIf(!process.env.DATABASE_URL).sequential("Fase 9E — vendas, receb
   afterAll(async () => {
     try {
       const receivableAccounts = await prisma.receivableAccount.findMany({ where: { saleId: { in: createdSaleIds } } });
-      await prisma.financialIntegrationEvent.deleteMany({ where: { OR: [{ receivableAccountId: { in: receivableAccounts.map((a) => a.id) } }, { sourceType: "SALE_COMMISSION", sourceId: { in: (await prisma.salesCommission.findMany({ where: { saleId: { in: createdSaleIds } } })).map((c) => c.id) } }, { sourceType: "SALE_RESCISSION", sourceId: { in: createdSaleIds } }] } });
+      const testCommissions = await prisma.salesCommission.findMany({ where: { saleId: { in: createdSaleIds } } });
+      const testCommissionIds = testCommissions.map((commission) => commission.id);
+      const payableNoteFilters = [...testCommissionIds.map((id) => ({ notes: { contains: `SALE_COMMISSION:${id}` } })), ...createdSaleIds.map((id) => ({ notes: { contains: `SALE_RESCISSION:${id}` } }))];
+      const payables = payableNoteFilters.length ? await prisma.payableAccount.findMany({ where: { OR: payableNoteFilters } }) : [];
+      await prisma.financialIntegrationEvent.deleteMany({ where: { OR: [{ receivableAccountId: { in: receivableAccounts.map((account) => account.id) } }, { payableAccountId: { in: payables.map((account) => account.id) } }, { sourceType: "SALE_COMMISSION", sourceId: { in: testCommissionIds } }, { sourceType: "SALE_RESCISSION", sourceId: { in: createdSaleIds } }] } });
       await prisma.receivablePayment.deleteMany({ where: { installment: { receivableAccountId: { in: receivableAccounts.map((a) => a.id) } } } });
       await prisma.installmentAdjustment.deleteMany({ where: { receivableInstallment: { receivableAccountId: { in: receivableAccounts.map((a) => a.id) } } } });
       await prisma.receivableInstallment.deleteMany({ where: { receivableAccountId: { in: receivableAccounts.map((a) => a.id) } } });
       const obligationIds = receivableAccounts.flatMap((a) => a.obligationId ? [a.obligationId] : []);
       await prisma.receivableAccount.deleteMany({ where: { id: { in: receivableAccounts.map((a) => a.id) } } });
-      const payables = await prisma.payableAccount.findMany({ where: { OR: [{ notes: { contains: "SALE_COMMISSION" } }, { notes: { contains: "SALE_RESCISSION" } }] } });
       await prisma.payableInstallment.deleteMany({ where: { payableAccountId: { in: payables.map((p) => p.id) } } });
       const payableObligationIds = payables.flatMap((p) => p.obligationId ? [p.obligationId] : []);
       await prisma.payableAccount.deleteMany({ where: { id: { in: payables.map((p) => p.id) } } });
