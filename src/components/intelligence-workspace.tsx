@@ -52,6 +52,7 @@ import { ProcurementView } from "./procurement-view";
 import { LegalView } from "./legal-view";
 import { SalesView } from "./sales-view";
 import { PeoplePerformanceView } from "./people-performance-view";
+import { AccountingView } from "./accounting-view";
 import { logoutAction } from "@/app/actions/auth";
 import { createStudyAction, createStudyVersionAction } from "@/app/actions/studies";
 import { reassessInvestmentCaseAction } from "@/app/actions/investment";
@@ -67,13 +68,14 @@ import type { ProcurementWorkspaceView } from "@/application/procurement/procure
 import type { LegalWorkspaceView } from "@/application/legal/legal-service";
 import type { SalesWorkspaceView } from "@/application/sales/sales-service";
 import type { PeoplePerformanceWorkspaceView } from "@/application/people-performance/people-performance-service";
+import type { AccountingWorkspaceView } from "@/application/accounting/accounting-service";
 import { DEMO_PROJECT } from "@/domain/financial/demo";
 import { calculateAllScenarios } from "@/domain/financial/engine";
 import { SCENARIOS } from "@/domain/financial/scenarios";
 import type { ProjectAssumptions, ScenarioKey } from "@/domain/financial/types";
 import { analyzeRisk, type FindingSeverity } from "@/domain/risk/rules";
 
-type ViewKey = "overview" | "assumptions" | "land" | "design" | "budget" | "procurement" | "legal" | "financial" | "sales" | "people" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit";
+type ViewKey = "overview" | "assumptions" | "land" | "design" | "budget" | "procurement" | "legal" | "financial" | "accounting" | "sales" | "people" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit";
 type EditorMode = "create" | "version";
 
 const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
@@ -85,6 +87,7 @@ const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
   { key: "procurement", label: "Suprimentos e Contratos", icon: ShoppingCart },
   { key: "legal", label: "Jurídico e Diligência", icon: Scale },
   { key: "financial", label: "Financeiro", icon: Landmark },
+  { key: "accounting", label: "Contabilidade e Controladoria", icon: BookOpenCheck },
   { key: "sales", label: "Vendas e Recebíveis", icon: HandCoins },
   { key: "people", label: "Pessoas e Eficiência", icon: Users },
   { key: "scenarios", label: "Cenários", icon: BarChart3 },
@@ -151,7 +154,7 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "RE";
 }
 
-export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, initialSales, initialPeoplePerformance, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; initialOperations: OperationsWorkspaceView; initialFinancial: FinancialWorkspaceView; initialProcurement: ProcurementWorkspaceView; initialLegal: LegalWorkspaceView; initialSales: SalesWorkspaceView; initialPeoplePerformance: PeoplePerformanceWorkspaceView; identity: WorkspaceIdentity }) {
+export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, initialSales, initialPeoplePerformance, initialAccounting, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; initialOperations: OperationsWorkspaceView; initialFinancial: FinancialWorkspaceView; initialProcurement: ProcurementWorkspaceView; initialLegal: LegalWorkspaceView; initialSales: SalesWorkspaceView; initialPeoplePerformance: PeoplePerformanceWorkspaceView; initialAccounting: AccountingWorkspaceView; identity: WorkspaceIdentity }) {
   const [study, setStudy] = useState<PersistedStudyView>(initialStudy);
   const [landWorkspace, setLandWorkspace] = useState<LandWorkspaceView>(initialLand);
   const [investmentWorkspace, setInvestmentWorkspace] = useState<InvestmentCaseWorkspace>(initialInvestment);
@@ -324,6 +327,11 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
               </section>
 
               <section className="panel scenario-strip">
+                <div className="panel-heading"><div><span className="eyebrow">CONTABILIDADE E CONTROLADORIA</span><h2>Razão, resultado, estoque, fiscal e fechamento</h2></div><button className="text-button" onClick={() => setView("accounting")}>Abrir contabilidade <ArrowRight size={15} /></button></div>
+                <div className="scenario-table compact-table"><div className="table-row table-head"><span>Receita contábil</span><span>Custo reconhecido</span><span>Margem bruta</span><span>Estoque</span><span>Tributos</span><span>Divergências</span></div><div className="table-row"><strong>{currency.format(initialAccounting.summary.recognizedRevenue)}</strong><strong>{currency.format(initialAccounting.summary.accountedCost)}</strong><strong>{currency.format(initialAccounting.summary.grossMargin)}</strong><strong>{currency.format(initialAccounting.summary.inventory)}</strong><strong>{currency.format(initialAccounting.summary.taxesDue)}</strong><strong>{initialAccounting.summary.divergences}</strong></div></div>
+              </section>
+
+              <section className="panel scenario-strip">
                 <div className="panel-heading"><div><span className="eyebrow">DOWNSIDE × UPSIDE</span><h2>Comparação rápida de cenários</h2></div><button className="text-button" onClick={() => setView("scenarios")}>Abrir análise <ArrowRight size={15} /></button></div>
                 <div className="scenario-table compact-table"><div className="table-row table-head"><span>Cenário</span><span>VGV</span><span>Lucro</span><span>Margem</span><span>TIR</span><span>Exposição</span></div>{(["conservative", "base", "aggressive"] as ScenarioKey[]).map((key) => { const item = results[key]; return <button key={key} onClick={() => setScenario(key)} className={`table-row ${scenario === key ? "selected" : ""}`}><span><i className={`scenario-dot dot-${key}`} />{SCENARIOS[key].label}</span><strong>{compactBrl(item.metrics.vgv)}</strong><strong>{compactBrl(item.metrics.profit)}</strong><strong>{percentage(item.metrics.marginOnVgv)}</strong><strong>{percentage(item.metrics.annualIrr)}</strong><strong>{compactBrl(item.metrics.maximumCashExposure)}</strong></button>; })}</div>
               </section>
@@ -360,6 +368,13 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
             <div className="view-stack">
               <SectionTitle eyebrow="FINANCEIRO E TESOURARIA" title="Contas a Pagar, Contas a Receber e Caixa" description="Obrigação → conta → parcela → pagamento → conciliação → realizado, rastreável por SPE e centro de custo." />
               <FinancialView workspace={initialFinancial} />
+            </div>
+          )}
+
+          {view === "accounting" && (
+            <div className="view-stack">
+              <SectionTitle eyebrow="CONTÁBIL, FISCAL E CONTROLADORIA" title="Fato operacional → Política → Razão → Resultado" description="Competência e caixa separados, partidas dobradas, estoque, tributos e consolidação sem criar uma segunda verdade financeira." />
+              <AccountingView workspace={initialAccounting} />
             </div>
           )}
 

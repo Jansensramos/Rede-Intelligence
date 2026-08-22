@@ -7908,3 +7908,876 @@ model IncentiveAllocation {
   @@unique([simulationId, relationshipId])
   @@map("incentive_allocations")
 }
+
+enum AccountingPlanStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+}
+
+enum LedgerAccountCategory {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  COST
+  EXPENSE
+  FINANCIAL_RESULT
+  CONTROL
+}
+
+enum NormalBalance {
+  DEBIT
+  CREDIT
+}
+
+enum AccountingPolicyStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+}
+
+enum AccountingMappingStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+}
+
+enum AccountingEventStatus {
+  RECEIVED
+  VALIDATED
+  CLASSIFIED
+  POSTED
+  PENDING_MAPPING
+  REJECTED
+  REVERSED
+}
+
+enum AccountingEntryStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+
+enum AccountingEntrySide {
+  DEBIT
+  CREDIT
+}
+
+enum AccountingPeriodStatus {
+  OPEN
+  UNDER_REVIEW
+  CLOSED
+  REOPENED
+  ADJUSTMENT
+}
+
+enum AccountingProvisionStatus {
+  ACTIVE
+  REVERSED
+  SETTLED
+}
+
+enum InventoryMovementType {
+  INPUT
+  TRANSFER
+  WRITE_OFF
+  REVERSAL
+  ADJUSTMENT
+}
+
+enum AccountingRunStatus {
+  DRAFT
+  CALCULATED
+  REVIEWED
+  APPROVED
+  POSTED
+  CLOSED
+}
+
+enum AccountingReconciliationStatus {
+  OPEN
+  MATCHED
+  DIVERGENT
+  RESOLVED
+}
+
+enum AccountingBookType {
+  STATUTORY
+  MANAGERIAL
+}
+
+enum TaxRegimeType {
+  RET
+  PRESUMED_PROFIT
+  ACTUAL_PROFIT
+  OTHER
+}
+
+model ChartOfAccounts {
+  id                String                   @id @default(cuid())
+  organizationId    String                   @map("organization_id")
+  economicGroupId   String?                  @map("economic_group_id")
+  code              String
+  name              String
+  functionalCurrency String                  @default("BRL") @map("functional_currency") @db.Char(3)
+  createdById       String                   @map("created_by_id")
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  versions          ChartOfAccountsVersion[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, economicGroupId])
+  @@map("charts_of_accounts")
+}
+
+model ChartOfAccountsVersion {
+  id              String               @id @default(cuid())
+  chartId         String               @map("chart_id")
+  version         Int
+  status          AccountingPlanStatus @default(DRAFT)
+  effectiveFrom   DateTime             @map("effective_from") @db.Date
+  effectiveTo     DateTime?            @map("effective_to") @db.Date
+  approvedById    String?              @map("approved_by_id")
+  approvedAt      DateTime?            @map("approved_at")
+  checksum        String
+  createdById     String               @map("created_by_id")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  chart           ChartOfAccounts      @relation(fields: [chartId], references: [id], onDelete: Restrict)
+  accounts        LedgerAccount[]
+  assignments     CompanyChartAssignment[]
+
+  @@unique([chartId, version])
+  @@index([chartId, status, effectiveFrom])
+  @@map("chart_of_accounts_versions")
+}
+
+model LedgerAccount {
+  id              String                @id @default(cuid())
+  versionId       String                @map("version_id")
+  parentId        String?               @map("parent_id")
+  code            String
+  name            String
+  category        LedgerAccountCategory
+  normalBalance   NormalBalance         @map("normal_balance")
+  isPosting       Boolean               @default(false) @map("is_posting")
+  isActive        Boolean               @default(true) @map("is_active")
+  managerialGroup String?               @map("managerial_group")
+  createdById     String                @map("created_by_id")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  version         ChartOfAccountsVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  parent          LedgerAccount?        @relation("LedgerAccountHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children        LedgerAccount[]       @relation("LedgerAccountHierarchy")
+  debitMappings   AccountingMappingRule[] @relation("MappingDebitAccount")
+  creditMappings  AccountingMappingRule[] @relation("MappingCreditAccount")
+  entryLines      AccountingEntryLine[]
+
+  @@unique([versionId, code])
+  @@index([versionId, parentId, isActive])
+  @@map("ledger_accounts")
+}
+
+model CompanyChartAssignment {
+  id             String                 @id @default(cuid())
+  organizationId String                 @map("organization_id")
+  companyId      String                 @map("company_id")
+  versionId      String                 @map("version_id")
+  effectiveFrom  DateTime               @map("effective_from") @db.Date
+  effectiveTo    DateTime?              @map("effective_to") @db.Date
+  overrides      Json?
+  createdById    String                 @map("created_by_id")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  version        ChartOfAccountsVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, effectiveFrom])
+  @@index([organizationId, companyId, effectiveFrom])
+  @@map("company_chart_assignments")
+}
+
+model AccountingPolicy {
+  id             String                 @id @default(cuid())
+  organizationId String                 @map("organization_id")
+  companyId      String?                @map("company_id")
+  projectId      String?                @map("project_id")
+  policyType     String                 @map("policy_type")
+  name           String
+  version        Int
+  status         AccountingPolicyStatus @default(DRAFT)
+  effectiveFrom  DateTime               @map("effective_from") @db.Date
+  effectiveTo    DateTime?              @map("effective_to") @db.Date
+  parameters     Json
+  approvedById   String?                @map("approved_by_id")
+  approvedAt     DateTime?              @map("approved_at")
+  createdById    String                 @map("created_by_id")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  mappings       AccountingMappingRule[]
+  events         AccountingEvent[]
+  entries        AccountingEntry[]
+
+  @@unique([organizationId, companyId, projectId, policyType, name, version])
+  @@index([organizationId, companyId, projectId, status, effectiveFrom])
+  @@map("accounting_policies")
+}
+
+model AccountingMappingRule {
+  id              String                  @id @default(cuid())
+  organizationId  String                  @map("organization_id")
+  companyId       String?                 @map("company_id")
+  projectId       String?                 @map("project_id")
+  policyId        String                  @map("policy_id")
+  sourceModule    String                  @map("source_module")
+  sourceType      String                  @map("source_type")
+  eventType       String                  @map("event_type")
+  version         Int
+  priority        Int                     @default(0)
+  status          AccountingMappingStatus @default(DRAFT)
+  effectiveFrom   DateTime                @map("effective_from") @db.Date
+  effectiveTo     DateTime?               @map("effective_to") @db.Date
+  criteria        Json
+  debitAccountId  String                  @map("debit_account_id")
+  creditAccountId String                  @map("credit_account_id")
+  historyTemplate String                  @map("history_template")
+  createdById     String                  @map("created_by_id")
+  approvedById    String?                 @map("approved_by_id")
+  createdAt       DateTime                @default(now()) @map("created_at")
+  policy          AccountingPolicy        @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  debitAccount    LedgerAccount           @relation("MappingDebitAccount", fields: [debitAccountId], references: [id], onDelete: Restrict)
+  creditAccount   LedgerAccount           @relation("MappingCreditAccount", fields: [creditAccountId], references: [id], onDelete: Restrict)
+  events          AccountingEvent[]
+
+  @@unique([organizationId, sourceModule, sourceType, eventType, version, priority])
+  @@index([organizationId, companyId, projectId, status, effectiveFrom])
+  @@map("accounting_mapping_rules")
+}
+
+model AccountingPeriod {
+  id                    String                 @id @default(cuid())
+  organizationId        String                 @map("organization_id")
+  companyId             String                 @map("company_id")
+  referenceMonth        DateTime               @map("reference_month") @db.Date
+  status                AccountingPeriodStatus @default(OPEN)
+  financialClosureId    String?                @map("financial_closure_id")
+  materialityPolicyId   String?                @map("materiality_policy_id")
+  reviewedById          String?                @map("reviewed_by_id")
+  closedById            String?                @map("closed_by_id")
+  closedAt              DateTime?              @map("closed_at")
+  reopenedById          String?                @map("reopened_by_id")
+  reopenedAt            DateTime?              @map("reopened_at")
+  reopeningReason       String?                @map("reopening_reason") @db.Text
+  checklistSnapshot     Json?                  @map("checklist_snapshot")
+  closeChecksum         String?                @map("close_checksum")
+  createdById           String                 @map("created_by_id")
+  updatedById           String                 @map("updated_by_id")
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+  events                AccountingEvent[]
+  entries               AccountingEntry[]
+  snapshots             LedgerSnapshot[]
+  reconciliations       AccountingReconciliation[]
+
+  @@unique([organizationId, companyId, referenceMonth])
+  @@index([organizationId, companyId, status, referenceMonth])
+  @@map("accounting_periods")
+}
+
+model AccountingEvent {
+  id                  String                @id @default(cuid())
+  organizationId      String                @map("organization_id")
+  companyId           String                @map("company_id")
+  projectId           String?               @map("project_id")
+  costCenterId        String?               @map("cost_center_id")
+  economicItemId      String?               @map("economic_item_id")
+  periodId            String?               @map("period_id")
+  policyId            String?               @map("policy_id")
+  mappingRuleId       String?               @map("mapping_rule_id")
+  sourceModule        String                @map("source_module")
+  sourceType          String                @map("source_type")
+  sourceId            String                @map("source_id")
+  sourceVersion       String                @map("source_version")
+  economicIdentityKey String                @map("economic_identity_key")
+  eventType           String                @map("event_type")
+  eventVersion        Int                   @default(1) @map("event_version")
+  schemaVersion       Int                   @default(1) @map("schema_version")
+  idempotencyKey      String                @map("idempotency_key")
+  payloadChecksum     String                @map("payload_checksum")
+  occurredAt          DateTime              @map("occurred_at")
+  competenceDate      DateTime              @map("competence_date") @db.Date
+  documentIssuedAt    DateTime?             @map("document_issued_at")
+  dueAt               DateTime?             @map("due_at")
+  proposedAccountingDate DateTime?          @map("proposed_accounting_date") @db.Date
+  settledAt           DateTime?             @map("settled_at")
+  reconciledAt        DateTime?             @map("reconciled_at")
+  grossAmount         Decimal               @map("gross_amount") @db.Decimal(20, 2)
+  withholdingAmount   Decimal               @default(0) @map("withholding_amount") @db.Decimal(20, 2)
+  discountAmount      Decimal               @default(0) @map("discount_amount") @db.Decimal(20, 2)
+  netAmount           Decimal               @map("net_amount") @db.Decimal(20, 2)
+  currency            String                @default("BRL") @db.Char(3)
+  status              AccountingEventStatus @default(RECEIVED)
+  provenance          Json
+  normalizedPayload   Json                  @map("normalized_payload")
+  classificationError String?               @map("classification_error") @db.Text
+  createdById         String                @map("created_by_id")
+  createdAt           DateTime              @default(now()) @map("created_at")
+  period              AccountingPeriod?     @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  policy              AccountingPolicy?     @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  mappingRule         AccountingMappingRule? @relation(fields: [mappingRuleId], references: [id], onDelete: Restrict)
+  entries             AccountingEntry[]
+  provisions          AccountingProvision[]
+  inventoryMovements  InventoryCostMovement[]
+
+  @@unique([organizationId, idempotencyKey])
+  @@unique([organizationId, sourceModule, sourceType, sourceId, sourceVersion, eventType])
+  @@index([organizationId, companyId, projectId, competenceDate, status])
+  @@index([organizationId, economicIdentityKey, eventType])
+  @@map("accounting_events")
+}
+
+model AccountingEntry {
+  id             String                @id @default(cuid())
+  organizationId String                @map("organization_id")
+  companyId      String                @map("company_id")
+  projectId      String?               @map("project_id")
+  periodId       String                @map("period_id")
+  eventId        String?               @map("event_id")
+  policyId       String?               @map("policy_id")
+  bookType       AccountingBookType    @default(STATUTORY) @map("book_type")
+  entryNumber    String                @map("entry_number")
+  accountingDate DateTime              @map("accounting_date") @db.Date
+  competenceDate DateTime              @map("competence_date") @db.Date
+  description    String
+  status         AccountingEntryStatus @default(DRAFT)
+  totalDebit     Decimal               @default(0) @map("total_debit") @db.Decimal(20, 2)
+  totalCredit    Decimal               @default(0) @map("total_credit") @db.Decimal(20, 2)
+  checksum       String
+  postedById     String?               @map("posted_by_id")
+  postedAt       DateTime?             @map("posted_at")
+  createdById    String                @map("created_by_id")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  period         AccountingPeriod      @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  event          AccountingEvent?      @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  policy         AccountingPolicy?     @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  lines          AccountingEntryLine[]
+  reversalAsOriginal AccountingReversal[] @relation("ReversalOriginal")
+  reversalAsReversal AccountingReversal[] @relation("ReversalEntry")
+
+  @@unique([organizationId, companyId, entryNumber])
+  @@unique([eventId, bookType])
+  @@index([organizationId, companyId, accountingDate, status])
+  @@index([organizationId, projectId, competenceDate])
+  @@map("accounting_entries")
+}
+
+model AccountingEntryLine {
+  id             String              @id @default(cuid())
+  entryId        String              @map("entry_id")
+  accountId      String              @map("account_id")
+  sequence       Int
+  side           AccountingEntrySide
+  amount         Decimal             @db.Decimal(20, 2)
+  history        String
+  projectId      String?             @map("project_id")
+  costCenterId   String?             @map("cost_center_id")
+  economicItemId String?             @map("economic_item_id")
+  contractId     String?             @map("contract_id")
+  supplierId     String?             @map("supplier_id")
+  documentRef    String?             @map("document_ref")
+  entry          AccountingEntry     @relation(fields: [entryId], references: [id], onDelete: Restrict)
+  account        LedgerAccount       @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([entryId, sequence])
+  @@index([accountId, entryId])
+  @@index([projectId, costCenterId, economicItemId])
+  @@map("accounting_entry_lines")
+}
+
+model AccountingReversal {
+  id              String          @id @default(cuid())
+  organizationId  String          @map("organization_id")
+  originalEntryId String          @map("original_entry_id")
+  reversalEntryId String          @unique @map("reversal_entry_id")
+  replacementEntryId String?      @map("replacement_entry_id")
+  reason          String          @db.Text
+  approvedById    String?         @map("approved_by_id")
+  createdById     String          @map("created_by_id")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  originalEntry   AccountingEntry @relation("ReversalOriginal", fields: [originalEntryId], references: [id], onDelete: Restrict)
+  reversalEntry   AccountingEntry @relation("ReversalEntry", fields: [reversalEntryId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, originalEntryId])
+  @@map("accounting_reversals")
+}
+
+model LedgerSnapshot {
+  id             String           @id @default(cuid())
+  organizationId String           @map("organization_id")
+  companyId      String           @map("company_id")
+  periodId       String           @map("period_id")
+  snapshotType   String           @map("snapshot_type")
+  balances       Json
+  totalDebit     Decimal          @map("total_debit") @db.Decimal(20, 2)
+  totalCredit    Decimal          @map("total_credit") @db.Decimal(20, 2)
+  checksum       String
+  createdById    String           @map("created_by_id")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  period         AccountingPeriod @relation(fields: [periodId], references: [id], onDelete: Restrict)
+
+  @@unique([periodId, snapshotType])
+  @@index([organizationId, companyId, createdAt])
+  @@map("ledger_snapshots")
+}
+
+model AccountingProvision {
+  id              String                    @id @default(cuid())
+  organizationId  String                    @map("organization_id")
+  companyId       String                    @map("company_id")
+  projectId       String?                   @map("project_id")
+  eventId         String?                   @map("event_id")
+  economicIdentityKey String                @map("economic_identity_key")
+  provisionType   String                    @map("provision_type")
+  competenceDate  DateTime                  @map("competence_date") @db.Date
+  amount          Decimal                   @db.Decimal(20, 2)
+  method          String
+  confidence      String
+  evidence        Json
+  policyVersion   String                    @map("policy_version")
+  status          AccountingProvisionStatus @default(ACTIVE)
+  reversalDate    DateTime?                 @map("reversal_date") @db.Date
+  createdById     String                    @map("created_by_id")
+  updatedById     String                    @map("updated_by_id")
+  createdAt       DateTime                  @default(now()) @map("created_at")
+  updatedAt       DateTime                  @updatedAt @map("updated_at")
+  event           AccountingEvent?          @relation(fields: [eventId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, economicIdentityKey, competenceDate])
+  @@index([organizationId, companyId, projectId, status])
+  @@map("accounting_provisions")
+}
+
+model InventoryCostPool {
+  id             String                  @id @default(cuid())
+  organizationId String                  @map("organization_id")
+  companyId      String                  @map("company_id")
+  projectId      String                  @map("project_id")
+  code           String
+  name           String
+  category       String
+  accountingPeriodId String?             @map("accounting_period_id")
+  totalAmount    Decimal                 @map("total_amount") @db.Decimal(20, 2)
+  currency       String                  @default("BRL") @db.Char(3)
+  policyVersion  String                  @map("policy_version")
+  createdById    String                  @map("created_by_id")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  movements      InventoryCostMovement[]
+  allocationRuns UnitCostAllocationRun[]
+
+  @@unique([organizationId, projectId, code])
+  @@index([organizationId, companyId, projectId])
+  @@map("inventory_cost_pools")
+}
+
+model InventoryCostMovement {
+  id             String                @id @default(cuid())
+  poolId         String                @map("pool_id")
+  eventId        String?               @map("event_id")
+  entryId        String?               @map("entry_id")
+  movementType   InventoryMovementType @map("movement_type")
+  occurredAt     DateTime              @map("occurred_at")
+  competenceDate DateTime              @map("competence_date") @db.Date
+  amount         Decimal               @db.Decimal(20, 2)
+  sourceType     String                @map("source_type")
+  sourceId       String                @map("source_id")
+  memo           String?
+  createdById    String                @map("created_by_id")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  pool           InventoryCostPool     @relation(fields: [poolId], references: [id], onDelete: Restrict)
+  event          AccountingEvent?      @relation(fields: [eventId], references: [id], onDelete: Restrict)
+
+  @@unique([poolId, sourceType, sourceId, movementType])
+  @@index([poolId, competenceDate])
+  @@map("inventory_cost_movements")
+}
+
+model UnitCostAllocationRun {
+  id              String              @id @default(cuid())
+  organizationId  String              @map("organization_id")
+  companyId       String              @map("company_id")
+  projectId       String              @map("project_id")
+  poolId          String              @map("pool_id")
+  version         Int
+  criterion       String
+  driverSnapshot  Json                @map("driver_snapshot")
+  sourceAmount    Decimal             @map("source_amount") @db.Decimal(20, 2)
+  allocatedAmount Decimal             @map("allocated_amount") @db.Decimal(20, 2)
+  residualAmount  Decimal             @map("residual_amount") @db.Decimal(20, 2)
+  proofZero       Boolean             @map("proof_zero")
+  status          AccountingRunStatus @default(CALCULATED)
+  checksum        String
+  approvedById    String?             @map("approved_by_id")
+  createdById     String              @map("created_by_id")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  pool            InventoryCostPool   @relation(fields: [poolId], references: [id], onDelete: Restrict)
+  lines           UnitCostAllocationLine[]
+
+  @@unique([poolId, version])
+  @@index([organizationId, companyId, projectId, status])
+  @@map("unit_cost_allocation_runs")
+}
+
+model UnitCostAllocationLine {
+  id             String                @id @default(cuid())
+  runId          String                @map("run_id")
+  salesUnitId    String                @map("sales_unit_id")
+  unitCode       String                @map("unit_code")
+  driverValue    Decimal               @map("driver_value") @db.Decimal(20, 6)
+  allocationRate Decimal               @map("allocation_rate") @db.Decimal(12, 9)
+  allocatedAmount Decimal              @map("allocated_amount") @db.Decimal(20, 2)
+  memory         Json
+  run            UnitCostAllocationRun @relation(fields: [runId], references: [id], onDelete: Restrict)
+
+  @@unique([runId, salesUnitId])
+  @@index([salesUnitId])
+  @@map("unit_cost_allocation_lines")
+}
+
+model RevenueRecognitionRun {
+  id              String              @id @default(cuid())
+  organizationId  String              @map("organization_id")
+  companyId       String              @map("company_id")
+  projectId       String              @map("project_id")
+  policyId        String              @map("policy_id")
+  cutoffDate      DateTime            @map("cutoff_date") @db.Date
+  version         Int
+  status          AccountingRunStatus @default(CALCULATED)
+  totalVgv        Decimal             @map("total_vgv") @db.Decimal(20, 2)
+  totalReceivable Decimal             @map("total_receivable") @db.Decimal(20, 2)
+  totalCash       Decimal             @map("total_cash") @db.Decimal(20, 2)
+  recognizedRevenue Decimal           @map("recognized_revenue") @db.Decimal(20, 2)
+  recognizedCost  Decimal             @map("recognized_cost") @db.Decimal(20, 2)
+  checksum        String
+  createdById     String              @map("created_by_id")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  lines           RevenueRecognitionLine[]
+
+  @@unique([organizationId, projectId, cutoffDate, version])
+  @@index([organizationId, companyId, projectId, status])
+  @@map("revenue_recognition_runs")
+}
+
+model RevenueRecognitionLine {
+  id                 String                @id @default(cuid())
+  runId              String                @map("run_id")
+  salesContractId    String                @map("sales_contract_id")
+  salesUnitId        String                @map("sales_unit_id")
+  vgv                Decimal               @db.Decimal(20, 2)
+  receivable         Decimal               @db.Decimal(20, 2)
+  cashReceived       Decimal               @map("cash_received") @db.Decimal(20, 2)
+  revenueRecognized  Decimal               @map("revenue_recognized") @db.Decimal(20, 2)
+  costRecognized     Decimal               @map("cost_recognized") @db.Decimal(20, 2)
+  margin             Decimal               @db.Decimal(20, 2)
+  recognitionBasis   Json                  @map("recognition_basis")
+  run                RevenueRecognitionRun @relation(fields: [runId], references: [id], onDelete: Restrict)
+
+  @@unique([runId, salesContractId])
+  @@index([salesUnitId])
+  @@map("revenue_recognition_lines")
+}
+
+model TaxRegimeAssignment {
+  id             String        @id @default(cuid())
+  organizationId String        @map("organization_id")
+  companyId      String        @map("company_id")
+  projectId      String?       @map("project_id")
+  regime         TaxRegimeType
+  effectiveFrom  DateTime      @map("effective_from") @db.Date
+  effectiveTo    DateTime?     @map("effective_to") @db.Date
+  parameters     Json
+  evidence       Json?
+  approvedById   String?       @map("approved_by_id")
+  createdById    String        @map("created_by_id")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  policies       TaxPolicy[]
+
+  @@unique([companyId, projectId, effectiveFrom])
+  @@index([organizationId, companyId, regime, effectiveFrom])
+  @@map("tax_regime_assignments")
+}
+
+model TaxPolicy {
+  id             String              @id @default(cuid())
+  organizationId String              @map("organization_id")
+  assignmentId   String              @map("assignment_id")
+  taxCode        String              @map("tax_code")
+  name           String
+  version        Int
+  jurisdiction   String
+  effectiveFrom  DateTime            @map("effective_from") @db.Date
+  effectiveTo    DateTime?           @map("effective_to") @db.Date
+  parameters     Json
+  normativeSource String?            @map("normative_source")
+  approvedById   String?             @map("approved_by_id")
+  createdById    String              @map("created_by_id")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  assignment     TaxRegimeAssignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assessments    TaxAssessment[]
+
+  @@unique([assignmentId, taxCode, version])
+  @@index([organizationId, taxCode, effectiveFrom])
+  @@map("tax_policies")
+}
+
+model FiscalDocumentReference {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  companyId      String   @map("company_id")
+  projectId      String?  @map("project_id")
+  documentId     String   @map("document_id")
+  documentType   String   @map("document_type")
+  documentKey    String?  @map("document_key")
+  issuer         String?
+  recipient      String?
+  issuedAt       DateTime? @map("issued_at")
+  amount         Decimal? @db.Decimal(20, 2)
+  checksum       String
+  createdById    String   @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, documentId])
+  @@index([organizationId, companyId, issuedAt])
+  @@map("fiscal_document_references")
+}
+
+model TaxAssessment {
+  id             String              @id @default(cuid())
+  organizationId String              @map("organization_id")
+  companyId      String              @map("company_id")
+  projectId      String?             @map("project_id")
+  policyId       String              @map("policy_id")
+  referenceMonth DateTime            @map("reference_month") @db.Date
+  version        Int
+  status         AccountingRunStatus @default(DRAFT)
+  taxCode        String              @map("tax_code")
+  taxableBase    Decimal             @map("taxable_base") @db.Decimal(20, 2)
+  assessedAmount Decimal             @map("assessed_amount") @db.Decimal(20, 2)
+  dueAt          DateTime?           @map("due_at") @db.Date
+  checksum       String
+  approvedById   String?             @map("approved_by_id")
+  createdById    String              @map("created_by_id")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  policy         TaxPolicy           @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  lines          TaxAssessmentLine[]
+  obligation     TaxObligationLink?
+
+  @@unique([organizationId, companyId, referenceMonth, taxCode, version])
+  @@index([organizationId, companyId, status, dueAt])
+  @@map("tax_assessments")
+}
+
+model TaxAssessmentLine {
+  id             String        @id @default(cuid())
+  assessmentId   String        @map("assessment_id")
+  sourceType     String        @map("source_type")
+  sourceId       String        @map("source_id")
+  taxableBase    Decimal       @map("taxable_base") @db.Decimal(20, 2)
+  rate           Decimal       @db.Decimal(12, 9)
+  adjustment     Decimal       @default(0) @db.Decimal(20, 2)
+  assessedAmount Decimal       @map("assessed_amount") @db.Decimal(20, 2)
+  memory         Json
+  assessment     TaxAssessment @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+
+  @@unique([assessmentId, sourceType, sourceId])
+  @@map("tax_assessment_lines")
+}
+
+model TaxObligationLink {
+  id                    String        @id @default(cuid())
+  organizationId        String        @map("organization_id")
+  assessmentId          String        @unique @map("assessment_id")
+  financialObligationId String        @unique @map("financial_obligation_id")
+  idempotencyKey        String        @unique @map("idempotency_key")
+  linkedById            String        @map("linked_by_id")
+  linkedAt              DateTime      @default(now()) @map("linked_at")
+  assessment            TaxAssessment @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, linkedAt])
+  @@map("tax_obligation_links")
+}
+
+model AccountingAllocationRun {
+  id              String              @id @default(cuid())
+  organizationId  String              @map("organization_id")
+  companyId       String              @map("company_id")
+  referenceMonth  DateTime            @map("reference_month") @db.Date
+  sourceType      String              @map("source_type")
+  sourceId        String              @map("source_id")
+  driver          String
+  driverSnapshot  Json                @map("driver_snapshot")
+  sourceAmount    Decimal             @map("source_amount") @db.Decimal(20, 2)
+  allocatedAmount Decimal             @map("allocated_amount") @db.Decimal(20, 2)
+  residualAmount  Decimal             @map("residual_amount") @db.Decimal(20, 2)
+  proofZero       Boolean             @map("proof_zero")
+  status          AccountingRunStatus @default(CALCULATED)
+  checksum        String
+  createdById     String              @map("created_by_id")
+  approvedById    String?             @map("approved_by_id")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  lines           AccountingAllocationLine[]
+
+  @@unique([organizationId, sourceType, sourceId, referenceMonth])
+  @@index([organizationId, companyId, referenceMonth, status])
+  @@map("accounting_allocation_runs")
+}
+
+model AccountingAllocationLine {
+  id              String                  @id @default(cuid())
+  runId           String                  @map("run_id")
+  targetCompanyId String                  @map("target_company_id")
+  targetProjectId String?                 @map("target_project_id")
+  driverValue     Decimal                 @map("driver_value") @db.Decimal(20, 6)
+  allocationRate  Decimal                 @map("allocation_rate") @db.Decimal(12, 9)
+  allocatedAmount Decimal                 @map("allocated_amount") @db.Decimal(20, 2)
+  run             AccountingAllocationRun @relation(fields: [runId], references: [id], onDelete: Restrict)
+
+  @@unique([runId, targetCompanyId, targetProjectId])
+  @@index([targetCompanyId, targetProjectId])
+  @@map("accounting_allocation_lines")
+}
+
+model AccountingReconciliation {
+  id             String                         @id @default(cuid())
+  organizationId String                         @map("organization_id")
+  companyId      String                         @map("company_id")
+  projectId      String?                        @map("project_id")
+  periodId       String                         @map("period_id")
+  reconciliationType String                     @map("reconciliation_type")
+  status         AccountingReconciliationStatus @default(OPEN)
+  sourceAmount   Decimal                        @map("source_amount") @db.Decimal(20, 2)
+  ledgerAmount   Decimal                        @map("ledger_amount") @db.Decimal(20, 2)
+  differenceAmount Decimal                      @map("difference_amount") @db.Decimal(20, 2)
+  material       Boolean
+  evidence       Json
+  resolvedById   String?                        @map("resolved_by_id")
+  resolvedAt     DateTime?                      @map("resolved_at")
+  createdById    String                         @map("created_by_id")
+  createdAt      DateTime                       @default(now()) @map("created_at")
+  period         AccountingPeriod               @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  items          AccountingReconciliationItem[]
+
+  @@unique([periodId, reconciliationType, projectId])
+  @@index([organizationId, companyId, status, material])
+  @@map("accounting_reconciliations")
+}
+
+model AccountingReconciliationItem {
+  id               String                   @id @default(cuid())
+  reconciliationId String                   @map("reconciliation_id")
+  sourceType       String                   @map("source_type")
+  sourceId         String                   @map("source_id")
+  ledgerEntryId    String?                  @map("ledger_entry_id")
+  sourceAmount     Decimal                  @map("source_amount") @db.Decimal(20, 2)
+  ledgerAmount     Decimal                  @map("ledger_amount") @db.Decimal(20, 2)
+  differenceAmount Decimal                  @map("difference_amount") @db.Decimal(20, 2)
+  notes            String?
+  reconciliation   AccountingReconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Restrict)
+
+  @@unique([reconciliationId, sourceType, sourceId])
+  @@map("accounting_reconciliation_items")
+}
+
+model ConsolidationScope {
+  id              String             @id @default(cuid())
+  organizationId  String             @map("organization_id")
+  economicGroupId String             @map("economic_group_id")
+  name            String
+  version         Int
+  effectiveFrom   DateTime           @map("effective_from") @db.Date
+  effectiveTo     DateTime?          @map("effective_to") @db.Date
+  companies       Json
+  method          String
+  createdById     String             @map("created_by_id")
+  approvedById    String?            @map("approved_by_id")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  runs            ConsolidationRun[]
+
+  @@unique([organizationId, economicGroupId, name, version])
+  @@index([organizationId, economicGroupId, effectiveFrom])
+  @@map("consolidation_scopes")
+}
+
+model ConsolidationRun {
+  id                 String              @id @default(cuid())
+  organizationId     String              @map("organization_id")
+  economicGroupId    String              @map("economic_group_id")
+  scopeId            String              @map("scope_id")
+  referenceMonth     DateTime            @map("reference_month") @db.Date
+  version            Int
+  status             AccountingRunStatus @default(DRAFT)
+  individualAmount   Decimal             @map("individual_amount") @db.Decimal(20, 2)
+  adjustmentAmount   Decimal             @default(0) @map("adjustment_amount") @db.Decimal(20, 2)
+  eliminationAmount  Decimal             @default(0) @map("elimination_amount") @db.Decimal(20, 2)
+  consolidatedAmount Decimal             @map("consolidated_amount") @db.Decimal(20, 2)
+  proofZero          Boolean             @map("proof_zero")
+  checksum           String
+  createdById        String              @map("created_by_id")
+  approvedById       String?             @map("approved_by_id")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  scope              ConsolidationScope  @relation(fields: [scopeId], references: [id], onDelete: Restrict)
+  packages           ConsolidationPackage[]
+  eliminations       ConsolidationElimination[]
+  snapshot           ConsolidatedBalanceSnapshot?
+
+  @@unique([scopeId, referenceMonth, version])
+  @@index([organizationId, economicGroupId, referenceMonth, status])
+  @@map("consolidation_runs")
+}
+
+model ConsolidationPackage {
+  id             String           @id @default(cuid())
+  runId          String           @map("run_id")
+  companyId      String           @map("company_id")
+  periodId       String           @map("period_id")
+  closingSnapshotId String?       @map("closing_snapshot_id")
+  debitTotal     Decimal          @map("debit_total") @db.Decimal(20, 2)
+  creditTotal    Decimal          @map("credit_total") @db.Decimal(20, 2)
+  netAmount      Decimal          @map("net_amount") @db.Decimal(20, 2)
+  balances       Json
+  checksum       String
+  run            ConsolidationRun @relation(fields: [runId], references: [id], onDelete: Restrict)
+
+  @@unique([runId, companyId])
+  @@index([companyId, periodId])
+  @@map("consolidation_packages")
+}
+
+model ConsolidationElimination {
+  id              String           @id @default(cuid())
+  runId           String           @map("run_id")
+  fromCompanyId   String           @map("from_company_id")
+  toCompanyId     String           @map("to_company_id")
+  sourceType      String           @map("source_type")
+  sourceId        String           @map("source_id")
+  debitAccountId  String?          @map("debit_account_id")
+  creditAccountId String?          @map("credit_account_id")
+  amount          Decimal          @db.Decimal(20, 2)
+  justification   String           @db.Text
+  evidence        Json
+  approvedById    String?          @map("approved_by_id")
+  createdById     String           @map("created_by_id")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  run             ConsolidationRun @relation(fields: [runId], references: [id], onDelete: Restrict)
+
+  @@unique([runId, sourceType, sourceId])
+  @@index([fromCompanyId, toCompanyId])
+  @@map("consolidation_eliminations")
+}
+
+model ConsolidatedBalanceSnapshot {
+  id             String           @id @default(cuid())
+  runId          String           @unique @map("run_id")
+  balances       Json
+  statements     Json
+  checksum       String
+  createdById    String           @map("created_by_id")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  run            ConsolidationRun @relation(fields: [runId], references: [id], onDelete: Restrict)
+
+  @@map("consolidated_balance_snapshots")
+}

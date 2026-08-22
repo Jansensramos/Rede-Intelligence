@@ -14,7 +14,8 @@ async function main() {
     const response = await fetch(baseUrl, { headers: { cookie: `${cookieName}=${token}` }, redirect: "manual" });
     const html = await response.text();
     if (response.status !== 200) throw new Error(`Página inicial respondeu HTTP ${response.status}.`);
-    for (const marker of ["START BUTANTÃ", "Pessoas e Eficiência", "Visão executiva", "REDE AI"]) {
+    const markers = ["START BUTANTÃ", "Visão executiva", "Orçamento", "Suprimentos e Contratos", "Jurídico e Diligência", "Financeiro", "Vendas e Recebíveis", "Pessoas e Eficiência", "Contabilidade e Controladoria", "REDE AI"];
+    for (const marker of markers) {
       if (!html.includes(marker)) throw new Error(`Marcador ausente na página autenticada: ${marker}.`);
     }
     if (/Runtime TypeError|__webpack_modules__\[moduleId\] is not a function|Application error/i.test(html)) throw new Error("A página autenticada contém um erro crítico de runtime.");
@@ -22,7 +23,7 @@ async function main() {
     const scriptStatuses = await Promise.all(scriptPaths.map(async (path) => ({ path, status: (await fetch(new URL(path, baseUrl))).status })));
     const failedScripts = scriptStatuses.filter((item) => item.status !== 200);
     if (failedScripts.length) throw new Error(`Chunks JavaScript indisponíveis: ${JSON.stringify(failedScripts)}.`);
-    console.info(JSON.stringify({ status: response.status, authenticated: true, markers: 4, scripts: scriptStatuses.length, runtimeErrorInHtml: false }));
+    console.info(JSON.stringify({ status: response.status, authenticated: true, markers: markers.length, scripts: scriptStatuses.length, runtimeErrorInHtml: false }));
   } finally {
     await prisma.session.deleteMany({ where: { id: session.id } });
   }

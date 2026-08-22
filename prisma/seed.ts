@@ -57,6 +57,7 @@ import {
   scheduleInspection, upsertBrokerProfile,
 } from "../src/application/sales/sales-service";
 import { allocateAdministrativeCost, calculateEfficiencyVariance, simulateIncentivePool } from "../src/domain/people-performance";
+import { seedAccountingDemo } from "./seed-accounting";
 
 async function main() {
   const passwordHash = await hash("Rede@2026", 12);
@@ -499,6 +500,30 @@ async function main() {
   const existingSimulation = await prisma.incentiveSimulation.findFirst({ where: { organizationId: organization.id, projectId: butantaStudy.projectId, name: "Simulação 9F — economia validada de fundações" } });
   if (!existingSimulation) await prisma.incentiveSimulation.create({ data: { organizationId: organization.id, projectId: butantaStudy.projectId, policyId: incentivePolicy.id, validatedSavingId: validatedSaving?.id ?? null, name: "Simulação 9F — economia validada de fundações", status: "CALCULATED", validatedSavingAmount: incentiveResult.validatedSavingAmount, implementationCost: "12000", reversalAmount: "0", eligibleBase: incentiveResult.eligibleBase, simulatedPool: incentiveResult.simulatedPool, inputSnapshot: { policyVersion: incentivePolicy.version, validatedSavingId: validatedSaving?.id ?? null, paymentCreated: false }, checksum: createHash("sha256").update(`9F-incentive-${validatedSaving?.id ?? "none"}`).digest("hex"), createdById: user.id } });
 
+  const salesContract = await prisma.salesContract.findUniqueOrThrow({ where: { saleId: sale.id } });
+  const accountingDemo = await seedAccountingDemo(prisma, {
+    organizationId: organization.id,
+    userId: user.id,
+    economicGroupId: economicGroup.id,
+    holdingCompanyId: holdingCompany.id,
+    companyId: company.id,
+    projectId: butantaStudy.projectId,
+    costCenterId: officialLine.costCenterId,
+    economicItemId: officialLine.economicItemId,
+    budgetTotal: officialBudget.totalBudget.toString(),
+    contractId: operationalContract.id,
+    contractAmount: operationalContract.originalAmount.toString(),
+    measurementId: measurement.id,
+    measurementAmount: measurement.grossAmount.toString(),
+    payableId: payableAccount.id,
+    intercompanyId: intercompanyTransaction.id,
+    intercompanyAmount: intercompanyTransaction.amount.toString(),
+    saleId: sale.id,
+    salesContractId: salesContract.id,
+    soldPrice: sale.soldPrice.toString(),
+    salesUnits: [salesUnitSold, salesUnitBlocked, salesUnitAvailable].map((unit) => ({ id: unit.id, code: unit.code, privateAreaM2: unit.privateAreaM2.toString() })),
+  });
+
   await prisma.viabilityStudy.update({ where: { id: study.studyId }, data: { updatedById: user.id } });
   const landStudy = legalLandWorkspace;
   const investmentCase = await ensureInvestmentCase({ userId: user.id, organizationId: organization.id });
@@ -525,7 +550,7 @@ async function main() {
   });
 
   await prisma.session.deleteMany({ where: { expiresAt: { lt: new Date() } } });
-  console.info(`Seed concluído: ${organization.name} · ${user.email} · viabilidade v${study.versionNumber} · START BUTANTÃ v${butantaStudy.versionNumber} · Orçamento ${butantaBudget.id} · Base Aprovada v${operationalBaseline.version} · Orçamento Oficial v${officialBudget.version} (${officialBudget.totalBudget}) · Cronograma v${operationalSchedule.version} · Financeiro: ${operationalBankAccount.id === fundingBankAccount.id ? 1 : 2} contas bancárias, Conta a Pagar ${payableAccount.id}, Conta a Receber ${receivableAccount.id}, Intercompany ${intercompanyTransaction.id} · Suprimentos: ${requisition.number}, ${quotation.number}, ${purchaseOrder.number}, ${operationalContract.number}, BM ${measurement.number} · Jurídico: ${diligence.code}, ${landContract.number}, ${legalObligation.code} · Vendas: ${salesUnitSold.code} (${deliveredUnit.status}), ${salesUnitBlocked.code} (bloqueada), ${salesUnitAvailable.code} (disponível), venda ${sale.id} (${sale.status}), comissão ${salesCommission.status}, pós-venda ${postSaleRequest.id} · Pessoas 9F: ${relationships.length} profissionais, ${projectTeam.name}, desvio ${varianceCase.code} (economia=${varianceCase.savingEligible}), ação ${correctiveAction.status}, incentivo somente simulado · Land v${landStudy.versionNumber} · Investment Case ${investmentCase.id} · Design ${designWorkspace.revision.label} (${designWorkspace.findings.length} findings derivados) · Dossiê ${demoMasterReport.reportId} (${demoMasterReport.pageCount} páginas) · REDE AI ${AI_PROMPT_VERSION} (${aiTasks.length} políticas)`);
+  console.info(`Seed concluído: ${organization.name} · ${user.email} · viabilidade v${study.versionNumber} · START BUTANTÃ v${butantaStudy.versionNumber} · Orçamento ${butantaBudget.id} · Base Aprovada v${operationalBaseline.version} · Orçamento Oficial v${officialBudget.version} (${officialBudget.totalBudget}) · Cronograma v${operationalSchedule.version} · Financeiro: ${operationalBankAccount.id === fundingBankAccount.id ? 1 : 2} contas bancárias, Conta a Pagar ${payableAccount.id}, Conta a Receber ${receivableAccount.id}, Intercompany ${intercompanyTransaction.id} · Suprimentos: ${requisition.number}, ${quotation.number}, ${purchaseOrder.number}, ${operationalContract.number}, BM ${measurement.number} · Jurídico: ${diligence.code}, ${landContract.number}, ${legalObligation.code} · Vendas: ${salesUnitSold.code} (${deliveredUnit.status}), ${salesUnitBlocked.code} (bloqueada), ${salesUnitAvailable.code} (disponível), venda ${sale.id} (${sale.status}), comissão ${salesCommission.status}, pós-venda ${postSaleRequest.id} · Pessoas 9F: ${relationships.length} profissionais, ${projectTeam.name}, desvio ${varianceCase.code} (economia=${varianceCase.savingEligible}), ação ${correctiveAction.status}, incentivo somente simulado · Contabilidade 9G: plano ${accountingDemo.chartVersion.version}, período ${accountingDemo.october.status}, estoque ${accountingDemo.pool.totalAmount}, receita ${accountingDemo.revenueRun.recognizedRevenue}, tributo configurado ${accountingDemo.taxAssessment.assessedAmount}, consolidado ${accountingDemo.consolidation.consolidatedAmount} · Land v${landStudy.versionNumber} · Investment Case ${investmentCase.id} · Design ${designWorkspace.revision.label} (${designWorkspace.findings.length} findings derivados) · Dossiê ${demoMasterReport.reportId} (${demoMasterReport.pageCount} páginas) · REDE AI ${AI_PROMPT_VERSION} (${aiTasks.length} políticas)`);
 }
 
 main()

@@ -1,0 +1,23 @@
+import type { MembershipRole } from "@prisma/client";
+
+export type AccountingCapability =
+  | "ACCOUNTING_VIEW" | "ACCOUNTING_CLASSIFY" | "ACCOUNTING_ENTRY_CREATE" | "ACCOUNTING_ENTRY_REVIEW"
+  | "ACCOUNTING_ENTRY_POST" | "ACCOUNTING_REVERSE" | "ACCOUNTING_CLOSE" | "ACCOUNTING_REOPEN"
+  | "TAX_VIEW" | "TAX_MANAGE" | "CONSOLIDATION_VIEW" | "CONSOLIDATION_MANAGE";
+
+const readOnly: AccountingCapability[] = ["ACCOUNTING_VIEW", "TAX_VIEW", "CONSOLIDATION_VIEW"];
+const matrix: Record<MembershipRole, AccountingCapability[]> = {
+  OWNER: ["ACCOUNTING_VIEW", "ACCOUNTING_CLASSIFY", "ACCOUNTING_ENTRY_CREATE", "ACCOUNTING_ENTRY_REVIEW", "ACCOUNTING_ENTRY_POST", "ACCOUNTING_REVERSE", "ACCOUNTING_CLOSE", "ACCOUNTING_REOPEN", "TAX_VIEW", "TAX_MANAGE", "CONSOLIDATION_VIEW", "CONSOLIDATION_MANAGE"],
+  ADMIN: ["ACCOUNTING_VIEW", "ACCOUNTING_CLASSIFY", "ACCOUNTING_ENTRY_CREATE", "ACCOUNTING_ENTRY_REVIEW", "ACCOUNTING_ENTRY_POST", "ACCOUNTING_REVERSE", "ACCOUNTING_CLOSE", "TAX_VIEW", "TAX_MANAGE", "CONSOLIDATION_VIEW", "CONSOLIDATION_MANAGE"],
+  ANALYST: ["ACCOUNTING_VIEW", "ACCOUNTING_CLASSIFY", "ACCOUNTING_ENTRY_CREATE", "ACCOUNTING_ENTRY_REVIEW", "TAX_VIEW", "CONSOLIDATION_VIEW"],
+  REVIEWER: ["ACCOUNTING_VIEW", "ACCOUNTING_ENTRY_REVIEW", "ACCOUNTING_ENTRY_POST", "ACCOUNTING_REVERSE", "ACCOUNTING_CLOSE", "TAX_VIEW", "TAX_MANAGE", "CONSOLIDATION_VIEW", "CONSOLIDATION_MANAGE"],
+  VIEWER: readOnly,
+};
+
+export function hasAccountingCapability(role: MembershipRole, capability: AccountingCapability) {
+  return matrix[role].includes(capability);
+}
+
+export function assertAccountingCapability(role: MembershipRole, capability: AccountingCapability) {
+  if (!hasAccountingCapability(role, capability)) throw new Error(`A função ${role} não possui a capacidade ${capability}.`);
+}

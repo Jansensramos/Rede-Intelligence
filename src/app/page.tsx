@@ -11,6 +11,7 @@ import { getProcurementWorkspace } from "@/application/procurement/procurement-s
 import { getLegalWorkspace } from "@/application/legal/legal-service";
 import { getSalesWorkspace } from "@/application/sales/sales-service";
 import { getPeoplePerformanceWorkspace } from "@/application/people-performance/people-performance-service";
+import { getAccountingWorkspace } from "@/application/accounting/accounting-service";
 import { IntelligenceWorkspace } from "@/components/intelligence-workspace";
 import { START_BUTANTA_PROJECT } from "@/domain/financial/demo";
 import { calculateAllScenarios } from "@/domain/financial/engine";
@@ -39,7 +40,7 @@ export default async function Home() {
   const baseVgv = calculateAllScenarios(initialStudy.assumptions).base.metrics.vgv;
 
   const initialInvestment = await ensureInvestmentCase(context);
-  const [initialLand, initialDesign, initialAI, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, initialSales, initialPeoplePerformance] = await Promise.all([
+  const [initialLand, initialDesign, initialAI, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, initialSales, initialPeoplePerformance, initialAccounting] = await Promise.all([
     getLatestLandStudyForOrganization(context.organizationId),
     ensureDesignWorkspace(context, initialStudy.projectId),
     getAIBootstrap(context),
@@ -50,6 +51,7 @@ export default async function Home() {
     getLegalWorkspace(context, initialStudy.projectId),
     getSalesWorkspace(context, initialStudy.projectId),
     getPeoplePerformanceWorkspace(context, initialStudy.projectId),
+    getAccountingWorkspace(context, initialStudy.projectId),
   ]);
   if (!initialLand) throw new Error("Execute o seed para carregar o estudo territorial demonstrativo.");
 
@@ -67,6 +69,7 @@ export default async function Home() {
       initialLegal={initialLegal}
       initialSales={initialSales}
       initialPeoplePerformance={initialPeoplePerformance}
+      initialAccounting={initialAccounting}
       identity={{ userName: context.userName, organizationName: context.organizationName }}
     />
   );
