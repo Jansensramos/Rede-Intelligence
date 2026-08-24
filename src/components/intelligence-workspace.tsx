@@ -12,6 +12,7 @@ import {
   ChevronDown,
   CircleDollarSign,
   ClipboardCheck,
+  Database,
   Gauge,
   Gavel,
   HandCoins,
@@ -55,6 +56,7 @@ import { SalesView } from "./sales-view";
 import { PeoplePerformanceView } from "./people-performance-view";
 import { AccountingView } from "./accounting-view";
 import { IntegrationsView } from "./integrations-view";
+import { DataIntelligenceView } from "./data-intelligence-view";
 import { logoutAction } from "@/app/actions/auth";
 import { createStudyAction, createStudyVersionAction } from "@/app/actions/studies";
 import { reassessInvestmentCaseAction } from "@/app/actions/investment";
@@ -72,13 +74,14 @@ import type { SalesWorkspaceView } from "@/application/sales/sales-service";
 import type { PeoplePerformanceWorkspaceView } from "@/application/people-performance/people-performance-service";
 import type { AccountingWorkspaceView } from "@/application/accounting/accounting-service";
 import type { IntegrationsWorkspaceView } from "@/application/integrations/integrations-service";
+import type { DataIntelligenceWorkspace } from "@/application/data-intelligence/data-intelligence-service";
 import { DEMO_PROJECT } from "@/domain/financial/demo";
 import { calculateAllScenarios } from "@/domain/financial/engine";
 import { SCENARIOS } from "@/domain/financial/scenarios";
 import type { ProjectAssumptions, ScenarioKey } from "@/domain/financial/types";
 import { analyzeRisk, type FindingSeverity } from "@/domain/risk/rules";
 
-type ViewKey = "overview" | "assumptions" | "land" | "design" | "budget" | "procurement" | "legal" | "financial" | "accounting" | "integrations" | "sales" | "people" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit";
+type ViewKey = "overview" | "assumptions" | "land" | "design" | "budget" | "procurement" | "legal" | "financial" | "accounting" | "integrations" | "sales" | "people" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit" | "dataIntelligence";
 type EditorMode = "create" | "version";
 
 const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
@@ -92,6 +95,7 @@ const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
   { key: "financial", label: "Financeiro", icon: Landmark },
   { key: "accounting", label: "Contabilidade e Controladoria", icon: BookOpenCheck },
   { key: "integrations", label: "Central de Integrações", icon: Plug },
+  { key: "dataIntelligence", label: "Inteligência de Dados", icon: Database },
   { key: "sales", label: "Vendas e Recebíveis", icon: HandCoins },
   { key: "people", label: "Pessoas e Eficiência", icon: Users },
   { key: "scenarios", label: "Cenários", icon: BarChart3 },
@@ -158,7 +162,7 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "RE";
 }
 
-export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, initialSales, initialPeoplePerformance, initialAccounting, initialIntegrations, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; initialOperations: OperationsWorkspaceView; initialFinancial: FinancialWorkspaceView; initialProcurement: ProcurementWorkspaceView; initialLegal: LegalWorkspaceView; initialSales: SalesWorkspaceView; initialPeoplePerformance: PeoplePerformanceWorkspaceView; initialAccounting: AccountingWorkspaceView; initialIntegrations: IntegrationsWorkspaceView; identity: WorkspaceIdentity }) {
+export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, initialSales, initialPeoplePerformance, initialAccounting, initialIntegrations, initialDataIntelligence, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; initialOperations: OperationsWorkspaceView; initialFinancial: FinancialWorkspaceView; initialProcurement: ProcurementWorkspaceView; initialLegal: LegalWorkspaceView; initialSales: SalesWorkspaceView; initialPeoplePerformance: PeoplePerformanceWorkspaceView; initialAccounting: AccountingWorkspaceView; initialIntegrations: IntegrationsWorkspaceView; initialDataIntelligence: DataIntelligenceWorkspace; identity: WorkspaceIdentity }) {
   const [study, setStudy] = useState<PersistedStudyView>(initialStudy);
   const [landWorkspace, setLandWorkspace] = useState<LandWorkspaceView>(initialLand);
   const [investmentWorkspace, setInvestmentWorkspace] = useState<InvestmentCaseWorkspace>(initialInvestment);
@@ -342,6 +346,11 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
               </section>
 
               <section className="panel scenario-strip">
+                <div className="panel-heading"><div><span className="eyebrow">INTELIGÊNCIA DE DADOS</span><h2>Comparativos, previsto x realizado e qualidade dos dados</h2></div><button className="text-button" onClick={() => setView("dataIntelligence")}>Abrir Inteligência de Dados <ArrowRight size={15} /></button></div>
+                <div className="scenario-table compact-table"><div className="table-row table-head"><span>Fatos analíticos</span><span>Comparativos</span><span>Confiança do último</span><span>Erro % médio (previsto x realizado)</span><span>Achados de qualidade abertos</span><span>Orçamento Inteligente</span></div><div className="table-row"><strong>{initialDataIntelligence.facts.length}</strong><strong>{initialDataIntelligence.benchmarks.length}</strong><strong>{initialDataIntelligence.benchmarks[0] ? { HIGH: "Alta", MEDIUM: "Média", LOW: "Baixa" }[initialDataIntelligence.benchmarks[0].confidenceLevel] ?? initialDataIntelligence.benchmarks[0].confidenceLevel : "—"}</strong><strong>{initialDataIntelligence.biasSummary.averagePercentError != null ? `${(initialDataIntelligence.biasSummary.averagePercentError * 100).toFixed(1)}%` : "—"}</strong><strong>{initialDataIntelligence.dataQuality.openIssues.length}</strong><strong>{initialDataIntelligence.autoBudgetProposals[0]?.status ?? "—"}</strong></div></div>
+              </section>
+
+              <section className="panel scenario-strip">
                 <div className="panel-heading"><div><span className="eyebrow">DOWNSIDE × UPSIDE</span><h2>Comparação rápida de cenários</h2></div><button className="text-button" onClick={() => setView("scenarios")}>Abrir análise <ArrowRight size={15} /></button></div>
                 <div className="scenario-table compact-table"><div className="table-row table-head"><span>Cenário</span><span>VGV</span><span>Lucro</span><span>Margem</span><span>TIR</span><span>Exposição</span></div>{(["conservative", "base", "aggressive"] as ScenarioKey[]).map((key) => { const item = results[key]; return <button key={key} onClick={() => setScenario(key)} className={`table-row ${scenario === key ? "selected" : ""}`}><span><i className={`scenario-dot dot-${key}`} />{SCENARIOS[key].label}</span><strong>{compactBrl(item.metrics.vgv)}</strong><strong>{compactBrl(item.metrics.profit)}</strong><strong>{percentage(item.metrics.marginOnVgv)}</strong><strong>{percentage(item.metrics.annualIrr)}</strong><strong>{compactBrl(item.metrics.maximumCashExposure)}</strong></button>; })}</div>
               </section>
@@ -385,6 +394,13 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
             <div className="view-stack">
               <SectionTitle eyebrow="CONTÁBIL, FISCAL E CONTROLADORIA" title="Fato operacional → Política → Razão → Resultado" description="Competência e caixa separados, partidas dobradas, estoque, tributos e consolidação sem criar uma segunda verdade financeira." />
               <AccountingView workspace={initialAccounting} />
+            </div>
+          )}
+
+          {view === "dataIntelligence" && (
+            <div className="view-stack">
+              <SectionTitle eyebrow="INTELIGÊNCIA DE DADOS" title="Fato → normalização → comparabilidade → métrica → benchmark → confiança → recomendação → explicação → revisão humana" description="O histórico operacional do REDE vira ativo proprietário: contratos analíticos, métricas versionadas, comparativos com amostra e confiança visíveis, previsto x realizado, qualidade dos dados, carteira de empreendimentos e Orçamento Inteligente — sempre como sugestão, nunca como base aprovada automaticamente." />
+              <DataIntelligenceView workspace={initialDataIntelligence} />
             </div>
           )}
 
