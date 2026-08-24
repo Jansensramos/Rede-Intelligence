@@ -548,7 +548,7 @@ async function main() {
 
   await prisma.viabilityStudy.update({ where: { id: study.studyId }, data: { updatedById: user.id } });
   const landStudy = legalLandWorkspace;
-  const investmentCase = await ensureInvestmentCase({ userId: user.id, organizationId: organization.id });
+  const investmentCase = await ensureInvestmentCase({ userId: user.id, organizationId: organization.id }, butantaStudy.projectId);
   const designWorkspace = await ensureDesignWorkspace({ userId: user.id, organizationId: organization.id }, butantaStudy.projectId);
   const existingMasterReport = await prisma.studioArtifact.findFirst({ where: { investmentCaseId: investmentCase.id, type: "MASTER_REPORT" }, orderBy: { version: "desc" } });
   const demoMasterReport = existingMasterReport

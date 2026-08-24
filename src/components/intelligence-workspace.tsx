@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownRight,
@@ -64,6 +64,18 @@ import { logoutAction } from "@/app/actions/auth";
 import { createStudyAction, createStudyVersionAction } from "@/app/actions/studies";
 import { decideProductScenarioAction, generateProductScenariosAction } from "@/app/actions/market-product";
 import { reassessInvestmentCaseAction } from "@/app/actions/investment";
+import { refreshAIBootstrapAction } from "@/app/actions/ai";
+import {
+  loadBudgetAreaAction,
+  loadDesignWorkspaceAction,
+  loadFinancialWorkspaceAction,
+  loadLegalWorkspaceAction,
+  loadProcurementWorkspaceAction,
+  loadSalesWorkspaceAction,
+} from "@/app/actions/workspace-loader";
+import { EmptyState, ErrorState, Loading, MetricCard, SectionTitle } from "@/components/ui";
+import { OPERATIONAL_AREAS, TRANSVERSAL_AREAS, type LegacyViewKey } from "@/domain/workspace/areas";
+import type { OperationalContext } from "@/application/workspace/operational-context";
 import type { PersistedStudyView, WorkspaceIdentity } from "@/application/studies/contracts";
 import type { LandWorkspaceView } from "@/domain/land";
 import type { InvestmentCaseWorkspace } from "@/domain/investment";
@@ -130,23 +142,7 @@ function statusClass(severity: FindingSeverity) {
   return severity === "critical" ? "critical" : severity === "warning" ? "warning" : "positive";
 }
 
-function MetricCard({ label, value, meta, tone, icon: Icon }: { label: string; value: string; meta: string; tone?: "positive" | "negative" | "neutral"; icon: typeof Gauge }) {
-  return (
-    <article className="metric-card">
-      <div><span>{label}</span><Icon size={17} /></div>
-      <strong>{value}</strong>
-      <small className={tone ? `metric-${tone}` : ""}>{meta}</small>
-    </article>
-  );
-}
-function SectionTitle({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: React.ReactNode }) {
-  return (
-    <header className="section-title">
-      <div>{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h2>{title}</h2>{description && <p>{description}</p>}</div>
-      {action}
-    </header>
-  );
-}
+/* MetricCard e SectionTitle foram extraídos para src/components/ui/ (Fase 9K.0, plano §C). */
 
 function AssumptionSummary({ project, onEdit }: { project: ProjectAssumptions; onEdit: () => void }) {
   const groups = [
@@ -170,12 +166,32 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "RE";
 }
 
-export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, initialSales, initialPeoplePerformance, initialAccounting, initialIntegrations, initialDataIntelligence, initialMarketProduct, role, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; initialOperations: OperationsWorkspaceView; initialFinancial: FinancialWorkspaceView; initialProcurement: ProcurementWorkspaceView; initialLegal: LegalWorkspaceView; initialSales: SalesWorkspaceView; initialPeoplePerformance: PeoplePerformanceWorkspaceView; initialAccounting: AccountingWorkspaceView; initialIntegrations: IntegrationsWorkspaceView; initialDataIntelligence: DataIntelligenceWorkspace; initialMarketProduct: MarketProductWorkspaceView; role: MembershipRole; identity: WorkspaceIdentity }) {
+/**
+ * Áreas carregadas sob demanda (Fase 9K.0, plano §2 e §AS). A Visão Executiva atual (aba
+ * "overview") não lê nenhuma delas — ver `src/app/actions/workspace-loader.ts`.
+ */
+type LazyViewKey = "design" | "budget" | "financial" | "procurement" | "legal" | "sales" | "ai";
+const LAZY_VIEW_KEYS: readonly LazyViewKey[] = ["design", "budget", "financial", "procurement", "legal", "sales", "ai"];
+
+interface LazyWorkspaceData {
+  design?: DesignWorkspaceView;
+  budget?: BudgetWorkspaceView | null;
+  operations?: OperationsWorkspaceView;
+  financial?: FinancialWorkspaceView;
+  procurement?: ProcurementWorkspaceView;
+  legal?: LegalWorkspaceView;
+  sales?: SalesWorkspaceView;
+  ai?: AIBootstrapView;
+}
+
+function isLazyViewKey(view: ViewKey): view is LazyViewKey {
+  return (LAZY_VIEW_KEYS as readonly string[]).includes(view);
+}
+
+export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialPeoplePerformance, initialAccounting, initialIntegrations, initialDataIntelligence, initialMarketProduct, operationalContext, role, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialPeoplePerformance: PeoplePerformanceWorkspaceView; initialAccounting: AccountingWorkspaceView; initialIntegrations: IntegrationsWorkspaceView; initialDataIntelligence: DataIntelligenceWorkspace; initialMarketProduct: MarketProductWorkspaceView; operationalContext: OperationalContext; role: MembershipRole; identity: WorkspaceIdentity }) {
   const [study, setStudy] = useState<PersistedStudyView>(initialStudy);
   const [landWorkspace, setLandWorkspace] = useState<LandWorkspaceView>(initialLand);
   const [investmentWorkspace, setInvestmentWorkspace] = useState<InvestmentCaseWorkspace>(initialInvestment);
-  const [designWorkspace, setDesignWorkspace] = useState<DesignWorkspaceView>(initialDesign);
-  const [budgetWorkspace, setBudgetWorkspace] = useState<BudgetWorkspaceView | null>(initialBudget);
   const [integrationsWorkspace, setIntegrationsWorkspace] = useState<IntegrationsWorkspaceView>(initialIntegrations);
   const [marketProductWorkspace, setMarketProductWorkspace] = useState<MarketProductWorkspaceView>(initialMarketProduct);
   const [project, setProject] = useState<ProjectAssumptions>(initialStudy.assumptions);
@@ -186,6 +202,10 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState<string | undefined>();
   const [aiOriginModule, setAiOriginModule] = useState<ViewKey>("overview");
+
+  const [lazyData, setLazyData] = useState<LazyWorkspaceData>({});
+  const [lazyLoaded, setLazyLoaded] = useState<Partial<Record<LazyViewKey, boolean>>>({});
+  const [lazyError, setLazyError] = useState<Partial<Record<LazyViewKey, string>>>({});
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -198,6 +218,77 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
   const criticalCount = recommendation.findings.filter((item) => item.severity === "critical").length;
   const warningCount = recommendation.findings.filter((item) => item.severity === "warning").length;
   const redTeamCriticalCount = study.redTeam?.findings.filter((finding) => finding.severity === "CRITICAL").length ?? 0;
+
+  const requestedLazyViews = useRef<Set<LazyViewKey>>(new Set());
+
+  const loadLazyView = useCallback(async (key: LazyViewKey) => {
+    requestedLazyViews.current.add(key);
+    setLazyError((prev) => (prev[key] === undefined ? prev : { ...prev, [key]: undefined }));
+    try {
+      switch (key) {
+        case "design": {
+          const response = await loadDesignWorkspaceAction(study.projectId);
+          if (!response.ok) throw new Error(response.error);
+          setLazyData((prev) => ({ ...prev, design: response.data }));
+          break;
+        }
+        case "budget": {
+          const response = await loadBudgetAreaAction(study.projectId, results.base.metrics.vgv);
+          if (!response.ok) throw new Error(response.error);
+          setLazyData((prev) => ({ ...prev, budget: response.data.budget, operations: response.data.operations }));
+          break;
+        }
+        case "financial": {
+          const response = await loadFinancialWorkspaceAction(study.projectId);
+          if (!response.ok) throw new Error(response.error);
+          setLazyData((prev) => ({ ...prev, financial: response.data }));
+          break;
+        }
+        case "procurement": {
+          const response = await loadProcurementWorkspaceAction(study.projectId);
+          if (!response.ok) throw new Error(response.error);
+          setLazyData((prev) => ({ ...prev, procurement: response.data }));
+          break;
+        }
+        case "legal": {
+          const response = await loadLegalWorkspaceAction(study.projectId);
+          if (!response.ok) throw new Error(response.error);
+          setLazyData((prev) => ({ ...prev, legal: response.data }));
+          break;
+        }
+        case "sales": {
+          const response = await loadSalesWorkspaceAction(study.projectId);
+          if (!response.ok) throw new Error(response.error);
+          setLazyData((prev) => ({ ...prev, sales: response.data }));
+          break;
+        }
+        case "ai": {
+          // Fase 9K.0 (fechamento, gate 3): mesmo projectId do OperationalContext (study.projectId),
+          // nunca uma segunda resolução independente dentro do REDE AI.
+          const response = await refreshAIBootstrapAction(study.projectId);
+          if (!response.ok) throw new Error(response.error);
+          setLazyData((prev) => ({ ...prev, ai: response.data }));
+          break;
+        }
+      }
+      setLazyLoaded((prev) => ({ ...prev, [key]: true }));
+    } catch (error) {
+      setLazyError((prev) => ({ ...prev, [key]: error instanceof Error ? error.message : "Não foi possível carregar esta área." }));
+    }
+  }, [study.projectId, results]);
+
+  useEffect(() => {
+    if (!isLazyViewKey(view)) return;
+    if (requestedLazyViews.current.has(view)) return;
+    void loadLazyView(view);
+  }, [view, loadLazyView]);
+
+  const groupedNav = useMemo(() => {
+    const byKey = new Map(viewItems.map((item) => [item.key as LegacyViewKey, item]));
+    return [...OPERATIONAL_AREAS, ...TRANSVERSAL_AREAS]
+      .map((area) => ({ area, items: area.viewKeys.map((key) => byKey.get(key)).filter((item): item is (typeof viewItems)[number] => Boolean(item)) }))
+      .filter((group) => group.items.length > 0);
+  }, []);
 
   async function saveProject(value: ProjectAssumptions) {
     const response = editorMode === "create" || !study.studyId
@@ -214,6 +305,7 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
   }
 
   async function updateBudgetItem(itemId: string, updates: { description?: string; quantity?: number; unitCost?: number }) {
+    const budgetWorkspace = lazyData.budget;
     if (!budgetWorkspace) return;
     const response = await fetch(`/api/budgets/${budgetWorkspace.id}/items/${itemId}`, {
       method: "PUT",
@@ -222,10 +314,11 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
     });
     const payload = await response.json() as { success?: boolean; data?: BudgetWorkspaceView; error?: string };
     if (!response.ok || !payload.data) throw new Error(payload.error ?? "Não foi possível atualizar o item.");
-    setBudgetWorkspace(payload.data);
+    setLazyData((prev) => ({ ...prev, budget: payload.data }));
   }
 
   async function deleteBudgetItem(itemId: string) {
+    const budgetWorkspace = lazyData.budget;
     if (!budgetWorkspace) return;
     const response = await fetch(`/api/budgets/${budgetWorkspace.id}/items/${itemId}`, { method: "DELETE" });
     const payload = await response.json() as { success?: boolean; error?: string };
@@ -233,7 +326,7 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
     const refreshed = await fetch(`/api/budgets/${budgetWorkspace.id}`);
     const refreshedPayload = await refreshed.json() as { data?: BudgetWorkspaceView; error?: string };
     if (!refreshed.ok || !refreshedPayload.data) throw new Error(refreshedPayload.error ?? "Não foi possível recarregar o orçamento.");
-    setBudgetWorkspace(refreshedPayload.data);
+    setLazyData((prev) => ({ ...prev, budget: refreshedPayload.data }));
   }
 
   async function handleGenerateProductScenarios() {
@@ -288,7 +381,12 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
           <ChevronDown size={15} />
         </button>
         <nav className="main-nav" aria-label="Navegação principal">
-          {viewItems.map((item) => <button key={item.key} className={view === item.key ? "is-active" : ""} onClick={() => item.key === "ai" ? openAI() : navigate(item.key)}><item.icon size={17} /><span>{item.label}</span>{item.key === "risks" && criticalCount > 0 && <b>{criticalCount}</b>}{item.key === "redteam" && redTeamCriticalCount > 0 && <b>{redTeamCriticalCount}</b>}</button>)}
+          {groupedNav.map(({ area, items }) => (
+            <Fragment key={area.id}>
+              <div className="ds-nav-group-label">{area.label}</div>
+              {items.map((item) => <button key={item.key} className={view === item.key ? "is-active" : ""} onClick={() => item.key === "ai" ? openAI() : navigate(item.key)}><item.icon size={17} /><span>{item.label}</span>{item.key === "risks" && criticalCount > 0 && <b>{criticalCount}</b>}{item.key === "redteam" && redTeamCriticalCount > 0 && <b>{redTeamCriticalCount}</b>}</button>)}
+            </Fragment>
+          ))}
         </nav>
         <button className="sidebar-module sidebar-ai-live" onClick={() => openAI("Explique este projeto.")}><span>COPILOTO ATIVO</span><Sparkles size={18} /><div><strong>Pergunte ao REDE</strong><small>Contexto estruturado</small></div><span className="soon">AI</span></button>
         <div className="sidebar-footer"><button><Building2 size={17} /><span>{identity.organizationName}</span></button><div className="user-avatar">{initials(identity.userName)}</div></div>
@@ -298,7 +396,7 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
 
       <main className="workspace">
         <header className="topbar">
-          <div className="topbar-left"><button className="mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Abrir menu"><Menu size={20} /></button><span>Portfólio</span><i>/</i><strong>{project.projectName}</strong></div>
+          <div className="topbar-left"><button className="mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Abrir menu"><Menu size={20} /></button><span>{operationalContext.company?.name ?? operationalContext.organization.name}</span><i>/</i><strong>{project.projectName}</strong></div>
           <div className="topbar-actions"><button className="ai-context-trigger" onClick={() => openAI(`Explique esta tela: ${view}.`)}><Sparkles size={14} /> Explicar esta tela</button><span className="engine-chip"><i /> ENGINE v1.0</span><button className="button button-secondary new-study" onClick={() => { setEditorMode("create"); setEditorProject({ ...structuredClone(DEMO_PROJECT), projectName: "Novo empreendimento", city: "", state: "SP", landPrice: "0", financingLimit: "0" }); }}><Plus size={16} /> Novo estudo</button><form action={logoutAction} className="logout-form"><button className="avatar-button" title="Sair" aria-label={`Sair da conta de ${identity.userName}`}>{initials(identity.userName)}</button></form></div>
         </header>
 
@@ -398,33 +496,44 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
 
           {view === "land" && <LandIntelligenceView initialLand={landWorkspace} onLandChange={(nextLand) => { setLandWorkspace(nextLand); void reassessInvestmentCaseAction(investmentWorkspace.id, study.studyVersionId, nextLand.versionId).then((response) => { if (response.ok) setInvestmentWorkspace(response.data); }); }} />}
 
-          {view === "design" && <DesignIntelligenceView initialWorkspace={designWorkspace} onWorkspaceChange={setDesignWorkspace} onAskAI={(prompt) => openAI(prompt)} />}
+          {view === "design" && (
+            lazyError.design ? <ErrorState message={lazyError.design} onRetry={() => loadLazyView("design")} /> :
+            !lazyLoaded.design || !lazyData.design ? <Loading label="Carregando Design Intelligence…" /> :
+            <DesignIntelligenceView initialWorkspace={lazyData.design} onWorkspaceChange={(next) => setLazyData((prev) => ({ ...prev, design: next }))} onAskAI={(prompt) => openAI(prompt)} />
+          )}
 
-          {view === "budget" && (budgetWorkspace ? (
-            <div className="view-stack">
-              <SectionTitle eyebrow="GESTÃO OPERACIONAL" title="Base Aprovada, Orçamento e Cronograma" description="Referências separadas, versionadas e rastreáveis para a execução do empreendimento." />
-              <OperationsView workspace={initialOperations} />
-              <SectionTitle eyebrow="ESTRUTURA ANALÍTICA" title={`${budgetWorkspace.name} · v${budgetWorkspace.version}`} description="Itens persistidos por empreendimento, organização e versão." />
-              <BudgetEditor
-                budgetId={budgetWorkspace.id}
-                projectName={budgetWorkspace.projectName}
-                lineItems={budgetWorkspace.lineItems}
-                totalBudget={budgetWorkspace.totalBudget}
-                summary={budgetWorkspace.summary}
-                onUpdateItem={updateBudgetItem}
-                onDeleteItem={deleteBudgetItem}
-                readOnly={["APPROVED", "OFFICIAL", "SUPERSEDED", "CLOSED", "ARCHIVED"].includes(budgetWorkspace.status)}
-              />
-            </div>
-          ) : (
-            <div className="empty-state"><CircleDollarSign size={18} /> Nenhum orçamento cadastrado para este empreendimento.</div>
-          ))}
+          {view === "budget" && (
+            lazyError.budget ? <ErrorState message={lazyError.budget} onRetry={() => loadLazyView("budget")} /> :
+            !lazyLoaded.budget ? <Loading label="Carregando Orçamento e Operações…" /> :
+            lazyData.budget ? (
+              <div className="view-stack">
+                <SectionTitle eyebrow="GESTÃO OPERACIONAL" title="Base Aprovada, Orçamento e Cronograma" description="Referências separadas, versionadas e rastreáveis para a execução do empreendimento." />
+                {lazyData.operations && <OperationsView workspace={lazyData.operations} />}
+                <SectionTitle eyebrow="ESTRUTURA ANALÍTICA" title={`${lazyData.budget.name} · v${lazyData.budget.version}`} description="Itens persistidos por empreendimento, organização e versão." />
+                <BudgetEditor
+                  budgetId={lazyData.budget.id}
+                  projectName={lazyData.budget.projectName}
+                  lineItems={lazyData.budget.lineItems}
+                  totalBudget={lazyData.budget.totalBudget}
+                  summary={lazyData.budget.summary}
+                  onUpdateItem={updateBudgetItem}
+                  onDeleteItem={deleteBudgetItem}
+                  readOnly={["APPROVED", "OFFICIAL", "SUPERSEDED", "CLOSED", "ARCHIVED"].includes(lazyData.budget.status)}
+                />
+              </div>
+            ) : (
+              <EmptyState icon={CircleDollarSign} title="Nenhum orçamento cadastrado" description="Este empreendimento ainda não tem um orçamento oficial cadastrado." />
+            )
+          )}
 
           {view === "financial" && (
-            <div className="view-stack">
-              <SectionTitle eyebrow="FINANCEIRO E TESOURARIA" title="Contas a Pagar, Contas a Receber e Caixa" description="Obrigação → conta → parcela → pagamento → conciliação → realizado, rastreável por SPE e centro de custo." />
-              <FinancialView workspace={initialFinancial} />
-            </div>
+            lazyError.financial ? <ErrorState message={lazyError.financial} onRetry={() => loadLazyView("financial")} /> :
+            !lazyLoaded.financial || !lazyData.financial ? <Loading label="Carregando Financeiro…" /> : (
+              <div className="view-stack">
+                <SectionTitle eyebrow="FINANCEIRO E TESOURARIA" title="Contas a Pagar, Contas a Receber e Caixa" description="Obrigação → conta → parcela → pagamento → conciliação → realizado, rastreável por SPE e centro de custo." />
+                <FinancialView workspace={lazyData.financial} />
+              </div>
+            )
           )}
 
           {view === "accounting" && (
@@ -463,24 +572,33 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
           )}
 
           {view === "procurement" && (
-            <div className="view-stack">
-              <SectionTitle eyebrow="SUPRIMENTOS, CONTRATOS E MEDIÇÕES" title="Do planejamento à execução contratual" description="Necessidade → requisição → cotação → contrato → medição → obrigação, sem dupla contagem." />
-              <ProcurementView workspace={initialProcurement} />
-            </div>
+            lazyError.procurement ? <ErrorState message={lazyError.procurement} onRetry={() => loadLazyView("procurement")} /> :
+            !lazyLoaded.procurement || !lazyData.procurement ? <Loading label="Carregando Suprimentos…" /> : (
+              <div className="view-stack">
+                <SectionTitle eyebrow="SUPRIMENTOS, CONTRATOS E MEDIÇÕES" title="Do planejamento à execução contratual" description="Necessidade → requisição → cotação → contrato → medição → obrigação, sem dupla contagem." />
+                <ProcurementView workspace={lazyData.procurement} />
+              </div>
+            )
           )}
 
           {view === "legal" && (
-            <div className="view-stack">
-              <SectionTitle eyebrow="JURÍDICO, DILIGÊNCIA E OBRIGAÇÕES" title="Central Jurídica do Empreendimento" description="Imóvel, evidências, riscos, licenças, prazos e impactos conectados à decisão, ao cronograma e ao Financeiro." />
-              <LegalView workspace={initialLegal} />
-            </div>
+            lazyError.legal ? <ErrorState message={lazyError.legal} onRetry={() => loadLazyView("legal")} /> :
+            !lazyLoaded.legal || !lazyData.legal ? <Loading label="Carregando Jurídico…" /> : (
+              <div className="view-stack">
+                <SectionTitle eyebrow="JURÍDICO, DILIGÊNCIA E OBRIGAÇÕES" title="Central Jurídica do Empreendimento" description="Imóvel, evidências, riscos, licenças, prazos e impactos conectados à decisão, ao cronograma e ao Financeiro." />
+                <LegalView workspace={lazyData.legal} />
+              </div>
+            )
           )}
 
           {view === "sales" && (
-            <div className="view-stack">
-              <SectionTitle eyebrow="VENDAS, CLIENTES E RECEBÍVEIS" title="Unidade → Tabela → Proposta → Reserva → Venda → Contrato → Recebíveis" description="Estoque, preço, comissão, entrega e pós-venda conectados ao Financeiro (9B) sem financeiro paralelo nem dupla contagem." />
-              <SalesView workspace={initialSales} />
-            </div>
+            lazyError.sales ? <ErrorState message={lazyError.sales} onRetry={() => loadLazyView("sales")} /> :
+            !lazyLoaded.sales || !lazyData.sales ? <Loading label="Carregando Vendas e Recebíveis…" /> : (
+              <div className="view-stack">
+                <SectionTitle eyebrow="VENDAS, CLIENTES E RECEBÍVEIS" title="Unidade → Tabela → Proposta → Reserva → Venda → Contrato → Recebíveis" description="Estoque, preço, comissão, entrega e pós-venda conectados ao Financeiro (9B) sem financeiro paralelo nem dupla contagem." />
+                <SalesView workspace={lazyData.sales} />
+              </div>
+            )
           )}
 
           {view === "people" && (
@@ -510,7 +628,11 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
 
           {view === "dataroom" && <InvestmentSuiteView mode="dataroom" initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
 
-          {view === "ai" && <RedeAIView initialBootstrap={initialAI} currentModule={aiOriginModule} initialPrompt={aiPrompt} onPromptConsumed={() => setAiPrompt(undefined)} onNavigate={(module) => navigate(module as ViewKey)} />}
+          {view === "ai" && (
+            lazyError.ai ? <ErrorState message={lazyError.ai} onRetry={() => loadLazyView("ai")} /> :
+            !lazyLoaded.ai || !lazyData.ai ? <Loading label="Carregando REDE AI…" /> :
+            <RedeAIView initialBootstrap={lazyData.ai} projectId={study.projectId} currentModule={aiOriginModule} initialPrompt={aiPrompt} onPromptConsumed={() => setAiPrompt(undefined)} onNavigate={(module) => navigate(module as ViewKey)} />
+          )}
 
           {view === "cashflow" && (
             <div className="view-stack">

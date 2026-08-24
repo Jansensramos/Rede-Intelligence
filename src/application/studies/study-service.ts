@@ -803,6 +803,45 @@ export async function getLatestStudyForOrganization(organizationId: string): Pro
   };
 }
 
+/**
+ * Fase 9K.0 (fechamento, gate 2): busca o estudo ACTIVE mais recente de UM projeto já
+ * determinado — diferente de `getLatestStudyForOrganization`, que escolhe o próprio projeto pela
+ * atividade mais recente em toda a organização. Ordenar por recência é legítimo *dentro* de um
+ * projeto já resolvido (qual versão de estudo está em vigor); não é legítimo para decidir *qual*
+ * projeto é o contexto operacional ativo — essa decisão é responsabilidade exclusiva de
+ * `resolveOperationalContext` (`src/application/workspace/operational-context.ts`).
+ */
+export async function getLatestStudyForProject(organizationId: string, projectId: string): Promise<PersistedStudyView | null> {
+  const study = await prisma.viabilityStudy.findFirst({
+    where: { status: "ACTIVE", projectId, project: { organizationId } },
+    orderBy: { updatedAt: "desc" },
+    include: {
+      versions: {
+        where: { status: StudyVersionStatus.SNAPSHOT },
+        orderBy: { versionNumber: "desc" },
+        take: 1,
+        include: {
+          assumptions: true,
+          scores: { include: { scenario: { select: { kind: true } } } },
+          sensitivity: { where: { status: AnalysisRunStatus.COMPLETED }, orderBy: { createdAt: "desc" }, take: 1 },
+          redTeamRuns: { where: { status: AnalysisRunStatus.COMPLETED }, orderBy: { createdAt: "desc" }, take: 1, select: { output: true } },
+        },
+      },
+    },
+  });
+  const version = study?.versions[0];
+  if (!study || !version?.assumptions) return null;
+  return {
+    projectId: study.projectId,
+    studyId: study.id,
+    studyVersionId: version.id,
+    versionNumber: version.versionNumber,
+    assumptions: snapshotToAssumptions(version.assumptions),
+    analytics: analyticsFromPersistence(snapshotToAssumptions(version.assumptions), version.scores, version.sensitivity),
+    redTeam: version.redTeamRuns[0]?.output as unknown as RedTeamReport | undefined ?? null,
+  };
+}
+
 export async function getStudyForOrganization(organizationId: string, studyId: string): Promise<PersistedStudyView | null> {
   const study = await prisma.viabilityStudy.findFirst({
     where: { id: studyId, status: "ACTIVE", project: { organizationId } },

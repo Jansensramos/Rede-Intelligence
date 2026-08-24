@@ -45,11 +45,20 @@ describe("Integrações 9H em PostgreSQL real", () => {
   });
 
   it("nunca guarda o segredo em texto puro — apenas secretRef opaco e fingerprint não reversível", async () => {
+    // Fechamento 9K.0 (gate 5): esta asserção lia o arquivo do vault escrito pelo seed, mas
+    // `.rede-storage/` é local e gitignored — não acompanha um novo checkout/worktree, mesmo que
+    // o Postgres (compartilhado entre worktrees neste ambiente) ainda tenha a linha de
+    // `CredentialReference` de uma sessão anterior. Isso quebrava de forma não determinística
+    // dependendo de qual worktree escreveu o arquivo por último. O teste agora prepara seu
+    // próprio segredo conhecido — nunca um segredo real — garantindo que o arquivo exista neste
+    // processo, sem depender de estado deixado por outra sessão.
+    const knownSecret = `gate5-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    await storeInstallationCredential(context, driveInstallationId, { method: "OAUTH2", secret: knownSecret });
     const credential = await prisma.credentialReference.findUniqueOrThrow({ where: { installationId: driveInstallationId } });
-    expect(credential.secretRef).not.toContain("demo-oauth-refresh-token-not-a-real-secret");
-    expect(JSON.stringify(credential)).not.toContain("demo-oauth-refresh-token-not-a-real-secret");
+    expect(credential.secretRef).not.toContain(knownSecret);
+    expect(JSON.stringify(credential)).not.toContain(knownSecret);
     const secret = await integrationSecretVault.read(credential.secretRef);
-    expect(secret).toBe("demo-oauth-refresh-token-not-a-real-secret");
+    expect(secret).toBe(knownSecret);
   });
 
   it("faz replay idempotente de webhook duplicado com efeito único (Caso Crítico B)", async () => {

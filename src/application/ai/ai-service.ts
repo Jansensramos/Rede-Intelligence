@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { Prisma, type MembershipRole } from "@prisma/client";
 import type { AuthContext } from "@/application/auth/session";
-import { addInvestmentCondition, createDecisionSandbox, getLatestInvestmentCaseForOrganization, promoteDecisionSandbox } from "@/application/investment/investment-service";
+import { addInvestmentCondition, createDecisionSandbox, getInvestmentCaseForOrganization, getInvestmentCaseForProject, promoteDecisionSandbox } from "@/application/investment/investment-service";
 import { generateMasterReport, generateStudioArtifact, preflightMasterReport } from "@/application/investment/studio-service";
 import { AI_CONTEXT_BUILDER_VERSION, AI_PROMPT_VERSION, AI_TOOLS_VERSION, AIModelRouter, DEFAULT_AI_SUGGESTIONS, REDE_AI_SYSTEM_PROMPT, aiQuestionSchema, confirmationSchema, createAIProvider, feedbackSchema, insightSchema, planAIIntent, responseModeSchema, type AIAnswer, type AIBootstrapView, type AIConversationView, type AIMessageView, type AIModelPolicy, type AIResponseEvidenceInput, type AIStructuredBlock, type AITask, type AIToolCallResult } from "@/domain/ai";
 import { renderDocumentPdf, type IntermediateDocumentModel } from "@/domain/investment";
@@ -35,18 +35,24 @@ function conversationView(row: {
 
 const conversationInclude = { messages: { orderBy: { createdAt: "asc" as const }, include: { evidence: { orderBy: { createdAt: "asc" as const } } } }, pendingActions: { orderBy: { createdAt: "desc" as const }, take: 20 } };
 
-export async function createAIConversation(context: Pick<AuthContext, "organizationId" | "userId">, currentModule = "ai") {
-  const workspace = await getLatestInvestmentCaseForOrganization(context.organizationId);
-  if (!workspace) throw new Error("Investment Case não encontrado nesta organização.");
+/**
+ * Fase 9K.0 (fechamento, gate 3 "Unificar REDE AI ao mesmo contexto"): `projectId` agora é
+ * obrigatório e vem sempre do `OperationalContext` já resolvido pela tela (nunca de uma segunda
+ * resolução independente por "Investment Case mais recente da organização" — era exatamente esse
+ * padrão que podia fazer o REDE AI conversar sobre um projeto diferente do que a tela exibia).
+ */
+export async function createAIConversation(context: Pick<AuthContext, "organizationId" | "userId">, projectId: string, currentModule = "ai") {
+  const workspace = await getInvestmentCaseForProject(context.organizationId, projectId);
+  if (!workspace) throw new Error("Investment Case não encontrado para este empreendimento.");
   const selection = { ...contextSelectionFromWorkspace(workspace), currentModule };
   return prisma.aIConversation.create({ data: { organizationId: context.organizationId, projectId: selection.projectId, studyId: selection.studyId, studyVersionId: selection.studyVersionId, investmentCaseId: selection.investmentCaseId, title: "Nova análise", scope: "GLOBAL_PROJECT_CONTEXT", activeScenario: selection.financialScenario, activeUrbanScenario: selection.urbanScenarioId, contextSnapshot: json(selection), sourceStudyVersionNumber: selection.studyVersionNumber, createdById: context.userId }, include: conversationInclude });
 }
 
-export async function getAIBootstrap(context: AuthContext, currentModule = "ai"): Promise<AIBootstrapView> {
-  const workspace = await getLatestInvestmentCaseForOrganization(context.organizationId);
-  if (!workspace) throw new Error("Investment Case não encontrado nesta organização.");
+export async function getAIBootstrap(context: AuthContext, projectId: string, currentModule = "ai"): Promise<AIBootstrapView> {
+  const workspace = await getInvestmentCaseForProject(context.organizationId, projectId);
+  if (!workspace) throw new Error("Investment Case não encontrado para este empreendimento.");
   let rows = await prisma.aIConversation.findMany({ where: { organizationId: context.organizationId, createdById: context.userId, investmentCaseId: workspace.id }, orderBy: { updatedAt: "desc" }, take: 20, include: conversationInclude });
-  if (!rows.length) rows = [await createAIConversation(context, currentModule)];
+  if (!rows.length) rows = [await createAIConversation(context, projectId, currentModule)];
   const month = new Date(); month.setUTCDate(1); month.setUTCHours(0, 0, 0, 0);
   const usage = await prisma.aIExecutionLog.aggregate({ where: { organizationId: context.organizationId, createdAt: { gte: month } }, _count: { id: true }, _sum: { inputTokens: true, outputTokens: true, estimatedCost: true } });
   const provider = createAIProvider();
@@ -224,8 +230,12 @@ export async function saveAIFeedback(context: AuthContext, input: { messageId: s
 export async function exportAIConversationPdf(context: AuthContext, conversationId: string) {
   const conversation = await prisma.aIConversation.findFirst({ where: { id: conversationId, organizationId: context.organizationId }, include: { messages: { orderBy: { createdAt: "asc" }, include: { evidence: true } } } });
   if (!conversation?.investmentCaseId) throw new Error("Conversa não encontrada nesta organização.");
-  const workspace = await getLatestInvestmentCaseForOrganization(context.organizationId);
-  if (!workspace || workspace.id !== conversation.investmentCaseId) throw new Error("Investment Case não encontrado nesta organização.");
+  // Fase 9K.0 (fechamento, gate 3): antes buscava "o Investment Case mais recente da organização"
+  // e conferia se batia com o da conversa — se a conversa não fosse do case mais recente (ex.: a
+  // organização tem mais de um empreendimento com Investment Case), a exportação falhava mesmo com
+  // tudo correto. Agora busca direto pelo id já pinado na conversa, sem indireção por recência.
+  const workspace = await getInvestmentCaseForOrganization(context.organizationId, conversation.investmentCaseId);
+  if (!workspace) throw new Error("Investment Case não encontrado nesta organização.");
   const model: IntermediateDocumentModel = { schemaVersion: "REDE_AI_CONVERSATION_V1", artifactType: "MANAGEMENT_SUMMARY", title: conversation.title, subtitle: `${workspace.bundle.project.name} · Snapshot v${conversation.sourceStudyVersionNumber ?? workspace.bundle.studyVersionNumber}`, metadata: { conversationId: conversation.id, generatedBy: context.userName }, sections: conversation.messages.map((message, index) => ({ key: `message-${message.id}`, title: `${message.role === "USER" ? "Pergunta" : "REDE AI"} ${index + 1}`, order: index + 1, blocks: [{ type: "NARRATIVE", narrative: { id: message.id, text: message.content, origin: "SYSTEM_GENERATED", evidenceRefs: message.evidence.map((item) => ({ ref: item.evidenceRef, label: item.label, sourceVersion: item.version ?? "contexto persistido" })) } }] })), disclaimers: ["Conversa de apoio à decisão. Não constitui documento oficial nem garantia de resultado."], sources: [], generatedAt: new Date().toISOString(), audience: "INTERNAL", confidentialityBySection: Object.fromEntries(conversation.messages.map((message) => [`message-${message.id}`, "STRICTLY_CONFIDENTIAL"])) };
   const rendered = await renderDocumentPdf(model, workspace.brand, { watermark: "CONFIDENTIAL" });
   return { fileName: `REDE_AI_${conversation.id}.pdf`, mimeType: "application/pdf", content: rendered.bytes, checksum: rendered.checksum, pageCount: rendered.pageCount };

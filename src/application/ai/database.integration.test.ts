@@ -14,6 +14,7 @@ let foreignContext: AuthContext;
 let conversationId: string;
 let studyVersionId: string;
 let investmentCaseId: string;
+let projectId: string;
 
 async function identity(name: string, role: MembershipRole) {
   const organization = await prisma.organization.create({ data: { name, slug: `${name.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-")}-${suffix}` } });
@@ -28,9 +29,10 @@ describe.sequential("REDE AI database boundaries and deterministic E2E", () => {
     foreignContext = await identity("AI Foreign", "OWNER");
     const study = await createStudy(context, { ...DEMO_PROJECT, projectName: `AI Case ${suffix}` });
     studyVersionId = study.studyVersionId;
+    projectId = study.projectId;
     const workspace = await createInvestmentCase(context, study.studyVersionId, null);
     investmentCaseId = workspace.id;
-    const conversation = await createAIConversation(context, "dashboard");
+    const conversation = await createAIConversation(context, projectId, "dashboard");
     conversationId = conversation.id;
   }, 60_000);
 
@@ -77,7 +79,9 @@ describe.sequential("REDE AI database boundaries and deterministic E2E", () => {
 
   it("blocks cross-organization conversation access and excludes foreign bootstrap data", async () => {
     await expect(askRedeAI(foreignContext, { conversationId, question: "Explique o projeto.", currentModule: "ai" })).rejects.toThrow(/Conversa não encontrada/i);
-    await expect(getAIBootstrap(foreignContext)).rejects.toThrow(/Investment Case não encontrado/i);
+    // mesmo projectId real, organização diferente: getInvestmentCaseForProject deve isolar por
+    // tenant e não "vazar" o Investment Case de `context` para `foreignContext`.
+    await expect(getAIBootstrap(foreignContext, projectId)).rejects.toThrow(/Investment Case não encontrado/i);
   });
 
   it("exports the grounded conversation as a real PDF", async () => {
@@ -85,5 +89,28 @@ describe.sequential("REDE AI database boundaries and deterministic E2E", () => {
     expect(Buffer.from(exported.content).subarray(0, 4).toString("ascii")).toBe("%PDF");
     expect(exported.checksum).toHaveLength(64);
     expect(exported.pageCount).toBeGreaterThan(0);
+  }, 30_000);
+
+  it("Fase 9K.0 (fechamento, gate 3): nenhuma consulta da IA muda silenciosamente de projeto — tela seleciona Project A, REDE AI recebe Project A", async () => {
+    // Segundo empreendimento na MESMA organização, com seu próprio Investment Case — cenário
+    // exato do bug original: existe mais de um projeto/Investment Case na organização, então
+    // "o mais recente" e "o que a tela está mostrando" podem divergir.
+    const studyB = await createStudy(context, { ...DEMO_PROJECT, projectName: `AI Case B ${suffix}` });
+    const workspaceB = await createInvestmentCase(context, studyB.studyVersionId, null);
+
+    const bootstrapA = await getAIBootstrap(context, projectId);
+    const bootstrapB = await getAIBootstrap(context, studyB.projectId);
+
+    expect(bootstrapA.activeConversation.context.projectId).toBe(projectId);
+    expect(bootstrapA.activeConversation.context.investmentCaseId).toBe(investmentCaseId);
+    expect(bootstrapB.activeConversation.context.projectId).toBe(studyB.projectId);
+    expect(bootstrapB.activeConversation.context.investmentCaseId).toBe(workspaceB.id);
+
+    // pedir o bootstrap de B não pode ter mudado o que A resolve na chamada seguinte (sem cache
+    // cruzado, sem "último vencedor" global).
+    const bootstrapAAgain = await getAIBootstrap(context, projectId);
+    expect(bootstrapAAgain.activeConversation.context.projectId).toBe(projectId);
+    expect(bootstrapAAgain.activeConversation.context.investmentCaseId).toBe(investmentCaseId);
+    expect(bootstrapAAgain.contextLabels.projectName).not.toBe(bootstrapB.contextLabels.projectName);
   }, 30_000);
 });

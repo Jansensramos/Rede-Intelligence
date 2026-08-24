@@ -21,6 +21,24 @@
   --radius: 3px;
   --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-display: Georgia, "Times New Roman", serif;
+
+  /* Fase 9K.0 — escala tipográfica mínima (plano §Y). Nenhum primitivo novo em
+     src/components/ui/ usa um font-size abaixo de --text-2xs (12px). As telas legadas que ainda
+     usam valores fixos de 7-9px (ver diagnóstico do plano §A.7) são uma exceção documentada,
+     migrada incrementalmente quando cada view adota estes tokens — ver nota no fim do arquivo. */
+  --text-2xs: 12px;
+  --text-xs: 13px;
+  --text-sm: 14px;
+  --text-md: 16px;
+  --text-lg: 20px;
+
+  /* Fase 9K.0 — tokens de espaçamento para os primitivos novos (plano §3). */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
 }
 
 /* Fase 9A — base operacional */
@@ -96,7 +114,7 @@ button:disabled { cursor: wait; opacity: .62; }
 .project-monogram { width: 34px; height: 34px; display: grid; place-items: center; background: #234554; border: 1px solid rgba(255,255,255,.1); font-family: var(--font-display); font-size: 13px; color: #e3ca9f; }
 .active-project strong, .active-project small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .active-project strong { font-size: 12px; font-weight: 650; }
-.active-project small { margin-top: 4px; font-size: 10px; color: #8fa3ab; }
+.active-project small { margin-top: 4px; font-size: var(--text-2xs); color: #8fa3ab; }
 .main-nav { min-height: 0; flex: 1; display: grid; align-content: start; gap: 3px; padding: 0 13px; overflow-y: auto; overscroll-behavior: contain; }
 .main-nav button { height: 41px; position: relative; border: 0; border-radius: 2px; background: transparent; color: #99abb2; padding: 0 12px; display: flex; gap: 12px; align-items: center; font-size: 12px; text-align: left; cursor: pointer; }
 .main-nav button:hover { color: #fff; background: rgba(255,255,255,.04); }
@@ -110,7 +128,7 @@ button:disabled { cursor: wait; opacity: .62; }
 .sidebar-module svg { color: var(--gold); }
 .sidebar-module strong, .sidebar-module small { display: block; }
 .sidebar-module strong { font-size: 11px; }
-.sidebar-module small { color: #81969e; font-size: 9px; margin-top: 3px; }
+.sidebar-module small { color: #81969e; font-size: var(--text-2xs); margin-top: 3px; }
 .sidebar-module .soon { position: absolute; right: 8px; bottom: 8px; padding: 3px 5px; background: rgba(185,138,67,.13); color: #cba566; font-size: 7px; letter-spacing: .09em; }
 .sidebar-footer { height: 60px; padding: 0 15px; border-top: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 8px; }
 .sidebar-footer button { min-width: 0; flex: 1; padding: 0; border: 0; background: none; color: #8fa3aa; display: flex; gap: 8px; align-items: center; font-size: 9px; text-align: left; }
@@ -128,7 +146,7 @@ button:disabled { cursor: wait; opacity: .62; }
 .logout-form { display: flex; margin: 0; }
 .mobile-menu { display: none; border: 0; background: none; padding: 5px; }
 
-.button { min-height: 36px; padding: 0 14px; border: 1px solid; border-radius: 2px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 10px; font-weight: 750; letter-spacing: .02em; cursor: pointer; }
+.button { min-height: 36px; padding: 0 14px; border: 1px solid; border-radius: 2px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: var(--text-xs); font-weight: 750; letter-spacing: .02em; cursor: pointer; }
 .button-primary { border-color: var(--ink); background: var(--ink); color: #fff; }
 .button-primary:hover { background: #183744; }
 .button-secondary { border-color: #d5d6d0; background: var(--surface); color: var(--ink); }
@@ -406,7 +424,7 @@ button.table-row { width: 100%; border: 0; border-bottom: 1px solid var(--line-s
 
 .section-title { min-height: 75px; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
 .section-title h2 { margin: 7px 0 0; font-size: 30px; letter-spacing: -.02em; }
-.section-title p { margin: 7px 0 0; max-width: 680px; color: var(--ink-muted); font-size: 10px; line-height: 1.55; }
+.section-title p { margin: 7px 0 0; max-width: 680px; color: var(--ink-muted); font-size: var(--text-sm); line-height: 1.55; }
 .assumption-groups { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
 .assumption-card { padding: 22px; border: 1px solid var(--line); background: var(--surface); }
 .assumption-card h3 { margin: 0 0 18px; padding-bottom: 13px; border-bottom: 1px solid var(--line-soft); font-family: var(--font-display); font-size: 18px; font-weight: 400; }
@@ -891,7 +909,7 @@ button.table-row { width: 100%; border: 0; border-bottom: 1px solid var(--line-s
 .sandbox-results strong { font-size: 10px; }
 .sandbox-results small, .sandbox-results > div > span { margin-top: 3px; color: #798689; font-size: 8px; }
 .sandbox-results button { display: flex; gap: 5px; align-items: center; padding: 6px 8px; border: 1px solid #cfd8d4; background: #f3f7f5; color: #37665b; font-size: 8px; cursor: pointer; }
-.empty-state { min-height: 100px; display: flex; align-items: center; justify-content: center; gap: 8px; color: #788588; font-size: 10px; }
+.empty-state { min-height: 100px; display: flex; align-items: center; justify-content: center; gap: 8px; color: #788588; font-size: var(--text-sm); }
 .suite-dialog-backdrop { position: fixed; inset: 0; z-index: 100; padding: 30px; display: grid; place-items: center; background: rgba(5,20,27,.7); backdrop-filter: blur(6px); }
 .suite-dialog { width: min(620px, 100%); max-height: calc(100vh - 60px); overflow-y: auto; padding: 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: var(--surface); box-shadow: 0 35px 90px rgba(0,0,0,.35); }
 .suite-dialog header, .suite-dialog footer, .suite-dialog > label:not(.dialog-row), .suite-dialog .checkbox-label { grid-column: 1 / -1; }
@@ -1514,4 +1532,80 @@ button.table-row { width: 100%; border: 0; border-bottom: 1px solid var(--line-s
 .integration-card footer { display: flex; gap: 8px; flex-wrap: wrap; }
 .integration-scope-chip { padding: 3px 7px; background: #f1efe9; color: #6a797e; font-size: 8px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; width: fit-content; }
 .integration-loading { display: flex; align-items: center; gap: 8px; padding: 14px; color: #788588; font-size: 10px; }
+
+/* ==========================================================================
+   Fase 9K.0 — Design System base (plano §3, §V, §W, §X, §Y, §Z, §AA, §AB, §AC)
+   Namespace "ds-" para os primitivos novos em src/components/ui/. Não redefine nem remove
+   nenhuma classe legada acima — migração das 24 views existentes é incremental (plano §X),
+   fora do escopo desta sprint.
+   ========================================================================== */
+
+/* Badge / SeverityPill (plano §5, §I) */
+.ds-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 5px 10px; font-size: var(--text-2xs); font-weight: 750; letter-spacing: .02em; white-space: nowrap; }
+.ds-badge-positive { background: var(--green-soft); color: var(--green); }
+.ds-badge-neutral { background: var(--paper-deep); color: var(--ink-muted); }
+.ds-badge-warning { background: var(--amber-soft); color: var(--amber); }
+.ds-badge-critical { background: var(--red-soft); color: var(--red); }
+
+/* Empty state (plano §AB) */
+.ds-empty-state { min-height: 140px; padding: var(--space-5); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); text-align: center; color: var(--ink-muted); border: 1px dashed var(--line); border-radius: var(--radius); background: var(--surface); }
+.ds-empty-state strong { font-size: var(--text-md); color: var(--ink); }
+.ds-empty-state p { margin: 0; max-width: 480px; font-size: var(--text-sm); line-height: 1.5; }
+
+/* Error state (plano §AC) */
+.ds-error-state { padding: var(--space-4) var(--space-5); display: flex; flex-direction: column; gap: var(--space-1); border: 1px solid #e4bbb5; border-radius: var(--radius); background: var(--red-soft); color: var(--red); }
+.ds-error-state strong { font-size: var(--text-md); }
+.ds-error-state p { margin: 0; font-size: var(--text-sm); line-height: 1.5; color: inherit; }
+.ds-error-state-meta { color: var(--ink-muted) !important; }
+.ds-error-state .button { align-self: flex-start; margin-top: var(--space-2); }
+
+/* Loading (plano §3) */
+.ds-loading { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-4); color: var(--ink-muted); font-size: var(--text-sm); }
+.ds-loading-spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--gold); animation: ds-spin .7s linear infinite; }
+@keyframes ds-spin { to { transform: rotate(360deg); } }
+
+/* DataTable (plano §Z) */
+.ds-data-table-wrap { display: grid; gap: var(--space-2); }
+.ds-data-table-toggle { justify-self: start; border: 1px solid var(--line); background: var(--surface); color: var(--ink-muted); padding: 6px 10px; border-radius: var(--radius); font-size: var(--text-2xs); font-weight: 700; cursor: pointer; }
+.ds-data-table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+.ds-data-table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.ds-data-table th, .ds-data-table td { padding: 11px 14px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.ds-data-table th { background: var(--paper-deep); color: var(--ink-muted); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: .05em; position: sticky; top: 0; }
+.ds-data-table tbody tr:last-child td { border-bottom: 0; }
+.ds-data-table-sticky { position: sticky; left: 0; background: var(--surface); }
+.ds-data-table th.ds-data-table-sticky { background: var(--paper-deep); z-index: 1; }
+.ds-data-table-clickable { cursor: pointer; }
+.ds-data-table-clickable:hover td { background: var(--paper-deep); }
+.ds-data-table-empty { padding: var(--space-4); color: var(--ink-muted); font-size: var(--text-sm); text-align: center; }
+
+/* FormField (plano §AA) */
+.ds-field { display: grid; gap: var(--space-1); }
+.ds-field > label { font-size: var(--text-xs); font-weight: 700; color: var(--ink); }
+.ds-field-required { color: var(--red); }
+.ds-field-hint { font-size: var(--text-2xs); color: var(--ink-muted); }
+.ds-field-error { font-size: var(--text-2xs); color: var(--red); }
+
+/* Tabs (plano §3) */
+.ds-tabs { display: flex; gap: 4px; padding: 4px; width: fit-content; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper-deep); }
+.ds-tabs button { border: 0; background: transparent; color: var(--ink-muted); padding: 8px 14px; border-radius: 2px; font-size: var(--text-xs); font-weight: 700; cursor: pointer; }
+.ds-tabs button.is-active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgba(16,39,51,.1); }
+
+/* Navegação agrupada por Grandes Áreas (plano §6, §E) — agrupamento visual apenas, sem rota
+   nova; ver src/domain/workspace/areas.ts e src/components/intelligence-workspace.tsx. */
+.ds-nav-group-label { margin: 14px 14px 4px; padding: 0 12px; color: #66808a; font-size: 9px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.ds-nav-group-label:first-child { margin-top: 4px; }
+
+/*
+ * Exceção documentada (plano §Y "Documentar exceções justificadas"): as classes legadas listadas
+ * abaixo continuam abaixo de 12px nesta sprint. Cada uma é específica de uma view (não é chrome
+ * compartilhado) e sua grade CSS foi dimensionada para esse tamanho — aumentar a fonte sem também
+ * redesenhar `min-height`/`padding`/`grid-template-columns` de cada uma arrisca sobreposição de
+ * texto, e essa verificação visual view-a-view é o trabalho de migração incremental do plano §X,
+ * não desta sprint (§3 do prompt da 9K.0: "não redesenhar todas as telas ainda"). Resolução
+ * completa prevista quando `DataTable` (acima) substituir essas grades na 9K.1+:
+ * .table-row / .table-head / .isolated-row / .isolated-head / .design-diff-table / .data-table
+ * (o antigo, em cash-flow — não confundir com `.ds-data-table` novo) / .scenario-table e as
+ * dezenas de seletores por módulo (score, red-team, land, investor, data-room, design/BIM,
+ * REDE AI) listados no relatório de entrega da 9K.0.
+ */
 .integration-error-banner { padding: 12px 16px; border: 1px solid #e5c5bf; border-left: 3px solid var(--red); background: #fbf2ef; color: #8a4a41; font-size: 10px; display: flex; align-items: center; gap: 8px; }

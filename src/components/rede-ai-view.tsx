@@ -7,13 +7,15 @@ import type { AIBootstrapView, AIMessageView, AIResponseEvidenceInput, AIStructu
 
 interface RedeAIViewProps {
   initialBootstrap: AIBootstrapView;
+  /** Fase 9K.0 (fechamento, gate 3): mesmo projectId do OperationalContext da tela — nunca resolvido de novo aqui. */
+  projectId: string;
   currentModule: string;
   initialPrompt?: string;
   onPromptConsumed?: () => void;
   onNavigate: (module: string) => void;
 }
 
-export function RedeAIView({ initialBootstrap, currentModule, initialPrompt, onPromptConsumed, onNavigate }: RedeAIViewProps) {
+export function RedeAIView({ initialBootstrap, projectId, currentModule, initialPrompt, onPromptConsumed, onNavigate }: RedeAIViewProps) {
   const [bootstrap, setBootstrap] = useState(initialBootstrap);
   const [activeId, setActiveId] = useState(initialBootstrap.activeConversation.id);
   const [draft, setDraft] = useState("");
@@ -30,12 +32,12 @@ export function RedeAIView({ initialBootstrap, currentModule, initialPrompt, onP
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [active.messages.length, liveText, progress.length]);
 
   async function refresh(preferredId = activeId) {
-    const response = await refreshAIBootstrapAction(currentModule);
+    const response = await refreshAIBootstrapAction(projectId, currentModule);
     if (response.ok) { setBootstrap(response.data); if (response.data.conversations.some((item) => item.id === preferredId)) setActiveId(preferredId); else setActiveId(response.data.activeConversation.id); }
   }
 
   async function createConversation() {
-    const response = await createAIConversationAction(currentModule);
+    const response = await createAIConversationAction(projectId, currentModule);
     if (!response.ok) { setError(response.error); return; }
     await refresh(response.data.id);
   }

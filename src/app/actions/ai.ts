@@ -5,13 +5,15 @@ import { confirmAIAction, createAIConversation, exportAIConversationPdf, getAIBo
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : "Não foi possível concluir esta ação.";
 
-export async function refreshAIBootstrapAction(currentModule = "ai") {
-  try { return { ok: true as const, data: await getAIBootstrap(await requireAuthContext(), currentModule) }; }
+// Fase 9K.0 (fechamento, gate 3): projectId é obrigatório e vem sempre do OperationalContext já
+// resolvido pela tela — nunca de uma segunda resolução independente dentro do REDE AI.
+export async function refreshAIBootstrapAction(projectId: string, currentModule = "ai") {
+  try { return { ok: true as const, data: await getAIBootstrap(await requireAuthContext(), projectId, currentModule) }; }
   catch (error) { return { ok: false as const, error: errorMessage(error) }; }
 }
 
-export async function createAIConversationAction(currentModule = "ai") {
-  try { const context = await requireAuthContext(); const row = await createAIConversation(context, currentModule); return { ok: true as const, data: { id: row.id } }; }
+export async function createAIConversationAction(projectId: string, currentModule = "ai") {
+  try { const context = await requireAuthContext(); const row = await createAIConversation(context, projectId, currentModule); return { ok: true as const, data: { id: row.id } }; }
   catch (error) { return { ok: false as const, error: errorMessage(error) }; }
 }
 

@@ -179,13 +179,22 @@ async function loadFrozenBundleSource(
   };
 }
 
-export async function ensureInvestmentCase(context: Pick<AuthContext, "userId" | "organizationId">): Promise<InvestmentCaseWorkspace> {
-  const existing = await getLatestInvestmentCaseForOrganization(context.organizationId);
+/**
+ * Fase 9K.0 (fechamento, gate 3 "Unificar REDE AI ao mesmo contexto"): `projectId` agora é
+ * obrigatório. Antes, esta função buscava "o Investment Case mais recentemente atualizado da
+ * organização" e, se não existisse nenhum, criava um a partir de "a versão de estudo SNAPSHOT mais
+ * recente da organização" — ambos escolhidos por atividade, exatamente o mesmo padrão que causou o
+ * problema do gate 2 (um teste de integração podia tornar-se "o mais recente" e desviar qual
+ * projeto ganhava o Investment Case). Agora tudo é escopado pelo `projectId` já resolvido por
+ * `resolveOperationalContext` — nunca por recência entre projetos diferentes.
+ */
+export async function ensureInvestmentCase(context: Pick<AuthContext, "userId" | "organizationId">, projectId: string): Promise<InvestmentCaseWorkspace> {
+  const existing = await getInvestmentCaseForProject(context.organizationId, projectId);
   if (existing) return existing;
   return prisma.$transaction(async (tx) => {
-    const latestVersion = await tx.studyVersion.findFirst({ where: { status: "SNAPSHOT", study: { project: { organizationId: context.organizationId } } }, orderBy: { createdAt: "desc" }, select: { id: true } });
+    const latestVersion = await tx.studyVersion.findFirst({ where: { status: "SNAPSHOT", study: { projectId, project: { organizationId: context.organizationId } } }, orderBy: { createdAt: "desc" }, select: { id: true } });
     if (!latestVersion) throw new Error("Crie um snapshot financeiro antes de abrir um Investment Case.");
-    const landVersion = await tx.landStudyVersion.findFirst({ where: { versionStatus: "SNAPSHOT", landStudy: { organizationId: context.organizationId, landAsset: { organizationId: context.organizationId } } }, orderBy: { createdAt: "desc" }, select: { id: true } });
+    const landVersion = await tx.landStudyVersion.findFirst({ where: { versionStatus: "SNAPSHOT", landStudy: { organizationId: context.organizationId, landAsset: { organizationId: context.organizationId, projectId } } }, orderBy: { createdAt: "desc" }, select: { id: true } });
     return createInvestmentCaseInTransaction(tx, context, latestVersion.id, landVersion?.id ?? null);
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
@@ -276,6 +285,18 @@ async function ensureBrand(tx: Tx, context: Pick<AuthContext, "userId" | "organi
 
 export async function getLatestInvestmentCaseForOrganization(organizationId: string): Promise<InvestmentCaseWorkspace | null> {
   const row = await prisma.investmentCase.findFirst({ where: { organizationId }, orderBy: { updatedAt: "desc" }, select: { id: true } });
+  return row ? loadWorkspace(prisma, organizationId, row.id) : null;
+}
+
+/**
+ * Fase 9K.0 (fechamento, gate 3): variante escopada por projeto de `getLatestInvestmentCaseForOrganization`.
+ * Ordenar por `updatedAt` aqui é legítimo — já não decide *qual projeto*, só qual Investment Case
+ * (dentro de um projeto já resolvido) está em vigor. Usada por `ensureInvestmentCase` e pelo REDE AI
+ * (`ai-service.ts`) para nunca resolver um projeto diferente do que a tela/OperationalContext já
+ * determinou.
+ */
+export async function getInvestmentCaseForProject(organizationId: string, projectId: string): Promise<InvestmentCaseWorkspace | null> {
+  const row = await prisma.investmentCase.findFirst({ where: { organizationId, projectId }, orderBy: { updatedAt: "desc" }, select: { id: true } });
   return row ? loadWorkspace(prisma, organizationId, row.id) : null;
 }
 
