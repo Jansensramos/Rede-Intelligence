@@ -23,6 +23,9 @@ describe("Entrega de webhooks de saída (outbox → subscription → HTTP fake)"
   beforeAll(async () => {
     const membership = await prisma.organizationMembership.findFirstOrThrow({ where: { organization: { slug: "rede-nucleo-de-negocios" }, user: { email: "admin@rede.local" } } });
     context = { organizationId: membership.organizationId, userId: membership.userId, role: "OWNER" };
+    await prisma.integrationDeadLetter.deleteMany({ where: { organizationId: context.organizationId, sourceType: "OUTBOX_EVENT" } });
+    await prisma.integrationOutboxEvent.deleteMany({ where: { organizationId: context.organizationId } });
+    await prisma.webhookSubscription.deleteMany({ where: { organizationId: context.organizationId } });
   });
 
   it("entrega com sucesso e nunca gera um segundo efeito para o mesmo evento", async () => {
@@ -91,5 +94,54 @@ describe("Entrega de webhooks de saída (outbox → subscription → HTTP fake)"
     const event = await prisma.integrationOutboxEvent.findFirstOrThrow({ where: { organizationId: context.organizationId, eventName: "budget.approved", entityId } });
     expect(event.status).toBe("DEAD_LETTER");
     void subscription;
+  });
+
+  it("trata secretRef inexistente/corrompido como AUTHENTICATION e segue processando outros eventos do lote", async () => {
+    // 1. Subscription com segredo inválido (arquivo inexistente no cofre)
+    const brokenSubscription = await prisma.webhookSubscription.create({
+      data: {
+        organizationId: context.organizationId,
+        endpointUrl: "https://consumer-broken-secret.example.com/webhooks/rede",
+        secretRef: "non-existent-secret-ref-path-corrupted",
+        events: ["user.created"],
+        createdById: context.userId,
+      },
+    });
+
+    // 2. Subscription válida com segredo íntegro no cofre
+    const validSubscription = await createWebhookSubscription(context, {
+      endpointUrl: "https://consumer-valid-secret.example.com/webhooks/rede",
+      events: ["contract.signed"],
+      secret: "valid-demo-secret-key-2026",
+    });
+
+    // 3. Enfileira ambos os eventos para o mesmo lote de entrega
+    const brokenEntityId = randomUUID();
+    const validEntityId = randomUUID();
+    await enqueueOutboxEvent(context.organizationId, { eventName: "user.created", entityType: "User", entityId: brokenEntityId, payload: { name: "Teste" } });
+    await enqueueOutboxEvent(context.organizationId, { eventName: "contract.signed", entityType: "OperationalContract", entityId: validEntityId, payload: { amount: 50000 } });
+
+    // 4. Executa entrega do lote
+    const adapter = fakeAdapter([200]);
+    const runResult = await deliverPendingOutboxEvents(context.organizationId, adapter);
+
+    // 5. O lote não foi derrubado: 2 tentados, 1 dead-letter (chave corrompida), 1 entregue com sucesso
+    expect(runResult.attempted).toBe(2);
+    expect(runResult.deadLettered).toBe(1);
+    expect(runResult.delivered).toBe(1);
+    expect(adapter.calls).toBe(1); // Somente o evento válido chamou o endpoint HTTP
+
+    // 6. Evento com segredo corrompido vira DEAD_LETTER com classificação AUTHENTICATION
+    const brokenEvent = await prisma.integrationOutboxEvent.findFirstOrThrow({ where: { organizationId: context.organizationId, eventName: "user.created", entityId: brokenEntityId } });
+    expect(brokenEvent.status).toBe("DEAD_LETTER");
+    const deadLetter = await prisma.integrationDeadLetter.findFirstOrThrow({ where: { sourceType: "OUTBOX_EVENT", sourceId: brokenEvent.id } });
+    expect(deadLetter.errorClass).toBe("AUTHENTICATION");
+
+    // 7. Evento válido foi entregue com sucesso
+    const validEvent = await prisma.integrationOutboxEvent.findFirstOrThrow({ where: { organizationId: context.organizationId, eventName: "contract.signed", entityId: validEntityId } });
+    expect(validEvent.status).toBe("DELIVERED");
+
+    void brokenSubscription;
+    void validSubscription;
   });
 });

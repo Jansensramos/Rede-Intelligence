@@ -45,7 +45,8 @@ describe.skipIf(!process.env.DATABASE_URL).sequential("fundação persistente mu
   });
 
   it("impede IDOR entre organizações no acesso por ID", async () => {
-    const redeStudy = await getLatestStudyForOrganization(rede.id);
+    const horizonteProject = await prisma.project.findFirstOrThrow({ where: { organizationId: rede.id, name: "Residencial Horizonte" }, include: { studies: true } });
+    const redeStudy = await getStudyForOrganization(rede.id, horizonteProject.studies[0].id);
     expect(redeStudy?.assumptions.projectName).toBe("Residencial Horizonte");
     expect(await getStudyForOrganization(rede.id, redeStudy!.studyId)).not.toBeNull();
     expect(await getStudyForOrganization(atlas.id, redeStudy!.studyId)).toBeNull();
@@ -119,7 +120,8 @@ describe.skipIf(!process.env.DATABASE_URL).sequential("fundação persistente mu
   });
 
   it("persiste Evidence Pack, especialistas, provenance e síntese do Red Team", async () => {
-    const latest = await getLatestStudyForOrganization(rede.id);
+    const horizonteProject = await prisma.project.findFirstOrThrow({ where: { organizationId: rede.id, name: "Residencial Horizonte" }, include: { studies: true } });
+    const latest = await getStudyForOrganization(rede.id, horizonteProject.studies[0].id);
     const run = await prisma.redTeamRun.findFirstOrThrow({
       where: { studyVersionId: latest!.studyVersionId, status: "COMPLETED" },
       include: {

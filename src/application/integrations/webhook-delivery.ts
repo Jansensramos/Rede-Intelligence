@@ -86,7 +86,14 @@ export async function deliverPendingOutboxEvents(organizationId: string, adapter
     const breakerDecision = await checkCircuitBreakerGate(organizationId, scopeKey, CIRCUIT_POLICY, now);
     if (!breakerDecision.allow) { result.skippedCircuitOpen += 1; continue; }
 
-    const secret = await integrationSecretVault.read(subscription.secretRef);
+    let secret: string;
+    try {
+      secret = await integrationSecretVault.read(subscription.secretRef);
+    } catch (error) {
+      const decision = await handleDeliveryFailure(event, "AUTHENTICATION", error instanceof Error ? error.message : "Chave de assinatura de webhook inacessível.");
+      if (decision.action === "RETRY") result.retried += 1; else result.deadLettered += 1;
+      continue;
+    }
     const body = JSON.stringify({ eventId: event.id, eventName: event.eventName, eventVersion: event.eventVersion, entityType: event.entityType, entityId: event.entityId, payload: event.payload });
     const signature = createHmac("sha256", secret).update(body).digest("hex");
 

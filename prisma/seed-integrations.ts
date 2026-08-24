@@ -70,17 +70,10 @@ export async function seedIntegrationsDemo(prisma: PrismaClient, input: SeedInte
     configuration: { syncMode: "SHADOW_READ_ONLY" },
   });
 
-  const driveCredential = await prisma.credentialReference.findUnique({ where: { installationId: driveInstallation.id } });
-  if (!driveCredential) {
-    await storeInstallationCredential(context, driveInstallation.id, { method: "OAUTH2", secret: "demo-oauth-refresh-token-not-a-real-secret", scopes: ["drive.readonly"], expiresAt: new Date("2027-01-01T00:00:00.000Z") });
-  }
-
-  const erpCredential = await prisma.credentialReference.findUnique({ where: { installationId: erpInstallation.id } });
-  if (!erpCredential) {
-    await storeInstallationCredential(context, erpInstallation.id, { method: "API_KEY", secret: "demo-erp-api-key-not-a-real-secret", expiresAt: new Date("2026-09-01T00:00:00.000Z") });
-    // Caso Crítico D: token expirado é registrado/alertado, nunca apaga dados nem entra em loop de retry.
-    await prisma.credentialReference.update({ where: { installationId: erpInstallation.id }, data: { status: "EXPIRED" } });
-  }
+  await storeInstallationCredential(context, driveInstallation.id, { method: "OAUTH2", secret: "demo-oauth-refresh-token-not-a-real-secret", scopes: ["drive.readonly"], expiresAt: new Date("2027-01-01T00:00:00.000Z") });
+  await storeInstallationCredential(context, erpInstallation.id, { method: "API_KEY", secret: "demo-erp-api-key-not-a-real-secret", expiresAt: new Date("2026-09-01T00:00:00.000Z") });
+  // Caso Crítico D: token expirado é registrado/alertado, nunca apaga dados nem entra em loop de retry.
+  await prisma.credentialReference.update({ where: { installationId: erpInstallation.id }, data: { status: "EXPIRED" } });
 
   // Google Drive: referência sem cópia; nova versão identificada sem perder a anterior (Caso Crítico E).
   const driveFiles = [
