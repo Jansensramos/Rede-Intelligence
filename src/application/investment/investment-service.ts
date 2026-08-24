@@ -187,16 +187,59 @@ async function loadFrozenBundleSource(
  * problema do gate 2 (um teste de integração podia tornar-se "o mais recente" e desviar qual
  * projeto ganhava o Investment Case). Agora tudo é escopado pelo `projectId` já resolvido por
  * `resolveOperationalContext` — nunca por recência entre projetos diferentes.
+ *
+ * Fechamento da 9K.1 (gate 1 "P2034 / deadlock em ensureInvestmentCase"): causa raiz confirmada por
+ * reprodução determinística (não suposição) — duas chamadas concorrentes desta função para o
+ * MESMO projeto sem Investment Case ainda produzem, de forma consistente, 1 sucesso + 1
+ * `PrismaClientKnownRequestError` código `P2034` ("write conflict or deadlock"). O padrão
+ * "ler; se não existe, escrever" (linhas abaixo) não tinha nenhuma proteção de concorrência: a
+ * transação `Serializable` grava tanto o `InvestmentCase` (chave única `(organizationId,
+ * studyVersionId, landStudyVersionId)`) quanto, via `ensureBrand`, um `organizationBrandConfig`
+ * escopado só por `organizationId` — ambos colidem quando duas execuções abrem o mesmo projeto (ou
+ * dois projetos da mesma organização, pela `organizationBrandConfig`) ao mesmo tempo. Na 9K.1, isso
+ * deixou de ser hipotético: troca de contexto aciona `router.refresh()` sobre uma rota que chama
+ * esta função, e nada impede duas invocações sobrepostas (duas abas, duplo clique, ou a própria
+ * revalidação do Next.js sobrepondo uma navegação em andamento).
+ *
+ * Não foi possível eliminar a escrita do fluxo de leitura sem redesenhar o domínio (o próprio
+ * conceito de "abrir Viabilidade pela primeira vez" já implica criar o Investment Case — não é uma
+ * escrita acidental, é o contrato hoje) — por isso a correção é neste nível: (a) antes de cada
+ * tentativa, relê `getInvestmentCaseForProject`, porque é provável que a transação concorrente que
+ * "venceu" já tenha criado o registro, e nesse caso a tentativa seguinte só lê, nunca escreve de
+ * novo; (b) só reexecuta quando o erro for especificamente `P2034` — qualquer outro erro (ex.: "crie
+ * um snapshot financeiro antes") propaga imediatamente, sem mascarar; (c) limite pequeno e fixo de
+ * tentativas (3), com um atraso curto e com jitter entre elas para não colidir de novo no mesmo
+ * instante.
  */
+const ENSURE_INVESTMENT_CASE_MAX_ATTEMPTS = 3;
+
+function isTransientWriteConflict(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
+}
+
+function jitterDelay(attempt: number) {
+  return new Promise((resolve) => setTimeout(resolve, 40 * attempt + Math.floor(Math.random() * 60)));
+}
+
 export async function ensureInvestmentCase(context: Pick<AuthContext, "userId" | "organizationId">, projectId: string): Promise<InvestmentCaseWorkspace> {
-  const existing = await getInvestmentCaseForProject(context.organizationId, projectId);
-  if (existing) return existing;
-  return prisma.$transaction(async (tx) => {
-    const latestVersion = await tx.studyVersion.findFirst({ where: { status: "SNAPSHOT", study: { projectId, project: { organizationId: context.organizationId } } }, orderBy: { createdAt: "desc" }, select: { id: true } });
-    if (!latestVersion) throw new Error("Crie um snapshot financeiro antes de abrir um Investment Case.");
-    const landVersion = await tx.landStudyVersion.findFirst({ where: { versionStatus: "SNAPSHOT", landStudy: { organizationId: context.organizationId, landAsset: { organizationId: context.organizationId, projectId } } }, orderBy: { createdAt: "desc" }, select: { id: true } });
-    return createInvestmentCaseInTransaction(tx, context, latestVersion.id, landVersion?.id ?? null);
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  for (let attempt = 1; attempt <= ENSURE_INVESTMENT_CASE_MAX_ATTEMPTS; attempt++) {
+    const existing = await getInvestmentCaseForProject(context.organizationId, projectId);
+    if (existing) return existing;
+
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const latestVersion = await tx.studyVersion.findFirst({ where: { status: "SNAPSHOT", study: { projectId, project: { organizationId: context.organizationId } } }, orderBy: { createdAt: "desc" }, select: { id: true } });
+        if (!latestVersion) throw new Error("Crie um snapshot financeiro antes de abrir um Investment Case.");
+        const landVersion = await tx.landStudyVersion.findFirst({ where: { versionStatus: "SNAPSHOT", landStudy: { organizationId: context.organizationId, landAsset: { organizationId: context.organizationId, projectId } } }, orderBy: { createdAt: "desc" }, select: { id: true } });
+        return createInvestmentCaseInTransaction(tx, context, latestVersion.id, landVersion?.id ?? null);
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (error) {
+      if (!isTransientWriteConflict(error) || attempt === ENSURE_INVESTMENT_CASE_MAX_ATTEMPTS) throw error;
+      await jitterDelay(attempt);
+    }
+  }
+  // Inalcançável: o laço acima sempre retorna ou lança na última tentativa. Existe só para o TypeScript.
+  throw new Error("Não foi possível preparar o Investment Case após múltiplas tentativas.");
 }
 
 export async function createInvestmentCase(
