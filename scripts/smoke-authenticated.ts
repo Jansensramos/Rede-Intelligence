@@ -14,7 +14,7 @@ async function main() {
     const response = await fetch(baseUrl, { headers: { cookie: `${cookieName}=${token}` }, redirect: "manual" });
     const html = await response.text();
     if (response.status !== 200) throw new Error(`Página inicial respondeu HTTP ${response.status}.`);
-    const markers = ["START BUTANTÃ", "Visão executiva", "Orçamento", "Suprimentos e Contratos", "Jurídico e Diligência", "Financeiro", "Vendas e Recebíveis", "Pessoas e Eficiência", "Contabilidade e Controladoria", "REDE AI"];
+    const markers = ["START BUTANTÃ", "Visão executiva", "Orçamento", "Suprimentos e Contratos", "Jurídico e Diligência", "Financeiro", "Vendas e Recebíveis", "Pessoas e Eficiência", "Contabilidade e Controladoria", "REDE AI", "Inteligência de Mercado", "Inteligência de Produto"];
     for (const marker of markers) {
       if (!html.includes(marker)) throw new Error(`Marcador ausente na página autenticada: ${marker}.`);
     }

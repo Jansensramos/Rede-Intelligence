@@ -1009,6 +1009,14 @@ model Organization {
   connectorDocumentReferences     ConnectorDocumentReference[]
   externalPriceObservations       ExternalPriceObservation[]
   apiClients                      ApiClient[]
+  marketAreas                     MarketArea[]
+  marketDevelopments              MarketDevelopment[]
+  marketPriceObservations         MarketPriceObservation[]
+  marketInventorySnapshots        MarketInventorySnapshot[]
+  demographicObservations         DemographicObservation[]
+  incomeObservations              IncomeObservation[]
+  productScenarios                ProductScenario[]
+  productDecisionRecords          ProductDecisionRecord[]
 
   @@map("organizations")
 }
@@ -1193,6 +1201,8 @@ model Project {
   benchmarkRuns                BenchmarkRun[]
   autoBudgetProposals          AutoBudgetProposal[]
   bimQuantityMappings          BimQuantityMapping[]
+  marketAreas                  MarketArea[]
+  productScenarios             ProductScenario[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -2506,6 +2516,8 @@ model LandAsset {
   legalRegistrations    LegalAssetRegistration[]
   dueDiligenceCases     LegalDueDiligenceCase[]
   municipalRecords      MunicipalPropertyRecord[]
+  marketAreas           MarketArea[]
+  productScenarios      ProductScenario[]
 
   @@index([organizationId, city, state])
   @@index([projectId])
@@ -10366,4 +10378,399 @@ model CostCompositionItem {
 
   @@index([compositionId])
   @@map("cost_composition_items")
+}
+
+// ============================================================================
+// FASE 9J — Inteligência de Mercado e Inteligência de Produto
+// Migração 100% aditiva. Nenhum modelo existente (9A–9I, Land, Viabilidade, Vendas) é alterado.
+// ============================================================================
+
+enum MarketAreaType {
+  RADIUS
+  NEIGHBORHOOD
+  MUNICIPALITY
+  CUSTOM_POLYGON
+  ISOCHRONE
+}
+
+enum MarketDevelopmentStage {
+  BREVE_LANCAMENTO
+  LANCAMENTO
+  EM_OBRAS
+  PRONTO_NOVO
+  PRONTO_USADO
+}
+
+enum MarketProductStandard {
+  ECONOMICO_MCMV
+  MEDIO_BAIXO
+  MEDIO
+  MEDIO_ALTO
+  ALTO
+  LUXO
+}
+
+enum MarketPriceType {
+  LIST_PRICE
+  ADVERTISED
+  NEGOTIATED
+  TRANSACTED_REGISTRY
+  REDE_ACTUAL_SALE
+}
+
+enum ProductScenarioKind {
+  CONSERVATIVE
+  BASE
+  AGGRESSIVE
+  CUSTOM
+}
+
+enum ProductLifecycleStatus {
+  DRAFT
+  UNDER_REVIEW
+  RECOMMENDED
+  APPROVED
+  REJECTED
+  SUPERSEDED
+}
+
+model MarketArea {
+  id              String         @id @default(cuid())
+  organizationId  String         @map("organization_id")
+  landAssetId     String?        @map("land_asset_id")
+  projectId       String?        @map("project_id")
+  name            String
+  type            MarketAreaType @default(RADIUS)
+  centerLatitude  Decimal        @map("center_latitude") @db.Decimal(11, 8)
+  centerLongitude Decimal        @map("center_longitude") @db.Decimal(11, 8)
+  radiusMeters    Int?           @map("radius_meters")
+  polygonGeometry Json?          @map("polygon_geometry")
+  neighborhood    String?
+  city            String
+  state           String         @db.Char(2)
+  isDefault       Boolean        @default(false) @map("is_default")
+  isDemo          Boolean        @default(false) @map("is_demo")
+  createdById     String         @map("created_by_id")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  organization     Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  landAsset        LandAsset?                @relation(fields: [landAssetId], references: [id], onDelete: SetNull)
+  project          Project?                  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  developments     MarketDevelopment[]
+  demographics     DemographicObservation[]
+  incomeRecords    IncomeObservation[]
+  productScenarios ProductScenario[]
+
+  @@index([organizationId, city, state])
+  @@index([organizationId, landAssetId])
+  @@map("market_areas")
+}
+
+model DemographicObservation {
+  id                   String       @id @default(cuid())
+  organizationId       String       @map("organization_id")
+  marketAreaId         String       @map("market_area_id")
+  referenceYear        Int          @map("reference_year")
+  totalPopulation      Int          @map("total_population")
+  projectedPopulation  Int?         @map("projected_population")
+  annualGrowthRate     Decimal?     @map("annual_growth_rate") @db.Decimal(6, 4)
+  totalHouseholds      Int          @map("total_households")
+  personsPerHousehold  Decimal      @map("persons_per_household") @db.Decimal(4, 2)
+  urbanizationRate     Decimal?     @map("urbanization_rate") @db.Decimal(6, 4)
+  ageDistribution      Json         @map("age_distribution")
+  householdComposition Json         @map("household_composition")
+  educationLevels      Json?        @map("education_levels")
+  sourceProvider       String       @map("source_provider")
+  confidenceScore      Float        @default(1.0) @map("confidence_score")
+  provenance           Json
+  createdAt            DateTime     @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  marketArea   MarketArea   @relation(fields: [marketAreaId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, marketAreaId, referenceYear, sourceProvider])
+  @@map("demographic_observations")
+}
+
+model IncomeObservation {
+  id                        String       @id @default(cuid())
+  organizationId            String       @map("organization_id")
+  marketAreaId              String       @map("market_area_id")
+  referenceYear             Int          @map("reference_year")
+  averageHouseholdIncome    Decimal      @map("average_household_income") @db.Decimal(14, 2)
+  medianHouseholdIncome     Decimal      @map("median_household_income") @db.Decimal(14, 2)
+  perCapitaIncome           Decimal?     @map("per_capita_income") @db.Decimal(14, 2)
+  totalIncomeMassMonthly    Decimal?     @map("total_income_mass_monthly") @db.Decimal(18, 2)
+  incomeBracketDistribution Json         @map("income_bracket_distribution")
+  sourceProvider            String       @map("source_provider")
+  provenance                Json
+  createdAt                 DateTime     @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  marketArea   MarketArea   @relation(fields: [marketAreaId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, marketAreaId, referenceYear, sourceProvider])
+  @@map("income_observations")
+}
+
+// Política versionada de capacidade de financiamento (plano 9J, seção I) — externaliza regras de
+// crédito como parâmetros, nunca constantes bancárias universais embutidas no motor.
+model AffordabilityPolicy {
+  id                   String   @id @default(cuid())
+  organizationId       String   @map("organization_id")
+  name                 String
+  version              Int      @default(1)
+  maxCommitmentRate    Decimal  @map("max_commitment_rate") @db.Decimal(6, 4)
+  annualInterestRate   Decimal  @map("annual_interest_rate") @db.Decimal(6, 4)
+  termMonths           Int      @map("term_months")
+  minDownPaymentRate   Decimal  @map("min_down_payment_rate") @db.Decimal(6, 4)
+  isActive             Boolean  @default(true) @map("is_active")
+  createdById          String   @map("created_by_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, name, version])
+  @@map("affordability_policies")
+}
+
+// Pesos versionados de similaridade de concorrentes (plano 9J, seção V) — parâmetros auditáveis,
+// nunca hardcoded silenciosamente na consulta.
+model MarketComparabilityPolicy {
+  id                 String   @id @default(cuid())
+  organizationId     String   @map("organization_id")
+  name               String
+  version            Int      @default(1)
+  distanceWeight     Decimal  @map("distance_weight") @db.Decimal(6, 4)
+  standardWeight     Decimal  @map("standard_weight") @db.Decimal(6, 4)
+  typologyWeight     Decimal  @map("typology_weight") @db.Decimal(6, 4)
+  pricePointWeight   Decimal  @map("price_point_weight") @db.Decimal(6, 4)
+  recencyWeight      Decimal  @map("recency_weight") @db.Decimal(6, 4)
+  minimumSampleSize  Int      @default(3) @map("minimum_sample_size")
+  isActive           Boolean  @default(true) @map("is_active")
+  createdById        String   @map("created_by_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, name, version])
+  @@map("market_comparability_policies")
+}
+
+// Catálogo estruturado de atributos e lazer (plano 9J, seção AD) — cada item carrega custo e
+// relevância observada, nunca recomendado por modismo.
+model AmenityCatalogItem {
+  id                   String   @id @default(cuid())
+  organizationId       String   @map("organization_id")
+  code                 String
+  name                 String
+  category             String
+  estimatedCostPerM2   Decimal  @map("estimated_cost_per_m2") @db.Decimal(12, 2)
+  areaRequiredM2       Decimal  @map("area_required_m2") @db.Decimal(10, 2)
+  relevanceRate        Decimal? @map("relevance_rate") @db.Decimal(6, 4)
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, code])
+  @@map("amenity_catalog_items")
+}
+
+model MarketDevelopment {
+  id                   String                 @id @default(cuid())
+  organizationId       String                 @map("organization_id")
+  marketAreaId         String                 @map("market_area_id")
+  name                 String
+  developerName        String?                @map("developer_name")
+  builderName          String?                @map("builder_name")
+  address              String
+  neighborhood         String
+  city                 String
+  state                String                 @db.Char(2)
+  latitude             Decimal                @db.Decimal(11, 8)
+  longitude            Decimal                @db.Decimal(11, 8)
+  distanceMeters       Int                    @map("distance_meters")
+  stage                MarketDevelopmentStage @default(LANCAMENTO)
+  standard             MarketProductStandard  @default(MEDIO)
+  launchDate           DateTime?              @map("launch_date") @db.Date
+  expectedDeliveryDate DateTime?              @map("expected_delivery_date") @db.Date
+  totalTowers          Int                    @default(1) @map("total_towers")
+  totalFloors          Int?                   @map("total_floors")
+  totalUnits           Int                    @map("total_units")
+  amenities            Json?
+  isCanonical          Boolean                @default(true) @map("is_canonical")
+  isDemo               Boolean                @default(false) @map("is_demo")
+  confidenceScore      Float                  @default(1.0) @map("confidence_score")
+  provenance           Json
+  createdById          String                 @map("created_by_id")
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @updatedAt @map("updated_at")
+
+  organization       Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  marketArea         MarketArea                @relation(fields: [marketAreaId], references: [id], onDelete: Cascade)
+  priceObservations  MarketPriceObservation[]
+  inventorySnapshots MarketInventorySnapshot[]
+  launchHistory      MarketLaunchHistory[]
+
+  @@index([organizationId, marketAreaId, stage])
+  @@index([organizationId, latitude, longitude])
+  @@map("market_developments")
+}
+
+model MarketPriceObservation {
+  id                  String            @id @default(cuid())
+  organizationId      String            @map("organization_id")
+  developmentId       String            @map("development_id")
+  typologyDescription String            @map("typology_description")
+  bedrooms            Int
+  suites              Int               @default(0)
+  bathrooms           Int               @default(1)
+  parkingSpaces       Int               @default(1) @map("parking_spaces")
+  privateAreaM2       Decimal           @map("private_area_m2") @db.Decimal(10, 2)
+  totalPrice          Decimal           @map("total_price") @db.Decimal(14, 2)
+  pricePerSqm         Decimal           @map("price_per_sqm") @db.Decimal(12, 2)
+  priceType           MarketPriceType   @default(LIST_PRICE) @map("price_type")
+  discountRate        Decimal?          @map("discount_rate") @db.Decimal(6, 4)
+  observedAt          DateTime          @map("observed_at") @db.Date
+  sourceProvider      String            @map("source_provider")
+  confidenceScore     Float             @default(1.0) @map("confidence_score")
+  provenance          Json
+  createdAt           DateTime          @default(now()) @map("created_at")
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  development  MarketDevelopment @relation(fields: [developmentId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, developmentId, observedAt])
+  @@map("market_price_observations")
+}
+
+// Estoque imobiliário de mercado estritamente temporal — nunca sobrescreve um registro passado
+// (plano 9J, seção N.1); cada observação é uma linha nova carimbada por asOfDate.
+model MarketInventorySnapshot {
+  id                  String            @id @default(cuid())
+  organizationId      String            @map("organization_id")
+  developmentId       String            @map("development_id")
+  asOfDate            DateTime          @map("as_of_date") @db.Date
+  totalUnits          Int               @map("total_units")
+  availableUnits      Int               @map("available_units")
+  soldUnits           Int               @map("sold_units")
+  reservedUnits       Int               @default(0) @map("reserved_units")
+  vsoPeriodPercentage Decimal?          @map("vso_period_percentage") @db.Decimal(6, 4)
+  monthsOfInventory   Decimal?          @map("months_of_inventory") @db.Decimal(6, 2)
+  sourceProvider      String            @map("source_provider")
+  provenance          Json
+  createdAt           DateTime          @default(now()) @map("created_at")
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  development  MarketDevelopment @relation(fields: [developmentId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, developmentId, asOfDate, sourceProvider])
+  @@map("market_inventory_snapshots")
+}
+
+// Histórico temporal de lançamentos (plano 9J, seção M) — preserva a curva de velocidade dos
+// primeiros 6 meses tal como observada na época, sem retroatividade.
+model MarketLaunchHistory {
+  id                       String   @id @default(cuid())
+  organizationId           String   @map("organization_id")
+  developmentId            String   @map("development_id")
+  launchDate               DateTime @map("launch_date") @db.Date
+  launchedVgv              Decimal  @map("launched_vgv") @db.Decimal(18, 2)
+  unitsOffered             Int      @map("units_offered")
+  averagePricePerSqmAtLaunch Decimal @map("average_price_per_sqm_at_launch") @db.Decimal(12, 2)
+  velocityCurveFirst6Months Json    @map("velocity_curve_first_6_months")
+  sourceProvider           String   @map("source_provider")
+  provenance               Json
+  createdAt                DateTime @default(now()) @map("created_at")
+
+  development MarketDevelopment @relation(fields: [developmentId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, developmentId])
+  @@map("market_launch_history")
+}
+
+model ProductScenario {
+  id                           String                 @id @default(cuid())
+  organizationId               String                 @map("organization_id")
+  marketAreaId                 String                 @map("market_area_id")
+  landAssetId                  String?                @map("land_asset_id")
+  projectId                    String?                @map("project_id")
+  name                         String
+  kind                         ProductScenarioKind    @default(BASE)
+  status                       ProductLifecycleStatus @default(DRAFT)
+  version                      Int                    @default(1)
+  standard                     MarketProductStandard  @default(MEDIO)
+  positioning                  String?
+  totalUnits                   Int                    @map("total_units")
+  totalPrivateAreaM2           Decimal                @map("total_private_area_m2") @db.Decimal(12, 2)
+  averageUnitAreaM2            Decimal                @map("average_unit_area_m2") @db.Decimal(8, 2)
+  targetVgv                    Decimal                @map("target_vgv") @db.Decimal(18, 2)
+  averagePricePerSqm           Decimal                @map("average_price_per_sqm") @db.Decimal(12, 2)
+  averageTicket                Decimal                @map("average_ticket") @db.Decimal(14, 2)
+  expectedVelocityUnitsMonth   Decimal                @map("expected_velocity_units_month") @db.Decimal(6, 2)
+  estimatedSalesDurationMonths Int                    @map("estimated_sales_duration_months")
+  confidenceLevel              ConfidenceLevel        @default(MEDIUM) @map("confidence_level")
+  confidenceScore              Float                  @map("confidence_score")
+  rationale                    String                 @db.Text
+  explainabilityJson           Json                   @map("explainability_json")
+  engineAssumptionsJson        Json?                  @map("engine_assumptions_json")
+  engineResultsJson            Json?                  @map("engine_results_json")
+  amenities                    Json?
+  isDemo                       Boolean                @default(false) @map("is_demo")
+  createdById                  String                 @map("created_by_id")
+  createdAt                    DateTime               @default(now()) @map("created_at")
+  updatedAt                    DateTime               @updatedAt @map("updated_at")
+
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  marketArea   MarketArea               @relation(fields: [marketAreaId], references: [id], onDelete: Restrict)
+  landAsset    LandAsset?               @relation(fields: [landAssetId], references: [id], onDelete: SetNull)
+  project      Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  mixLines     ProductScenarioMixLine[]
+  decisions    ProductDecisionRecord[]
+
+  @@unique([organizationId, marketAreaId, name, version])
+  @@index([organizationId, status])
+  @@map("product_scenarios")
+}
+
+model ProductScenarioMixLine {
+  id                   String          @id @default(cuid())
+  scenarioId           String          @map("scenario_id")
+  typologyCode         String          @map("typology_code")
+  name                 String
+  bedrooms             Int
+  suites               Int             @default(0)
+  bathrooms            Int             @default(1)
+  parkingSpaces        Int             @default(1) @map("parking_spaces")
+  privateAreaM2        Decimal         @map("private_area_m2") @db.Decimal(8, 2)
+  unitCount            Int             @map("unit_count")
+  mixPercentage        Decimal         @map("mix_percentage") @db.Decimal(6, 4)
+  targetPricePerSqm    Decimal         @map("target_price_per_sqm") @db.Decimal(12, 2)
+  targetUnitPrice      Decimal         @map("target_unit_price") @db.Decimal(14, 2)
+  expectedMonthlySales Decimal?        @map("expected_monthly_sales") @db.Decimal(6, 2)
+  sortOrder            Int             @default(0) @map("sort_order")
+
+  scenario ProductScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  @@index([scenarioId])
+  @@map("product_scenario_mix_lines")
+}
+
+// Memória imutável da decisão (plano 9J, seção AM) — snapshot recomendado + snapshot aprovado +
+// deltas + justificativa; nunca editada após criada.
+model ProductDecisionRecord {
+  id                  String          @id @default(cuid())
+  organizationId      String          @map("organization_id")
+  scenarioId          String          @map("scenario_id")
+  recommendedSnapshot Json            @map("recommended_snapshot")
+  approvedSnapshot    Json            @map("approved_snapshot")
+  deltasJson          Json            @map("deltas_json")
+  decision            ProductLifecycleStatus
+  decisionRationale   String          @map("decision_rationale") @db.Text
+  decidedById         String          @map("decided_by_id")
+  decidedAt           DateTime        @default(now()) @map("decided_at")
+  engineVersion       String          @map("engine_version")
+  checksum            String
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  scenario     ProductScenario @relation(fields: [scenarioId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, decidedAt])
+  @@map("product_decision_records")
 }

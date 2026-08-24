@@ -7,6 +7,7 @@ import {
   ArrowRight,
   BarChart3,
   BookOpenCheck,
+  Boxes,
   Building2,
   Check,
   ChevronDown,
@@ -57,8 +58,11 @@ import { PeoplePerformanceView } from "./people-performance-view";
 import { AccountingView } from "./accounting-view";
 import { IntegrationsView } from "./integrations-view";
 import { DataIntelligenceView } from "./data-intelligence-view";
+import { MarketIntelligenceView } from "./market-intelligence-view";
+import { ProductIntelligenceView } from "./product-intelligence-view";
 import { logoutAction } from "@/app/actions/auth";
 import { createStudyAction, createStudyVersionAction } from "@/app/actions/studies";
+import { decideProductScenarioAction, generateProductScenariosAction } from "@/app/actions/market-product";
 import { reassessInvestmentCaseAction } from "@/app/actions/investment";
 import type { PersistedStudyView, WorkspaceIdentity } from "@/application/studies/contracts";
 import type { LandWorkspaceView } from "@/domain/land";
@@ -75,13 +79,15 @@ import type { PeoplePerformanceWorkspaceView } from "@/application/people-perfor
 import type { AccountingWorkspaceView } from "@/application/accounting/accounting-service";
 import type { IntegrationsWorkspaceView } from "@/application/integrations/integrations-service";
 import type { DataIntelligenceWorkspace } from "@/application/data-intelligence/data-intelligence-service";
+import type { MarketProductWorkspaceView } from "@/application/market-product";
+import type { MembershipRole } from "@prisma/client";
 import { DEMO_PROJECT } from "@/domain/financial/demo";
 import { calculateAllScenarios } from "@/domain/financial/engine";
 import { SCENARIOS } from "@/domain/financial/scenarios";
 import type { ProjectAssumptions, ScenarioKey } from "@/domain/financial/types";
 import { analyzeRisk, type FindingSeverity } from "@/domain/risk/rules";
 
-type ViewKey = "overview" | "assumptions" | "land" | "design" | "budget" | "procurement" | "legal" | "financial" | "accounting" | "integrations" | "sales" | "people" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit" | "dataIntelligence";
+type ViewKey = "overview" | "assumptions" | "land" | "design" | "budget" | "procurement" | "legal" | "financial" | "accounting" | "integrations" | "sales" | "people" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit" | "dataIntelligence" | "marketIntelligence" | "productIntelligence";
 type EditorMode = "create" | "version";
 
 const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
@@ -96,6 +102,8 @@ const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
   { key: "accounting", label: "Contabilidade e Controladoria", icon: BookOpenCheck },
   { key: "integrations", label: "Central de Integrações", icon: Plug },
   { key: "dataIntelligence", label: "Inteligência de Dados", icon: Database },
+  { key: "marketIntelligence", label: "Inteligência de Mercado", icon: Radar },
+  { key: "productIntelligence", label: "Inteligência de Produto", icon: Boxes },
   { key: "sales", label: "Vendas e Recebíveis", icon: HandCoins },
   { key: "people", label: "Pessoas e Eficiência", icon: Users },
   { key: "scenarios", label: "Cenários", icon: BarChart3 },
@@ -162,13 +170,14 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "RE";
 }
 
-export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, initialSales, initialPeoplePerformance, initialAccounting, initialIntegrations, initialDataIntelligence, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; initialOperations: OperationsWorkspaceView; initialFinancial: FinancialWorkspaceView; initialProcurement: ProcurementWorkspaceView; initialLegal: LegalWorkspaceView; initialSales: SalesWorkspaceView; initialPeoplePerformance: PeoplePerformanceWorkspaceView; initialAccounting: AccountingWorkspaceView; initialIntegrations: IntegrationsWorkspaceView; initialDataIntelligence: DataIntelligenceWorkspace; identity: WorkspaceIdentity }) {
+export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvestment, initialAI, initialDesign, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, initialSales, initialPeoplePerformance, initialAccounting, initialIntegrations, initialDataIntelligence, initialMarketProduct, role, identity }: { initialStudy: PersistedStudyView; initialLand: LandWorkspaceView; initialInvestment: InvestmentCaseWorkspace; initialAI: AIBootstrapView; initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; initialOperations: OperationsWorkspaceView; initialFinancial: FinancialWorkspaceView; initialProcurement: ProcurementWorkspaceView; initialLegal: LegalWorkspaceView; initialSales: SalesWorkspaceView; initialPeoplePerformance: PeoplePerformanceWorkspaceView; initialAccounting: AccountingWorkspaceView; initialIntegrations: IntegrationsWorkspaceView; initialDataIntelligence: DataIntelligenceWorkspace; initialMarketProduct: MarketProductWorkspaceView; role: MembershipRole; identity: WorkspaceIdentity }) {
   const [study, setStudy] = useState<PersistedStudyView>(initialStudy);
   const [landWorkspace, setLandWorkspace] = useState<LandWorkspaceView>(initialLand);
   const [investmentWorkspace, setInvestmentWorkspace] = useState<InvestmentCaseWorkspace>(initialInvestment);
   const [designWorkspace, setDesignWorkspace] = useState<DesignWorkspaceView>(initialDesign);
   const [budgetWorkspace, setBudgetWorkspace] = useState<BudgetWorkspaceView | null>(initialBudget);
   const [integrationsWorkspace, setIntegrationsWorkspace] = useState<IntegrationsWorkspaceView>(initialIntegrations);
+  const [marketProductWorkspace, setMarketProductWorkspace] = useState<MarketProductWorkspaceView>(initialMarketProduct);
   const [project, setProject] = useState<ProjectAssumptions>(initialStudy.assumptions);
   const [scenario, setScenario] = useState<ScenarioKey>("base");
   const [view, setView] = useState<ViewKey>("overview");
@@ -225,6 +234,24 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
     const refreshedPayload = await refreshed.json() as { data?: BudgetWorkspaceView; error?: string };
     if (!refreshed.ok || !refreshedPayload.data) throw new Error(refreshedPayload.error ?? "Não foi possível recarregar o orçamento.");
     setBudgetWorkspace(refreshedPayload.data);
+  }
+
+  async function handleGenerateProductScenarios() {
+    if (!marketProductWorkspace.marketArea) throw new Error("Nenhuma área de mercado configurada.");
+    const response = await generateProductScenariosAction({
+      marketAreaId: marketProductWorkspace.marketArea.id,
+      landAssetId: marketProductWorkspace.marketArea.landAssetId ?? undefined,
+      projectId: marketProductWorkspace.marketArea.projectId ?? undefined,
+      standard: "MEDIO",
+    });
+    if (!response.ok) throw new Error(response.error);
+    setMarketProductWorkspace(response.data);
+  }
+
+  async function handleDecideProductScenario(scenarioId: string, decision: "APPROVED" | "REJECTED", decisionRationale: string) {
+    const response = await decideProductScenarioAction({ scenarioId, decision, decisionRationale });
+    if (!response.ok) throw new Error(response.error);
+    setMarketProductWorkspace(response.data);
   }
 
   function navigate(next: ViewKey) {
@@ -351,6 +378,16 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
               </section>
 
               <section className="panel scenario-strip">
+                <div className="panel-heading"><div><span className="eyebrow">MERCADO LOCAL</span><h2>Preço, pressão competitiva e velocidade da região</h2></div><button className="text-button" onClick={() => setView("marketIntelligence")}>Abrir Inteligência de Mercado <ArrowRight size={15} /></button></div>
+                <div className="scenario-table compact-table"><div className="table-row table-head"><span>Preço médio da região</span><span>Estoque ativo</span><span>Velocidade de vendas</span><span>Nível de Confiança</span></div><div className="table-row"><strong>{marketProductWorkspace.overview && marketProductWorkspace.overview.priceStats.median > 0 ? `${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(marketProductWorkspace.overview.priceStats.median)}/m²` : "—"}</strong><strong>{marketProductWorkspace.overview ? marketProductWorkspace.overview.competitors.filter((c) => c.eligible).length : 0} concorrentes</strong><strong>{marketProductWorkspace.overview ? `${number.format(marketProductWorkspace.overview.aggregateVsoPercentage * 100)}% a.m.` : "—"}</strong><strong>{marketProductWorkspace.overview ? { HIGH: "Alta", MEDIUM: "Média", LOW: "Baixa" }[marketProductWorkspace.overview.confidence.level] : "—"}</strong></div></div>
+              </section>
+
+              <section className="panel scenario-strip">
+                <div className="panel-heading"><div><span className="eyebrow">PRODUTO EM ESTUDO</span><h2>Cenário recomendado, delta de VGV e status de aprovação</h2></div><button className="text-button" onClick={() => setView("productIntelligence")}>Abrir Inteligência de Produto <ArrowRight size={15} /></button></div>
+                <div className="scenario-table compact-table"><div className="table-row table-head"><span>Cenário recomendado</span><span>VGV projetado</span><span>Margem projetada</span><span>Status</span></div><div className="table-row"><strong>{marketProductWorkspace.scenarios.find((s) => s.kind === "BASE")?.name ?? "Nenhum cenário gerado"}</strong><strong>{marketProductWorkspace.scenarios.find((s) => s.kind === "BASE") ? compactBrl(marketProductWorkspace.scenarios.find((s) => s.kind === "BASE")!.targetVgv.toString()) : "—"}</strong><strong>{(() => { const base = marketProductWorkspace.scenarios.find((s) => s.kind === "BASE"); const metrics = base?.engineResultsJson as { metrics?: { marginOnVgv?: string } } | null; return metrics?.metrics?.marginOnVgv ? percentage(metrics.metrics.marginOnVgv) : "—"; })()}</strong><strong>{marketProductWorkspace.scenarios.find((s) => s.kind === "BASE") ? { DRAFT: "Rascunho", UNDER_REVIEW: "Em Análise", RECOMMENDED: "Recomendado", APPROVED: "Aprovado", REJECTED: "Rejeitado", SUPERSEDED: "Substituído" }[marketProductWorkspace.scenarios.find((s) => s.kind === "BASE")!.status] : "—"}</strong></div></div>
+              </section>
+
+              <section className="panel scenario-strip">
                 <div className="panel-heading"><div><span className="eyebrow">DOWNSIDE × UPSIDE</span><h2>Comparação rápida de cenários</h2></div><button className="text-button" onClick={() => setView("scenarios")}>Abrir análise <ArrowRight size={15} /></button></div>
                 <div className="scenario-table compact-table"><div className="table-row table-head"><span>Cenário</span><span>VGV</span><span>Lucro</span><span>Margem</span><span>TIR</span><span>Exposição</span></div>{(["conservative", "base", "aggressive"] as ScenarioKey[]).map((key) => { const item = results[key]; return <button key={key} onClick={() => setScenario(key)} className={`table-row ${scenario === key ? "selected" : ""}`}><span><i className={`scenario-dot dot-${key}`} />{SCENARIOS[key].label}</span><strong>{compactBrl(item.metrics.vgv)}</strong><strong>{compactBrl(item.metrics.profit)}</strong><strong>{percentage(item.metrics.marginOnVgv)}</strong><strong>{percentage(item.metrics.annualIrr)}</strong><strong>{compactBrl(item.metrics.maximumCashExposure)}</strong></button>; })}</div>
               </section>
@@ -401,6 +438,20 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
             <div className="view-stack">
               <SectionTitle eyebrow="INTELIGÊNCIA DE DADOS" title="Fato → normalização → comparabilidade → métrica → benchmark → confiança → recomendação → explicação → revisão humana" description="O histórico operacional do REDE vira ativo proprietário: contratos analíticos, métricas versionadas, comparativos com amostra e confiança visíveis, previsto x realizado, qualidade dos dados, carteira de empreendimentos e Orçamento Inteligente — sempre como sugestão, nunca como base aprovada automaticamente." />
               <DataIntelligenceView workspace={initialDataIntelligence} />
+            </div>
+          )}
+
+          {view === "marketIntelligence" && (
+            <div className="view-stack">
+              <SectionTitle eyebrow="INTELIGÊNCIA DE MERCADO" title="Área de influência, demografia, renda, oferta e preços" description="Neste terreno e nesta localização: o que o mercado mostra, com proveniência e nível de confiança explícitos." />
+              <MarketIntelligenceView workspace={marketProductWorkspace} />
+            </div>
+          )}
+
+          {view === "productIntelligence" && (
+            <div className="view-stack">
+              <SectionTitle eyebrow="INTELIGÊNCIA DE PRODUTO" title="O que construir, para quem, em qual configuração e em qual faixa de preço" description="Três cenários sempre comparáveis, simulados no REDE Engine, com decisão humana obrigatória e memória imutável." />
+              <ProductIntelligenceView workspace={marketProductWorkspace} role={role} onGenerate={handleGenerateProductScenarios} onDecide={handleDecideProductScenario} />
             </div>
           )}
 

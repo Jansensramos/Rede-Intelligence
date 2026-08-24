@@ -14,6 +14,7 @@ import { getPeoplePerformanceWorkspace } from "@/application/people-performance/
 import { getAccountingWorkspace } from "@/application/accounting/accounting-service";
 import { getIntegrationsWorkspace } from "@/application/integrations/integrations-service";
 import { getDataIntelligenceWorkspace } from "@/application/data-intelligence/data-intelligence-service";
+import { buildMarketProductWorkspaceView, getMarketProductWorkspace } from "@/application/market-product";
 import { IntelligenceWorkspace } from "@/components/intelligence-workspace";
 import { START_BUTANTA_PROJECT } from "@/domain/financial/demo";
 import { calculateAllScenarios } from "@/domain/financial/engine";
@@ -42,7 +43,7 @@ export default async function Home() {
   const baseVgv = calculateAllScenarios(initialStudy.assumptions).base.metrics.vgv;
 
   const initialInvestment = await ensureInvestmentCase(context);
-  const [initialLand, initialDesign, initialAI, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, initialSales, initialPeoplePerformance, initialAccounting, initialIntegrations, initialDataIntelligence] = await Promise.all([
+  const [initialLand, initialDesign, initialAI, initialBudget, initialOperations, initialFinancial, initialProcurement, initialLegal, initialSales, initialPeoplePerformance, initialAccounting, initialIntegrations, initialDataIntelligence, marketProductWorkspace] = await Promise.all([
     getLatestLandStudyForOrganization(context.organizationId),
     ensureDesignWorkspace(context, initialStudy.projectId),
     getAIBootstrap(context),
@@ -56,8 +57,10 @@ export default async function Home() {
     getAccountingWorkspace(context, initialStudy.projectId),
     getIntegrationsWorkspace(context, initialStudy.projectId),
     getDataIntelligenceWorkspace(context, initialStudy.projectId),
+    getMarketProductWorkspace(context),
   ]);
   if (!initialLand) throw new Error("Execute o seed para carregar o estudo territorial demonstrativo.");
+  const initialMarketProduct = buildMarketProductWorkspaceView(marketProductWorkspace);
 
   return (
     <IntelligenceWorkspace
@@ -76,6 +79,8 @@ export default async function Home() {
       initialAccounting={initialAccounting}
       initialIntegrations={initialIntegrations}
       initialDataIntelligence={initialDataIntelligence}
+      initialMarketProduct={initialMarketProduct}
+      role={context.role}
       identity={{ userName: context.userName, organizationName: context.organizationName }}
     />
   );
