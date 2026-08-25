@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildApprovalExceptions,
   buildBudgetVarianceExceptions,
+  buildCommercialClosingExceptions,
   buildFinancialExceptions,
   buildIntegrationExceptions,
   buildLegalExceptions,
@@ -84,6 +85,46 @@ describe("buildSalesExceptions (plano §7 COMERCIAL)", () => {
 
   it("saldo zerado não gera exceção", () => {
     expect(buildSalesExceptions(ctx, [{ id: "sr-2", description: "Quitada", counterpartyName: null, dueDate: days(-30), balance: 0 }], referenceDate)).toHaveLength(0);
+  });
+});
+
+describe("buildCommercialClosingExceptions (Fase 9K.4, plano item G — crédito/contrato/assinatura são fatos reais, não uma segunda central)", () => {
+  const empty = { pendingApprovalSales: [], creditReviewRequired: [], signaturePending: [], signatureFailed: [] };
+
+  it("venda em rascunho vira sale_awaiting_approval com responsibleId = quem criou", () => {
+    const [result] = buildCommercialClosingExceptions(ctx, { ...empty, pendingApprovalSales: [{ id: "sale-1", unitCode: "UN-101", soldPrice: 500000, responsibleId: "user-1", createdAt: days(-2) }] }, referenceDate);
+    expect(result.type).toBe("sale_awaiting_approval");
+    expect(result.responsibleId).toBe("user-1");
+    expect(result.materialityValue).toBe(500000);
+    expect(result.href).toBe("/comercial");
+  });
+
+  it("crédito REQUER_ANALISE vira credit_review_required, nunca decide a venda sozinho (sem status de aprovação no campo)", () => {
+    const [result] = buildCommercialClosingExceptions(ctx, { ...empty, creditReviewRequired: [{ id: "credit-1", customerName: "Maria Silva", responsibleId: "user-2", requestedAt: days(-1) }] }, referenceDate);
+    expect(result.type).toBe("credit_review_required");
+    expect(result.title).toContain("Maria Silva");
+    expect(result.responsibleId).toBe("user-2");
+  });
+
+  it("assinatura pendente há mais de 7 dias vira ACAO_NECESSARIA; recente vira ATENCAO", () => {
+    const [old] = buildCommercialClosingExceptions(ctx, { ...empty, signaturePending: [{ id: "sig-1", contractNumber: "CV-1", responsibleId: "user-3", dueDate: days(-10) }] }, referenceDate);
+    const [recent] = buildCommercialClosingExceptions(ctx, { ...empty, signaturePending: [{ id: "sig-2", contractNumber: "CV-2", responsibleId: "user-3", dueDate: days(-1) }] }, referenceDate);
+    expect(old.severity).toBe("ACAO_NECESSARIA");
+    expect(recent.severity).toBe("ATENCAO");
+  });
+
+  it("assinatura recusada e assinatura com erro viram signature_failed distintos", () => {
+    const results = buildCommercialClosingExceptions(ctx, { ...empty, signatureFailed: [
+      { id: "sig-3", contractNumber: "CV-3", responsibleId: "user-4", status: "RECUSADO", errorMessage: null, updatedAt: days(0) },
+      { id: "sig-4", contractNumber: "CV-4", responsibleId: "user-4", status: "ERRO", errorMessage: "timeout do provider", updatedAt: days(0) },
+    ] }, referenceDate);
+    expect(results).toHaveLength(2);
+    expect(results[0].title).toContain("recusada");
+    expect(results[1].summary).toBe("timeout do provider");
+  });
+
+  it("sem nenhum sinal, não gera exceção nenhuma", () => {
+    expect(buildCommercialClosingExceptions(ctx, empty, referenceDate)).toHaveLength(0);
   });
 });
 

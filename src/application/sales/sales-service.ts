@@ -577,17 +577,18 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
   await projectForTenant(context.organizationId, projectId);
   await releaseExpiredReservations(context, projectId, referenceDate);
 
-  const [units, priceTables, proposals, reservations, sales, leads, commissionPolicies, inspections, postSaleRequests, brokerProfiles] = await Promise.all([
+  const [units, priceTables, proposals, reservations, sales, leads, commissionPolicies, inspections, postSaleRequests, brokerProfiles, contractTemplates] = await Promise.all([
     prisma.salesUnit.findMany({ where: { organizationId: context.organizationId, projectId }, include: { priceLines: { include: { priceTable: true } }, blocks: { where: { endedAt: null } } }, orderBy: { code: "asc" }, take: 2000 }),
     prisma.salesPriceTable.findMany({ where: { organizationId: context.organizationId, projectId }, include: { lines: true }, orderBy: { version: "desc" }, take: 50 }),
-    prisma.salesProposal.findMany({ where: { organizationId: context.organizationId, projectId }, include: { customer: true, salesUnit: true, broker: true }, orderBy: { createdAt: "desc" }, take: 200 }),
+    prisma.salesProposal.findMany({ where: { organizationId: context.organizationId, projectId }, include: { customer: true, salesUnit: true, broker: true, creditBureauConsultations: { orderBy: { requestedAt: "desc" }, take: 1 } }, orderBy: { createdAt: "desc" }, take: 200 }),
     prisma.salesReservation.findMany({ where: { organizationId: context.organizationId, projectId }, include: { customer: true, salesUnit: true }, orderBy: { createdAt: "desc" }, take: 200 }),
-    prisma.sale.findMany({ where: { organizationId: context.organizationId, projectId }, include: { salesUnit: true, parties: { include: { customer: true } }, contract: true, paymentPlans: { include: { installments: { include: { receivableInstallment: { include: { payments: true } } } } } }, commissions: { include: { broker: true } }, broker: true, receivableAccounts: { include: { installments: { include: { payments: true } } } } }, orderBy: { createdAt: "desc" }, take: 500 }),
+    prisma.sale.findMany({ where: { organizationId: context.organizationId, projectId }, include: { salesUnit: true, parties: { include: { customer: true } }, contract: { include: { documents: { orderBy: { createdAt: "desc" }, take: 5 }, signatureRequests: { orderBy: { createdAt: "desc" }, take: 1, include: { parties: true } } } }, paymentPlans: { include: { installments: { include: { receivableInstallment: { include: { payments: true } } } } } }, commissions: { include: { broker: true } }, broker: true, receivableAccounts: { include: { installments: { include: { payments: true } } } } }, orderBy: { createdAt: "desc" }, take: 500 }),
     prisma.salesLead.findMany({ where: { organizationId: context.organizationId, OR: [{ projectId }, { projectId: null }] }, orderBy: { createdAt: "desc" }, take: 200 }),
     prisma.salesCommissionPolicy.findMany({ where: { organizationId: context.organizationId, OR: [{ projectId }, { projectId: null }], isActive: true } }),
     prisma.salesUnitInspection.findMany({ where: { salesUnit: { organizationId: context.organizationId, projectId } }, include: { salesUnit: true }, orderBy: { scheduledAt: "desc" }, take: 200 }),
     prisma.postSaleRequest.findMany({ where: { organizationId: context.organizationId, salesUnit: { projectId } }, include: { customer: true, salesUnit: true, updates: { orderBy: { createdAt: "desc" }, take: 5 } }, orderBy: { createdAt: "desc" }, take: 200 }),
     prisma.brokerProfile.findMany({ where: { organizationId: context.organizationId }, include: { supplier: true } }),
+    prisma.contractTemplate.findMany({ where: { organizationId: context.organizationId, projectId }, include: { versions: { orderBy: { version: "desc" }, take: 5 } }, orderBy: { createdAt: "desc" }, take: 50 }),
   ]);
 
   const activeLineByUnit = new Map(units.map((unit) => [unit.id, unit.priceLines.find((line) => line.priceTable.status === "ACTIVE") ?? null]));
@@ -616,15 +617,25 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
     },
     units: units.map((unit) => ({ id: unit.id, code: unit.code, floor: unit.floor, typology: unit.typology, privateAreaM2: Number(unit.privateAreaM2), status: unit.status, listPrice: activeLineByUnit.get(unit.id) ? Number(activeLineByUnit.get(unit.id)!.listPrice) : null, pricePerM2: activeLineByUnit.get(unit.id) ? Number(engine.pricePerM2(activeLineByUnit.get(unit.id)!.listPrice, unit.privateAreaM2)) : null, activeBlock: unit.blocks[0] ? { origin: unit.blocks[0].origin, reason: unit.blocks[0].reason } : null })),
     priceTables: priceTables.map((table) => ({ id: table.id, version: table.version, status: table.status, validFrom: table.validFrom.toISOString(), lines: table.lines.length })),
-    proposals: proposals.map((proposal) => ({ id: proposal.id, unit: proposal.salesUnit.code, customer: proposal.customer.name, broker: proposal.broker?.name ?? null, proposedPrice: Number(proposal.proposedPrice), discountAmount: Number(proposal.discountAmount), validUntil: proposal.validUntil.toISOString(), status: proposal.status })),
+    proposals: proposals.map((proposal) => ({ id: proposal.id, unit: proposal.salesUnit.code, customer: proposal.customer.name, broker: proposal.broker?.name ?? null, proposedPrice: Number(proposal.proposedPrice), discountAmount: Number(proposal.discountAmount), validUntil: proposal.validUntil.toISOString(), status: proposal.status, creditConsultation: proposal.creditBureauConsultations[0] ? { status: proposal.creditBureauConsultations[0].status, result: proposal.creditBureauConsultations[0].result, cpfMasked: proposal.creditBureauConsultations[0].cpfMasked, requestedAt: proposal.creditBureauConsultations[0].requestedAt.toISOString() } : null })),
     reservations: reservations.map((reservation) => ({ id: reservation.id, unit: reservation.salesUnit.code, customer: reservation.customer.name, expiresAt: reservation.expiresAt.toISOString(), status: reservation.status, expired: engine.isReservationExpired(reservation.expiresAt, reservation.status, referenceDate) })),
-    sales: sales.map((sale) => ({ id: sale.id, unit: sale.salesUnit.code, buyers: sale.parties.map((party) => party.customer.name), broker: sale.broker?.name ?? null, soldPrice: Number(sale.soldPrice), discountAmount: Number(sale.discountAmount), status: sale.status, contractNumber: sale.contract?.number ?? null, installments: sale.paymentPlans.flatMap((plan) => plan.status === "ACTIVE" ? plan.installments : []).length, received: Number(receivedByReceivable(sale.receivableAccounts.flatMap((account) => account.installments))) })),
+    sales: sales.map((sale) => {
+      const signatureRequest = sale.contract?.signatureRequests[0] ?? null;
+      return {
+        id: sale.id, unit: sale.salesUnit.code, buyers: sale.parties.map((party) => party.customer.name), broker: sale.broker?.name ?? null, soldPrice: Number(sale.soldPrice), discountAmount: Number(sale.discountAmount), status: sale.status,
+        contractId: sale.contract?.id ?? null, contractNumber: sale.contract?.number ?? null, contractDocuments: sale.contract?.documents.map((doc) => ({ id: doc.id, kind: doc.kind, status: doc.status, version: doc.version, fileName: doc.fileName })) ?? [],
+        signatureStatus: sale.contract?.signatureStatus ?? null,
+        signatureRequest: signatureRequest ? { id: signatureRequest.id, status: signatureRequest.status, provider: signatureRequest.provider, signedCount: signatureRequest.parties.filter((party) => party.status === "SIGNED").length, totalParties: signatureRequest.parties.length } : null,
+        installments: sale.paymentPlans.flatMap((plan) => plan.status === "ACTIVE" ? plan.installments : []).length, received: Number(receivedByReceivable(sale.receivableAccounts.flatMap((account) => account.installments))),
+      };
+    }),
     leads: leads.map((lead) => ({ id: lead.id, name: lead.name, source: lead.source, stage: lead.stage, brokerId: lead.brokerId })),
     commissionPolicies: commissionPolicies.map((policy) => ({ id: policy.id, triggerEvent: policy.triggerEvent, percentage: Number(policy.percentage), basis: policy.basis })),
     commissions: sales.flatMap((sale) => sale.commissions.map((commission) => ({ id: commission.id, sale: sale.id, broker: commission.broker.name, amount: Number(commission.amount), status: commission.status }))),
     inspections: inspections.map((inspection) => ({ id: inspection.id, unit: inspection.salesUnit.code, scheduledAt: inspection.scheduledAt.toISOString(), outcome: inspection.outcome })),
     postSaleRequests: postSaleRequests.map((request) => ({ id: request.id, unit: request.salesUnit.code, customer: request.customer.name, category: request.category, status: request.status, updates: request.updates.length })),
     brokers: brokerProfiles.map((profile) => ({ id: profile.id, name: profile.supplier.name, creci: profile.creci, defaultCommissionRate: profile.defaultCommissionRate ? Number(profile.defaultCommissionRate) : null })),
+    contractTemplates: contractTemplates.map((template) => ({ id: template.id, name: template.name, status: template.status, versions: template.versions.map((version) => ({ id: version.id, version: version.version, status: version.status })) })),
   };
 }
 

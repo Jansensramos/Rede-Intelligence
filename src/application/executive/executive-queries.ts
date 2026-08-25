@@ -126,13 +126,38 @@ export async function queryFinancialSignals(organizationId: string, projectId: s
 // ---------------------------------------------------------------------------
 
 export async function querySalesSignals(organizationId: string, projectId: string, referenceDate: Date) {
-  const [unitGroups, soldAggregate, overdueReceivables] = await Promise.all([
+  const [unitGroups, soldAggregate, overdueReceivables, pendingApprovalSales, creditReviewRequired, signaturePending, signatureFailed] = await Promise.all([
     prisma.salesUnit.groupBy({ by: ["status"], where: { organizationId, projectId }, _count: { _all: true } }),
     prisma.sale.aggregate({ where: { organizationId, projectId, status: "APPROVED" }, _sum: { soldPrice: true }, _count: { _all: true } }),
     prisma.receivableInstallment.findMany({
       where: { receivableAccount: { organizationId, projectId, saleId: { not: null } }, status: { notIn: [...RECEIVABLE_TERMINAL_STATUSES] }, dueDate: { lt: referenceDate } },
       select: { id: true, currentAmount: true, dueDate: true, updatedAt: true, receivableAccount: { select: { description: true, responsibleId: true, customer: { select: { name: true } } } }, payments: { select: { amount: true, status: true } } },
       orderBy: { dueDate: "asc" },
+      take: 50,
+    }),
+    // Fechamento Comercial 360 (9K.4) — mesmo padrão enxuto do resto deste arquivo (select mínimo, take limitado).
+    prisma.sale.findMany({
+      where: { organizationId, projectId, status: "DRAFT" },
+      select: { id: true, soldPrice: true, createdById: true, createdAt: true, salesUnit: { select: { code: true } } },
+      orderBy: { createdAt: "asc" },
+      take: 50,
+    }),
+    prisma.creditBureauConsultation.findMany({
+      where: { organizationId, projectId, status: "COMPLETED", result: "REQUER_ANALISE" },
+      select: { id: true, requestedById: true, requestedAt: true, customer: { select: { name: true } } },
+      orderBy: { requestedAt: "asc" },
+      take: 50,
+    }),
+    prisma.signatureRequest.findMany({
+      where: { organizationId, projectId, status: { in: ["ENVIADO", "AGUARDANDO_ASSINATURAS"] } },
+      select: { id: true, createdById: true, preparedAt: true, sentAt: true, contract: { select: { number: true } } },
+      orderBy: { preparedAt: "asc" },
+      take: 50,
+    }),
+    prisma.signatureRequest.findMany({
+      where: { organizationId, projectId, status: { in: ["RECUSADO", "ERRO"] } },
+      select: { id: true, createdById: true, status: true, errorMessage: true, updatedAt: true, contract: { select: { number: true } } },
+      orderBy: { updatedAt: "desc" },
       take: 50,
     }),
   ]);
@@ -145,6 +170,10 @@ export async function querySalesSignals(organizationId: string, projectId: strin
     vgvVendido: Number(soldAggregate._sum.soldPrice ?? 0),
     salesApprovedCount: soldAggregate._count._all,
     overdueReceivables: overdueReceivables.map((item) => toInstallmentSignal({ id: item.id, currentAmount: item.currentAmount, dueDate: item.dueDate, description: item.receivableAccount.description, counterpartyName: item.receivableAccount.customer?.name ?? null, responsibleId: item.receivableAccount.responsibleId, payments: item.payments })),
+    pendingApprovalSales: pendingApprovalSales.map((sale) => ({ id: sale.id, unitCode: sale.salesUnit.code, soldPrice: Number(sale.soldPrice), responsibleId: sale.createdById, createdAt: sale.createdAt })),
+    creditReviewRequired: creditReviewRequired.map((item) => ({ id: item.id, customerName: item.customer.name, responsibleId: item.requestedById, requestedAt: item.requestedAt })),
+    signaturePending: signaturePending.map((item) => ({ id: item.id, contractNumber: item.contract.number, responsibleId: item.createdById, dueDate: item.sentAt ?? item.preparedAt })),
+    signatureFailed: signatureFailed.map((item) => ({ id: item.id, contractNumber: item.contract.number, responsibleId: item.createdById, status: item.status as "RECUSADO" | "ERRO", errorMessage: item.errorMessage, updatedAt: item.updatedAt })),
     // Gate 3 (freshness real): agregados de venda/unidade são ao vivo; a única âncora real
     // disponível sem consulta extra é o `updatedAt` dos recebíveis já buscados.
     latestUpdatedAt: latestTimestamp(overdueReceivables.map((item) => item.updatedAt)),

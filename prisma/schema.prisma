@@ -983,6 +983,10 @@ model Organization {
   salesContracts                  SalesContract[]
   salesCommissionPolicies         SalesCommissionPolicy[]
   postSaleRequests                PostSaleRequest[]
+  contractTemplates               ContractTemplate[]
+  contractDocuments               ContractDocument[]
+  signatureRequests               SignatureRequest[]
+  creditBureauConsultations       CreditBureauConsultation[]
   departments                     Department[]
   positions                       Position[]
   personProfiles                  PersonProfile[]
@@ -1187,6 +1191,9 @@ model Project {
   salesReservations            SalesReservation[]
   sales                        Sale[]
   salesContracts               SalesContract[]
+  contractTemplates            ContractTemplate[]
+  signatureRequests            SignatureRequest[]
+  creditBureauConsultations    CreditBureauConsultation[]
   teams                        Team[]
   workAllocations              WorkAllocation[]
   administrativeCostPlans      AdministrativeCostPlan[]
@@ -4676,6 +4683,8 @@ model Customer {
   salesReservations  SalesReservation[]
   saleParties        SaleParty[]
   postSaleRequests   PostSaleRequest[]
+  signatureParties           SignatureParty[]
+  creditBureauConsultations  CreditBureauConsultation[]
 
   @@unique([organizationId, taxId])
   @@index([organizationId, status])
@@ -6954,6 +6963,7 @@ model SalesProposal {
   priceTable   SalesPriceTable    @relation(fields: [priceTableId], references: [id], onDelete: Restrict)
   reservations SalesReservation[]
   sale         Sale?
+  creditBureauConsultations CreditBureauConsultation[]
 
   @@index([organizationId, status])
   @@index([salesUnitId])
@@ -7059,6 +7069,7 @@ model SalesContract {
   projectId           String                       @map("project_id")
   companyId           String                       @map("company_id")
   saleId              String                       @unique @map("sale_id")
+  templateVersionId   String?                      @map("template_version_id")
   number              String
   title               String
   soldPrice           Decimal                      @map("sold_price") @db.Decimal(20, 2)
@@ -7071,13 +7082,17 @@ model SalesContract {
   createdAt           DateTime                     @default(now()) @map("created_at")
   updatedAt           DateTime                     @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project      Project      @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  company      Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  sale         Sale         @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  organization      Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project           Project                   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  company           Company                   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  sale              Sale                      @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  templateVersion   ContractTemplateVersion?  @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
+  documents         ContractDocument[]
+  signatureRequests SignatureRequest[]
 
   @@unique([projectId, number])
   @@index([organizationId, status])
+  @@index([templateVersionId])
   @@map("sales_contracts")
 }
 
@@ -7222,6 +7237,355 @@ model PostSaleUpdate {
 
   @@index([requestId, createdAt])
   @@map("post_sale_updates")
+}
+
+// -----------------------------------------------------------------------------
+// FASE 9K.4 — Fechamento Comercial 360 (Crédito → Proposta → Contrato → Assinatura → Recebíveis)
+// Estende a 9E (SalesContract já é a origem econômica oficial — nada aqui duplica preço, parcela
+// ou recebível). Bytes de documento NÃO ficam no Postgres — reaproveita o `FileStorageProvider`
+// genérico de src/infrastructure/storage/design-file-storage.ts (mesmo shape de
+// `DesignFile.storageProvider/storageKey/checksum/fileSize`), com uma segunda instância apontando
+// para `.rede-storage/contracts`. Transporte/idempotência de webhook continuam 100% na 9H
+// (`ConnectorInstallation` + `IntegrationInboxEvent.@@unique([installationId, provider, eventId])`)
+// — `SignatureEvent` é só a projeção de domínio 1:1 opcional de um `IntegrationInboxEvent` já
+// processado (ver campo `sourceInboxEventId`), nunca uma segunda infra genérica de webhook.
+// -----------------------------------------------------------------------------
+
+enum ContractTemplateStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum ContractTemplateVersionStatus {
+  DRAFT
+  APPROVED
+}
+
+enum ContractDocumentKind {
+  MODEL_RENDER
+  ATTACHMENT
+  SIGNED_FINAL
+}
+
+enum ContractDocumentStatus {
+  DRAFT
+  FINAL
+}
+
+enum SignatureProviderCode {
+  MOCK
+  CLICKSIGN
+  MANUAL_UPLOAD
+}
+
+enum SignatureRequestStatus {
+  PREPARADO
+  ENVIADO
+  AGUARDANDO_ASSINATURAS
+  ASSINADO
+  RECUSADO
+  CANCELADO
+  ERRO
+}
+
+enum SignatoryRole {
+  BUYER
+  CO_BUYER
+  REPRESENTATIVE
+  GUARANTOR
+  SELLER
+  WITNESS
+}
+
+enum SignaturePartyStatus {
+  PENDING
+  SIGNED
+  DECLINED
+}
+
+/** Só transições de DOMÍNIO (o transporte/recebimento cru do webhook é `IntegrationInboxEvent.status`, 9H — não duplicado aqui). */
+enum SignatureEventType {
+  CREATED
+  SENT
+  PARTY_SIGNED
+  PARTY_DECLINED
+  COMPLETED
+  CANCELLED
+  ERROR
+}
+
+enum CreditBureauProviderCode {
+  MOCK
+  SERASA_EXPERIAN
+}
+
+enum CreditConsultationPurpose {
+  SALE_PROPOSAL_ANALYSIS
+  CONTRACT_RENEWAL
+  OTHER
+}
+
+enum CreditConsultationStatus {
+  REQUESTED
+  COMPLETED
+  ERROR
+}
+
+enum CreditConsultationResult {
+  SEM_RESTRICAO
+  COM_RESTRICAO
+  REQUER_ANALISE
+}
+
+/** Modelo contratual por empreendimento (item 1 do plano). Nunca editado após ter uma versão APROVADA — só nova versão via `ContractTemplateVersion`. */
+model ContractTemplate {
+  id             String                 @id @default(cuid())
+  organizationId String                 @map("organization_id")
+  projectId      String                 @map("project_id")
+  name           String
+  status         ContractTemplateStatus @default(DRAFT)
+  createdById    String                 @map("created_by_id")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  updatedAt      DateTime               @updatedAt @map("updated_at")
+
+  organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project      Project                    @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  versions     ContractTemplateVersion[]
+
+  @@unique([projectId, name])
+  @@index([organizationId, status])
+  @@map("contract_templates")
+}
+
+/**
+ * Versão do modelo (item 1/3/6). `content` é o texto com placeholders — motor de merge simples,
+ * sem motor jurídico. `checksum` = hash do `content`, gravado na criação (integridade/conferência,
+ * mesmo padrão de `DesignFile.checksum`). Regra de imutabilidade (aplicada em serviço, igual ao
+ * resto do arquivo — nenhum trigger de banco): enquanto `status = DRAFT` o serviço pode fazer
+ * `UPDATE` no mesmo registro (rascunho em edição); a partir do `UPDATE` que grava `status =
+ * APPROVED` (+ `approvedById`/`approvedAt`), o serviço NUNCA mais escreve neste registro — conteúdo
+ * novo sempre cria `version + 1`. `@@unique([templateId, version])` impede duas linhas com o mesmo
+ * número de versão.
+ */
+model ContractTemplateVersion {
+  id           String                        @id @default(cuid())
+  templateId   String                        @map("template_id")
+  version      Int
+  content      String                        @db.Text
+  checksum     String
+  variables    Json?
+  status       ContractTemplateVersionStatus @default(DRAFT)
+  approvedById String?                       @map("approved_by_id")
+  approvedAt   DateTime?                     @map("approved_at")
+  createdById  String                        @map("created_by_id")
+  createdAt    DateTime                      @default(now()) @map("created_at")
+
+  template  ContractTemplate   @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  contracts SalesContract[]
+  documents ContractDocument[]
+
+  @@unique([templateId, version])
+  @@index([templateId, status])
+  @@map("contract_template_versions")
+}
+
+/**
+ * Documento contratual (item 3/9): render do modelo, anexo comercial ou artefato final assinado —
+ * um único shape para os três, distinguido por `kind`. Não reaproveita `ProjectDocument`
+ * (acoplado a `InvestmentCase`, domínio de viabilidade/investimento, tenant path incompatível).
+ * NÃO guarda bytes no Postgres — `storageProvider` + `storageKey` são a referência opaca ao
+ * `FileStorageProvider` já existente (mesmo contrato de `design-file-storage.ts`), lido/escrito
+ * via `.put()`/`.read()`; o banco só guarda metadado (nome, mime, tamanho, checksum) + a chave.
+ */
+model ContractDocument {
+  id                String                 @id @default(cuid())
+  organizationId    String                 @map("organization_id")
+  contractId        String                 @map("contract_id")
+  templateVersionId String?                @map("template_version_id")
+  kind              ContractDocumentKind
+  status            ContractDocumentStatus @default(DRAFT)
+  version           Int                    @default(1)
+  title             String
+  fileName          String                 @map("file_name")
+  mimeType          String                 @map("mime_type")
+  storageProvider   String                 @map("storage_provider")
+  storageKey        String                 @map("storage_key")
+  fileSize          Int                    @map("file_size")
+  checksum          String
+  createdById       String                 @map("created_by_id")
+  createdAt         DateTime               @default(now()) @map("created_at")
+
+  organization      Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  contract          SalesContract            @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  templateVersion   ContractTemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
+  signatureRequests SignatureRequest[]       @relation("SignatureSourceDocument")
+  finalDocumentFor  SignatureRequest?        @relation("SignatureFinalDocument")
+
+  @@unique([contractId, kind, version])
+  @@index([contractId, kind])
+  @@map("contract_documents")
+}
+
+/**
+ * Abstração `SignatureProvider` (item 4) — domínio nunca acopla a Clicksign: `provider` +
+ * `externalId` opaco. `documentId` aponta para o `ContractDocument` (kind=MODEL_RENDER)
+ * efetivamente enviado; `finalDocumentId` só é preenchido em ASSINADO, apontando para o artefato
+ * final (kind=SIGNED_FINAL) — RESTRICT (item 8: evidência histórica crítica, nunca apagável em
+ * silêncio enquanto referenciada). `@@unique([organizationId, provider, externalId])` (item 2):
+ * `externalId` só é único DENTRO da conta daquele provider/tenant, nunca globalmente.
+ */
+model SignatureRequest {
+  id               String                 @id @default(cuid())
+  organizationId   String                 @map("organization_id")
+  projectId        String                 @map("project_id")
+  contractId       String                 @map("contract_id")
+  documentId       String                 @map("document_id")
+  provider         SignatureProviderCode  @default(MOCK)
+  externalId       String?                @map("external_id")
+  status           SignatureRequestStatus @default(PREPARADO)
+  documentChecksum String                 @map("document_checksum")
+  finalDocumentId  String?                @unique @map("final_document_id")
+  errorMessage     String?                @map("error_message") @db.Text
+  preparedAt       DateTime               @default(now()) @map("prepared_at")
+  sentAt           DateTime?              @map("sent_at")
+  completedAt      DateTime?              @map("completed_at")
+  cancelledAt      DateTime?              @map("cancelled_at")
+  cancelledReason  String?                @map("cancelled_reason")
+  createdById      String                 @map("created_by_id")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+
+  organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project       Project           @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  contract      SalesContract     @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  document      ContractDocument  @relation("SignatureSourceDocument", fields: [documentId], references: [id], onDelete: Restrict)
+  finalDocument ContractDocument? @relation("SignatureFinalDocument", fields: [finalDocumentId], references: [id], onDelete: Restrict)
+  parties       SignatureParty[]
+  events        SignatureEvent[]
+
+  @@unique([organizationId, provider, externalId])
+  @@index([organizationId, status])
+  @@index([contractId])
+  @@map("signature_requests")
+}
+
+/**
+ * Signatário (item 4/5: comprador/co-comprador/representante/fiador/vendedor). `customerId`
+ * opcional é só um cross-reference de conveniência para a UI — o registro histórico de QUEM
+ * assinou é o SNAPSHOT (`displayName`/`email`/`role` fixados no momento em que a parte foi
+ * incluída na request), por isso `onDelete: SetNull` no cliente é seguro (item 5: `Customer` pode
+ * mudar/ser referenciado por outra coisa no futuro, a evidência de assinatura não deve depender
+ * disso). Representante sem cadastro nunca vira `Customer` fictício — fica só com o snapshot.
+ * `externalPartyId` é o id do signatário no provider (útil quando `SignatureRequest.provider =
+ * CLICKSIGN`); nenhum CPF é armazenado aqui — se uma referência de identidade for necessária,
+ * ela viaja mascarada dentro de `evidence` (Json), nunca em coluna própria.
+ */
+model SignatureParty {
+  id              String               @id @default(cuid())
+  requestId       String               @map("request_id")
+  customerId      String?              @map("customer_id")
+  externalPartyId String?              @map("external_party_id")
+  displayName     String               @map("display_name")
+  email           String?
+  role            SignatoryRole
+  order           Int                  @default(1)
+  status          SignaturePartyStatus @default(PENDING)
+  authMethod      String?              @map("auth_method")
+  evidence        Json?
+  signedAt        DateTime?            @map("signed_at")
+  declinedAt      DateTime?            @map("declined_at")
+  declinedReason  String?              @map("declined_reason")
+  createdAt       DateTime             @default(now()) @map("created_at")
+
+  request  SignatureRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  customer Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@unique([requestId, order])
+  @@index([requestId, status])
+  @@index([customerId])
+  @@map("signature_parties")
+}
+
+/**
+ * Projeção de DOMÍNIO da assinatura (item 3/4 do seu pedido) — não é uma segunda infraestrutura
+ * de webhook. Transporte cru + idempotência de recebimento continuam 100% na 9H:
+ * `IntegrationInboxEvent` (`@@unique([installationId, provider, eventId])`) é quem recebe/deduplica
+ * o webhook HTTP real (quando existir um adapter Clicksign com `ConnectorInstallation` configurado).
+ * `sourceInboxEventId` é o vínculo 1:1 opcional: no caminho "webhook real", o handler (1) upsert
+ * idempotente em `IntegrationInboxEvent`, (2) só then cria a `SignatureEvent` correspondente — a
+ * constraint `@unique` em `sourceInboxEventId` garante que um mesmo `IntegrationInboxEvent` nunca
+ * gera duas projeções de domínio. No caminho MOCK/manual (sem transporte HTTP nenhum) o serviço
+ * cria a `SignatureEvent` diretamente, com `sourceInboxEventId = null`, e evita duplicar a mesma
+ * transição do mesmo jeito que o resto do arquivo faz idempotência de efeito — `updateMany` guardado
+ * pelo `status` esperado de `SignatureRequest`/`SignatureParty` antes de gravar o evento (ver
+ * `blockSalesUnit`/`confirmSalesReservation` em `sales-service.ts`), não uma segunda chave técnica.
+ * ESTRITAMENTE append-only e imutável (item 4): não existe nenhum campo aqui sujeito a `UPDATE`
+ * depois do `INSERT` — `occurredAt` (tempo do fato, do payload do provider quando houver) e
+ * `recordedAt` (tempo em que a REDE gravou) são preenchidos uma única vez. Qualquer metadado
+ * OPERACIONAL de processamento (retry, erro de validação de assinatura HMAC, `processedAt` do
+ * recebimento) pertence a `IntegrationInboxEvent.status`/`processedAt` (9H, já mutável) — nunca a
+ * este registro.
+ */
+model SignatureEvent {
+  id                 String             @id @default(cuid())
+  organizationId     String             @map("organization_id")
+  requestId          String             @map("request_id")
+  sourceInboxEventId String?            @unique @map("source_inbox_event_id")
+  eventType          SignatureEventType @map("event_type")
+  payload            Json?
+  occurredAt         DateTime           @map("occurred_at")
+  recordedAt         DateTime           @default(now()) @map("recorded_at")
+
+  request          SignatureRequest       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  sourceInboxEvent IntegrationInboxEvent? @relation(fields: [sourceInboxEventId], references: [id], onDelete: SetNull)
+
+  @@index([requestId, recordedAt])
+  @@map("signature_events")
+}
+
+/**
+ * Abstração `CreditBureauProvider` (item 5/7). `cpfMasked` é um SNAPSHOT já mascarado do CPF
+ * checado no momento da consulta (auditoria imutável do que foi de fato verificado) — nunca o CPF
+ * em claro, e nunca uma segunda cópia viva de `Customer.taxId` (que pode mudar depois). `score`/
+ * `findingsSummary`/`result` só são preenchidos quando o provider efetivamente retorna algo — três
+ * colunas nulas até lá, nunca um valor fabricado. `findingsSummary` é só o resumo mínimo
+ * (contagens/categorias); NENHUM relatório bruto é persistido em coluna nenhuma deste model (LGPD).
+ * Se um dia for necessário reter a resposta original do provider, a forma correta é reaproveitar o
+ * MESMO `FileStorageProvider`/`ContractDocument`-like reference usado para documentos — não uma
+ * coluna Json aberta aqui — e isso fica para quando essa necessidade for real, não hoje.
+ * `retentionUntil` prepara o corte de governança LGPD (job de expurgo/anonimização fica para depois;
+ * a coluna só marca até quando o registro pode ser mantido). `result` alimenta a alçada/política
+ * existente (`ApprovalPolicy`, 9C) — nunca decide a venda sozinho.
+ */
+model CreditBureauConsultation {
+  id                String                    @id @default(cuid())
+  organizationId    String                    @map("organization_id")
+  projectId         String?                   @map("project_id")
+  customerId        String                    @map("customer_id")
+  proposalId        String?                   @map("proposal_id")
+  provider          CreditBureauProviderCode  @default(MOCK)
+  purpose           CreditConsultationPurpose @default(SALE_PROPOSAL_ANALYSIS)
+  status            CreditConsultationStatus  @default(REQUESTED)
+  cpfMasked         String                    @map("cpf_masked")
+  externalReference String?                   @map("external_reference")
+  score             Int?
+  findingsSummary   Json?                     @map("findings_summary")
+  result            CreditConsultationResult?
+  errorMessage      String?                   @map("error_message") @db.Text
+  requestedById     String                    @map("requested_by_id")
+  requestedAt       DateTime                  @default(now()) @map("requested_at")
+  completedAt       DateTime?                 @map("completed_at")
+  retentionUntil    DateTime?                 @map("retention_until")
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project      Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  customer     Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  proposal     SalesProposal? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, customerId])
+  @@index([proposalId])
+  @@map("credit_bureau_consultations")
 }
 
 // -----------------------------------------------------------------------------
@@ -9327,6 +9691,8 @@ model IntegrationInboxEvent {
   errorMessage    String?               @map("error_message") @db.Text
   syncRunId       String?               @map("sync_run_id")
   installation    ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict)
+  /** 9K.4: projeção de domínio opcional quando este evento cru é um webhook de assinatura — ver `SignatureEvent`. */
+  signatureEvent  SignatureEvent?
 
   @@unique([installationId, provider, eventId])
   @@index([organizationId, status])

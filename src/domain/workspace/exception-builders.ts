@@ -223,6 +223,82 @@ export function buildSalesExceptions(ctx: ExceptionTenantContext, overdueReceiva
 }
 
 // ---------------------------------------------------------------------------
+// Comercial 360 — crédito, contrato e assinatura (Fase 9K.4, item G: "fatos reais", não uma
+// segunda central). Cada sinal aqui aponta para um registro que já existe por si só
+// (`Sale.status`, `SignatureRequest.status`, `CreditBureauConsultation.result`) — nenhum estado
+// novo é inventado só para alimentar a Central de Ações.
+// ---------------------------------------------------------------------------
+
+export interface PendingApprovalSaleSignal { id: string; unitCode: string; soldPrice: number; responsibleId: string; createdAt: Date }
+export interface CreditReviewSignal { id: string; customerName: string; responsibleId: string; requestedAt: Date }
+export interface SignaturePendingSignal { id: string; contractNumber: string; responsibleId: string; dueDate: Date }
+export interface SignatureFailedSignal { id: string; contractNumber: string; responsibleId: string; status: "RECUSADO" | "ERRO"; errorMessage: string | null; updatedAt: Date }
+
+export function buildCommercialClosingExceptions(ctx: ExceptionTenantContext, signals: { pendingApprovalSales: PendingApprovalSaleSignal[]; creditReviewRequired: CreditReviewSignal[]; signaturePending: SignaturePendingSignal[]; signatureFailed: SignatureFailedSignal[] }, referenceDate: Date): ExecutiveException[] {
+  const exceptions: ExecutiveException[] = [];
+
+  for (const sale of signals.pendingApprovalSales) {
+    const days = daysUntil(sale.createdAt, referenceDate);
+    exceptions.push({
+      id: buildExceptionId(ctx.organizationId, "sales", "sale_awaiting_approval", sale.id),
+      organizationId: ctx.organizationId, economicGroupId: ctx.economicGroupId, companyId: ctx.companyId, projectId: ctx.projectId, projectName: ctx.projectName,
+      domain: "sales", type: "sale_awaiting_approval",
+      title: `Venda da unidade ${sale.unitCode} aguardando aprovação`,
+      summary: `R$ ${sale.soldPrice.toLocaleString("pt-BR")} · em rascunho há ${Math.max(0, -days)} dia(s)`,
+      severity: "ACAO_NECESSARIA" as const, impact: { financial: sale.soldPrice }, materialityValue: sale.soldPrice, dueDate: null, confidence: ALTA,
+      source: "REDE", occurredAt: referenceDate.toISOString(), href: "/comercial",
+      reason: "Venda criada em rascunho ainda não passou por aprovação (contrato/plano de pagamento não gerados).",
+      responsibleId: sale.responsibleId, status: "ABERTA", evidence: [sale.id],
+    });
+  }
+
+  for (const item of signals.creditReviewRequired) {
+    exceptions.push({
+      id: buildExceptionId(ctx.organizationId, "sales", "credit_review_required", item.id),
+      organizationId: ctx.organizationId, economicGroupId: ctx.economicGroupId, companyId: ctx.companyId, projectId: ctx.projectId, projectName: ctx.projectName,
+      domain: "sales", type: "credit_review_required",
+      title: `Crédito requer análise: ${item.customerName}`,
+      summary: "Consulta de crédito retornou REQUER_ANALISE — decisão não é automática.",
+      severity: "ACAO_NECESSARIA" as const, impact: {}, materialityValue: null, dueDate: null, confidence: ALTA,
+      source: "REDE", occurredAt: item.requestedAt.toISOString(), href: "/comercial",
+      reason: "Resultado da consulta ao bureau de crédito exige avaliação humana antes de prosseguir com a proposta.",
+      responsibleId: item.responsibleId, status: "ABERTA", evidence: [item.id],
+    });
+  }
+
+  for (const item of signals.signaturePending) {
+    const days = daysUntil(item.dueDate, referenceDate);
+    exceptions.push({
+      id: buildExceptionId(ctx.organizationId, "sales", "signature_pending", item.id),
+      organizationId: ctx.organizationId, economicGroupId: ctx.economicGroupId, companyId: ctx.companyId, projectId: ctx.projectId, projectName: ctx.projectName,
+      domain: "sales", type: "signature_pending",
+      title: `Assinatura pendente — contrato ${item.contractNumber}`,
+      summary: `Aguardando signatário(s) há ${Math.max(0, -days)} dia(s).`,
+      severity: days < -7 ? ("ACAO_NECESSARIA" as const) : ("ATENCAO" as const), impact: {}, materialityValue: null, dueDate: null, confidence: ALTA,
+      source: "REDE", occurredAt: item.dueDate.toISOString(), href: "/comercial",
+      reason: "Solicitação de assinatura enviada e ainda não concluída por todos os signatários.",
+      responsibleId: item.responsibleId, status: "ABERTA", evidence: [item.id],
+    });
+  }
+
+  for (const item of signals.signatureFailed) {
+    exceptions.push({
+      id: buildExceptionId(ctx.organizationId, "sales", "signature_failed", item.id),
+      organizationId: ctx.organizationId, economicGroupId: ctx.economicGroupId, companyId: ctx.companyId, projectId: ctx.projectId, projectName: ctx.projectName,
+      domain: "sales", type: "signature_failed",
+      title: `Assinatura ${item.status === "RECUSADO" ? "recusada" : "com erro"} — contrato ${item.contractNumber}`,
+      summary: item.errorMessage ?? (item.status === "RECUSADO" ? "Um signatário recusou o documento." : "Falha reportada pelo provider de assinatura."),
+      severity: "ACAO_NECESSARIA" as const, impact: {}, materialityValue: null, dueDate: null, confidence: ALTA,
+      source: "REDE", occurredAt: item.updatedAt.toISOString(), href: "/comercial",
+      reason: item.status === "RECUSADO" ? "Signatário recusou — contrato não segue para recebíveis oficiais." : "Provider de assinatura reportou erro — requer nova tentativa ou intervenção manual.",
+      responsibleId: item.responsibleId, status: "ABERTA", evidence: [item.id],
+    });
+  }
+
+  return exceptions;
+}
+
+// ---------------------------------------------------------------------------
 // Suprimentos — compras críticas e medições pendentes (plano §7 "SUPRIMENTOS")
 // ---------------------------------------------------------------------------
 

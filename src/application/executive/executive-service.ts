@@ -19,6 +19,7 @@ import { analyzeRisk } from "@/domain/risk/rules";
 import {
   buildApprovalExceptions,
   buildBudgetVarianceExceptions,
+  buildCommercialClosingExceptions,
   buildFinancialExceptions,
   buildIntegrationExceptions,
   buildLegalExceptions,
@@ -184,7 +185,10 @@ async function buildProjectExceptionsAndKpis(organizationId: string, project: Ex
   const exceptions: ExecutiveException[] = [...buildBudgetVarianceExceptions(ctx, operations.bridge, referenceDate)];
   if (authorized.has("legal") && legal) exceptions.push(...buildLegalExceptions(ctx, legal.obligations, legal.licenses, referenceDate));
   if (authorized.has("financial") && financial) exceptions.push(...buildFinancialExceptions(ctx, financial.payables, financial.receivables, referenceDate));
-  if (authorized.has("sales") && sales) exceptions.push(...buildSalesExceptions(ctx, sales.overdueReceivables, referenceDate));
+  if (authorized.has("sales") && sales) {
+    exceptions.push(...buildSalesExceptions(ctx, sales.overdueReceivables, referenceDate));
+    exceptions.push(...buildCommercialClosingExceptions(ctx, sales, referenceDate));
+  }
   if (authorized.has("procurement") && procurement) exceptions.push(...buildProcurementExceptions(ctx, procurement.needs, referenceDate));
 
   let viability: ExecutiveViabilityKpis | null = null;
