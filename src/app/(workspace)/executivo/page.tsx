@@ -1,6 +1,7 @@
 import { requireAuthContext } from "@/application/auth/session";
 import { getCurrentOperationalContext } from "@/application/workspace/current-context";
 import { getExecutiveProjectOverview, getExecutivePortfolioOverview } from "@/application/executive/executive-service";
+import { getDecisionInsights, listSimulableSalesUnits } from "@/application/executive-insights/executive-insights-service";
 import { GestaoExecutivaView } from "@/components/areas/gestao-executiva-view";
 
 /**
@@ -27,5 +28,11 @@ export default async function ExecutivoPage() {
     getExecutivePortfolioOverview(authContext, context),
   ]);
 
-  return <GestaoExecutivaView overview={overview} portfolio={portfolio} />;
+  const scopeProjects = portfolio ? portfolio.entries.map((entry) => ({ id: entry.project.id })) : [{ id: context.project.id }];
+  const [insights, simulableUnits] = await Promise.all([
+    getDecisionInsights(authContext, { id: context.project.id, companyId: context.company?.id ?? null }, scopeProjects),
+    listSimulableSalesUnits(authContext, context.project.id),
+  ]);
+
+  return <GestaoExecutivaView overview={overview} portfolio={portfolio} insights={insights} simulableUnits={simulableUnits} />;
 }

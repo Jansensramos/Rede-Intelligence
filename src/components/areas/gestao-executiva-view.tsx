@@ -16,9 +16,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, BadgeCheck, Building2, CircleDollarSign, ClipboardCheck, ClipboardList, Gauge, HandCoins, Landmark, Lock, Scale, TrendingUp } from "lucide-react";
 import { DataTable, EmptyState, MetricCard, SectionTitle, SeverityBadge, type DataTableColumn } from "@/components/ui";
+import { DecisionInsightsPanel } from "@/components/areas/decision-insights-panel";
 import { SEVERITY_LABELS, type CanonicalSeverity } from "@/domain/workspace/severity";
 import type { ExecutiveDomain, ExecutiveException } from "@/domain/workspace/exceptions";
 import type { ExecutiveFreshnessEntry, ExecutiveProjectOverview, ExecutivePortfolioEntry, ExecutivePortfolioOverview } from "@/application/executive/executive-service";
+import type { DecisionInsightsBundle, SimulableSalesUnit } from "@/application/executive-insights/executive-insights-service";
 
 const compactCurrency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact", maximumFractionDigits: 1 });
 const percentage = (value: number) => `${(value * 100).toFixed(1)}%`;
@@ -93,7 +95,17 @@ function ExceptionRow({ exception, onOpen }: { exception: ExecutiveException; on
   );
 }
 
-export function GestaoExecutivaView({ overview, portfolio }: { overview: ExecutiveProjectOverview; portfolio: ExecutivePortfolioOverview | null }) {
+export function GestaoExecutivaView({
+  overview,
+  portfolio,
+  insights,
+  simulableUnits,
+}: {
+  overview: ExecutiveProjectOverview;
+  portfolio: ExecutivePortfolioOverview | null;
+  insights: DecisionInsightsBundle;
+  simulableUnits: SimulableSalesUnit[];
+}) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const { kpis } = overview;
@@ -188,6 +200,8 @@ export function GestaoExecutivaView({ overview, portfolio }: { overview: Executi
           )}
         </div>
       </section>
+
+      <DecisionInsightsPanel insights={insights} simulableUnits={simulableUnits} />
 
       <section>
         <SectionTitle eyebrow="DESDE A ÚLTIMA JANELA" title={`O que mudou nos últimos ${overview.windowDays} dias`} description="Janela fixa e determinística — este contexto ainda não persiste 'última visita' por usuário (ver relatório de entrega da 9K.2)." />

@@ -1663,3 +1663,22 @@ button.table-row { width: 100%; border: 0; border-bottom: 1px solid var(--line-s
 .ds-area-card small { color: var(--ink-muted); font-size: var(--text-xs); }
 .ds-area-card-restricted { cursor: default; border-style: dashed; color: var(--ink-muted); }
 .ds-area-card-restricted:hover { background: var(--surface); }
+
+/* Fase 9K.4A — "O que você precisa saber para decidir" */
+.ds-insight-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--space-3); align-items: start; }
+.ds-insight-card { display: grid; gap: var(--space-2); padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.ds-insight-card-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.ds-insight-card-header .eyebrow { display: flex; align-items: center; gap: 6px; }
+.ds-insight-headline { font-size: var(--text-md); font-weight: 650; }
+.ds-insight-explanation { margin: 0; color: var(--ink-muted); font-size: var(--text-xs); line-height: 1.5; }
+.ds-insight-scenario-list { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.ds-insight-scenario-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: var(--text-xs); border-bottom: 1px solid var(--line-soft); padding-bottom: 6px; }
+.ds-insight-scenario-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+.ds-insight-scenario-list li span { color: var(--ink-muted); }
+.ds-insight-scenario-list li strong { font-variant-numeric: tabular-nums; }
+.ds-insight-premises { font-size: var(--text-xs); color: var(--ink-muted); }
+.ds-insight-premises summary { cursor: pointer; font-weight: 650; color: var(--ink); }
+.ds-insight-premises ul { margin: var(--space-2) 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.ds-insight-footer { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); color: var(--ink-muted); font-size: var(--text-2xs); }
+.ds-insight-sim-form { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.ds-insight-sim-form input, .ds-insight-sim-form select { flex: 1; min-width: 160px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); font-size: var(--text-xs); color: var(--ink); font: inherit; }
