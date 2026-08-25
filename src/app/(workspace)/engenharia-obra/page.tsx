@@ -15,14 +15,17 @@ export default async function EngenhariaObraPage() {
   if (!context.project) return null;
   const projectId = context.project.id;
 
-  const study = await getLatestStudyForProject(authContext.organizationId, projectId);
-  const baseVgv = study ? calculateAllScenarios(study.assumptions).base.metrics.vgv : undefined;
-
-  const [design, budget, operations] = await Promise.all([
+  // Fechamento 9K.1 (revisão): só o orçamento depende do estudo (via `baseVgv`) — Design e
+  // Operações não dependem de nada aqui além do projectId, então não há razão para esperar o
+  // estudo terminar antes de disparar as três buscas. Antes, o `await` do estudo bloqueava as
+  // outras duas desnecessariamente, serializando 3 round-trips independentes ao banco.
+  const [study, design, operations] = await Promise.all([
+    getLatestStudyForProject(authContext.organizationId, projectId),
     ensureDesignWorkspace(authContext, projectId),
-    getLatestProjectBudget(authContext, projectId, baseVgv),
     getOperationsWorkspace(authContext, projectId),
   ]);
+  const baseVgv = study ? calculateAllScenarios(study.assumptions).base.metrics.vgv : undefined;
+  const budget = await getLatestProjectBudget(authContext, projectId, baseVgv);
 
   return (
     <Suspense fallback={<Loading label="Carregando Engenharia e Obra…" />}>

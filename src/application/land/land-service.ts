@@ -189,6 +189,34 @@ export async function getLatestLandStudyForOrganization(organizationId: string):
   return version ? toView(version) : null;
 }
 
+/**
+ * Fechamento da 9K.1 (revisão pós-fechamento): variante escopada por projeto de
+ * `getLatestLandStudyForOrganization`. A versão original busca "o terreno mais recente de toda a
+ * organização" — com a troca de contexto real que a 9K.1 introduziu, isso podia mostrar na aba
+ * Terreno de um projeto o terreno de OUTRO projeto da mesma organização (nunca de outra
+ * organização — `organizationId` já era filtrado nos dois níveis — mas ainda assim uma
+ * inconsistência real de contexto: "terreno exibido" deixava de corresponder a "projeto ativo").
+ *
+ * Usa a relação real e já existente `LandAsset.projectId` (FK opcional, `onDelete: SetNull`,
+ * schema.prisma:2490-2511) — nunca o nome do projeto, nunca o `createdAt` mais recente da
+ * organização. Se este projeto não tiver nenhum `LandAsset` vinculado, devolve `null` — nunca cai
+ * para o terreno de outro projeto nem para o mais recente da organização. Não requer migration: o
+ * campo e a FK já existem, só não são populados por nenhum fluxo de criação real hoje (o único
+ * criador de `LandAsset`, `createDemoLandStudy`, é usado apenas por `prisma/seed.ts`, que depois
+ * vincula manualmente o terreno de demonstração ao projeto START BUTANTÃ via
+ * `prisma.landAsset.update({ data: { projectId } })` — não existe ainda uma ação de produto real
+ * para "vincular este terreno a este projeto"; isso é uma lacuna de funcionalidade a ser endereçada
+ * em fase futura, não algo que esta função deva inventar ou contornar).
+ */
+export async function getLatestLandStudyForProject(organizationId: string, projectId: string): Promise<LandWorkspaceView | null> {
+  const version = await prisma.landStudyVersion.findFirst({
+    where: { versionStatus: LandVersionStatus.SNAPSHOT, landStudy: { organizationId, landAsset: { organizationId, projectId } } },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, versionNumber: true, snapshot: true },
+  });
+  return version ? toView(version) : null;
+}
+
 export async function getLandStudyForOrganization(organizationId: string, landStudyId: string): Promise<LandWorkspaceView | null> {
   const version = await prisma.landStudyVersion.findFirst({
     where: { versionStatus: LandVersionStatus.SNAPSHOT, landStudy: { id: landStudyId, organizationId, landAsset: { organizationId } } },

@@ -1,6 +1,6 @@
 import { requireAuthContext } from "@/application/auth/session";
 import { getLatestStudyForProject } from "@/application/studies/study-service";
-import { getLatestLandStudyForOrganization } from "@/application/land/land-service";
+import { getLatestLandStudyForProject } from "@/application/land/land-service";
 import { ensureInvestmentCase } from "@/application/investment/investment-service";
 import { getPeoplePerformanceWorkspace } from "@/application/people-performance/people-performance-service";
 import { getAccountingWorkspace } from "@/application/accounting/accounting-service";
@@ -28,8 +28,13 @@ export default async function LegacyHome() {
   const initialStudy = await getLatestStudyForProject(context.organizationId, project.id);
   if (!initialStudy) throw new Error("Este empreendimento ainda não tem um estudo ativo. Crie um estudo ou execute o seed.");
 
+  // Fechamento 9K.1 (revisão pós-fechamento): escopado por projeto, nunca "o terreno mais recente
+  // da organização" — mesma correção aplicada em src/app/(workspace)/viabilidade/page.tsx. Não
+  // muda o comportamento observável hoje (o projeto resolvido pelo legado, sem seleção explícita,
+  // continua sendo o mesmo de sempre, e é o único com Land Asset vinculado no seed de demonstração)
+  // — só deixa de depender silenciosamente de "o mais recente da organização".
   const [initialLand, initialInvestment, initialPeoplePerformance, initialAccounting, initialIntegrations, initialDataIntelligence, marketProductWorkspace] = await Promise.all([
-    getLatestLandStudyForOrganization(context.organizationId),
+    getLatestLandStudyForProject(context.organizationId, project.id),
     ensureInvestmentCase(context, project.id),
     getPeoplePerformanceWorkspace(context, project.id),
     getAccountingWorkspace(context, project.id),
@@ -37,7 +42,7 @@ export default async function LegacyHome() {
     getDataIntelligenceWorkspace(context, project.id),
     getMarketProductWorkspace(context),
   ]);
-  if (!initialLand) throw new Error("Execute o seed para carregar o estudo territorial demonstrativo.");
+  if (!initialLand) throw new Error("Este empreendimento ainda não tem um terreno vinculado. Execute o seed para carregar o estudo territorial demonstrativo, ou abra outro empreendimento.");
   const initialMarketProduct = buildMarketProductWorkspaceView(marketProductWorkspace);
 
   return (

@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { requireAuthContext } from "@/application/auth/session";
 import { getLatestStudyForProject } from "@/application/studies/study-service";
-import { getLatestLandStudyForOrganization } from "@/application/land/land-service";
+import { getLatestLandStudyForProject } from "@/application/land/land-service";
 import { ensureInvestmentCase } from "@/application/investment/investment-service";
 import { getCurrentOperationalContext } from "@/application/workspace/current-context";
 import { ViabilidadeWorkspace } from "@/components/areas/viabilidade-workspace";
@@ -20,11 +20,14 @@ export default async function ViabilidadePage() {
   const initialStudy = await getLatestStudyForProject(authContext.organizationId, projectId);
   if (!initialStudy) throw new Error("Este empreendimento ainda não tem um estudo ativo. Crie um estudo (\"Novo estudo\", nesta área) ou execute o seed.");
 
+  // Fechamento 9K.1 (revisão pós-fechamento): escopado por projeto (`getLatestLandStudyForProject`),
+  // nunca "o terreno mais recente da organização" — evita mostrar o terreno de outro projeto da
+  // mesma organização. `initialLand` pode ser `null` (projeto sem Land Asset vinculado ainda); a
+  // aba Terreno trata isso como estado vazio, não como erro (ver ViabilidadeWorkspace).
   const [initialLand, initialInvestment] = await Promise.all([
-    getLatestLandStudyForOrganization(authContext.organizationId),
+    getLatestLandStudyForProject(authContext.organizationId, projectId),
     ensureInvestmentCase(authContext, projectId),
   ]);
-  if (!initialLand) throw new Error("Execute o seed para carregar o estudo territorial demonstrativo.");
 
   return (
     <Suspense fallback={<Loading label="Carregando Viabilidade…" />}>

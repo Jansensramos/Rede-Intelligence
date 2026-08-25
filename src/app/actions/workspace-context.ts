@@ -27,3 +27,18 @@ export async function setActiveProjectAction(projectId: string) {
   });
   return { ok: true as const };
 }
+
+/**
+ * Recuperação de contexto (achado da revisão pós-fechamento da 9K.1): `resolveOperationalContext`
+ * nunca cai para o fallback determinístico quando a seleção explícita do cookie não resolve mais
+ * (projeto apagado, reseed, cookie de outra organização) — decisão correta (evita trocar de projeto
+ * às escondidas), mas antes disso deixava o usuário sem NENHUMA ação possível na tela (nenhuma
+ * sidebar, nenhum seletor). Esta ação limpa a seleção presa; a próxima resolução volta a cair no
+ * fallback determinístico (projeto mais antigo da organização) só se nenhuma seleção nova for feita.
+ */
+export async function clearActiveProjectAction() {
+  await requireAuthContext();
+  const cookieStore = await cookies();
+  cookieStore.delete(ACTIVE_PROJECT_COOKIE);
+  return { ok: true as const };
+}

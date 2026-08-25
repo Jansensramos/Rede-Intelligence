@@ -38,12 +38,21 @@ export interface ContextOptionGroup {
 }
 
 export async function getContextSelectorOptions(organizationId: string): Promise<ContextOptionGroup[]> {
-  const [groups, companies] = await Promise.all([
+  // Fechamento 9K.1 (revisão): as 3 consultas são independentes entre si — nenhuma depende do
+  // resultado das outras — mas `projectsWithoutCompany` era buscada só depois do primeiro
+  // `Promise.all` resolver. Esta função roda em toda navegação (chamada pelo layout do shell), então
+  // um round-trip sequencial a mais aqui pesa em toda troca de área, não só na abertura do seletor.
+  const [groups, companies, projectsWithoutCompany] = await Promise.all([
     prisma.economicGroup.findMany({ where: { organizationId }, orderBy: { name: "asc" } }),
     prisma.company.findMany({
       where: { organizationId },
       orderBy: { name: "asc" },
       include: { projects: { orderBy: { name: "asc" }, select: { id: true, name: true, city: true, state: true } } },
+    }),
+    prisma.project.findMany({
+      where: { organizationId, companyId: null },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, city: true, state: true },
     }),
   ]);
 
@@ -64,11 +73,6 @@ export async function getContextSelectorOptions(organizationId: string): Promise
   const ungrouped = companiesByGroup.get(null) ?? [];
   if (ungrouped.length > 0) result.push({ id: null, name: "Sem grupo econômico", companies: ungrouped });
 
-  const projectsWithoutCompany = await prisma.project.findMany({
-    where: { organizationId, companyId: null },
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, city: true, state: true },
-  });
   if (projectsWithoutCompany.length > 0) {
     result.push({
       id: "__no_company__",

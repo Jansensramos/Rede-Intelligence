@@ -17,16 +17,17 @@
  */
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, BarChart3, Check, ClipboardCheck, Plus, Settings2 } from "lucide-react";
+import { AlertTriangle, BarChart3, Check, ClipboardCheck, MapPinned, Plus, Settings2 } from "lucide-react";
 import { CashFlowChart } from "@/components/cash-flow-chart";
 import { LandIntelligenceView } from "@/components/land-intelligence-view";
 import { InvestmentSuiteView } from "@/components/investment-suite-view";
 import { ProjectEditor } from "@/components/project-editor";
 import { RedTeamView } from "@/components/red-team-view";
 import { SensitivityView } from "@/components/sensitivity-view";
-import { SectionTitle, Tabs } from "@/components/ui";
+import { EmptyState, SectionTitle, Tabs } from "@/components/ui";
 import { createStudyAction, createStudyVersionAction } from "@/app/actions/studies";
 import { reassessInvestmentCaseAction } from "@/app/actions/investment";
+import { setActiveProjectAction } from "@/app/actions/workspace-context";
 import { analyzeRisk } from "@/domain/risk/rules";
 import { calculateAllScenarios } from "@/domain/financial/engine";
 import { DEMO_PROJECT } from "@/domain/financial/demo";
@@ -85,7 +86,7 @@ export function ViabilidadeWorkspace({
   initialInvestment,
 }: {
   initialStudy: PersistedStudyView;
-  initialLand: LandWorkspaceView;
+  initialLand: LandWorkspaceView | null;
   initialInvestment: InvestmentCaseWorkspace;
 }) {
   const router = useRouter();
@@ -94,7 +95,10 @@ export function ViabilidadeWorkspace({
   const funcao: Funcao = funcaoParam && FUNCOES.some((item) => item.key === funcaoParam) ? funcaoParam : "land";
 
   const [study, setStudy] = useState(initialStudy);
-  const [landWorkspace, setLandWorkspace] = useState(initialLand);
+  // Fechamento 9K.1 (revisão pós-fechamento): `landWorkspace` agora é escopado por projeto
+  // (`getLatestLandStudyForProject`) — pode ser `null` quando este projeto ainda não tem nenhum
+  // `LandAsset` vinculado. Nunca cai silenciosamente no terreno de outro projeto.
+  const [landWorkspace, setLandWorkspace] = useState<LandWorkspaceView | null>(initialLand);
   const [investmentWorkspace, setInvestmentWorkspace] = useState(initialInvestment);
   const [project, setProject] = useState<ProjectAssumptions>(initialStudy.assumptions);
   const [scenario, setScenario] = useState<ScenarioKey>("base");
@@ -114,14 +118,32 @@ export function ViabilidadeWorkspace({
   }
 
   async function saveProject(value: ProjectAssumptions) {
-    const response = editorMode === "create" || !study.studyId
+    const isNewProject = editorMode === "create" || !study.studyId;
+    const response = isNewProject
       ? await createStudyAction(value)
       : await createStudyVersionAction(study.projectId, study.studyId, value);
     if (!response.ok) throw new Error(response.error);
+
+    if (isNewProject) {
+      // "Novo estudo" cria um projeto DIFERENTE do atual — reavaliar o Investment Case do projeto
+      // antigo contra a nova versão sempre falharia (mesma organização, projeto diferente) e o
+      // contexto ativo (cookie) nunca era atualizado, deixando Comitê/Studio/Data Room presos no
+      // projeto anterior enquanto Premissas/Cenários já mostravam o novo. Em vez de reavaliar,
+      // torna o novo projeto o contexto ativo e recarrega — a própria rota de Viabilidade já cria
+      // o Investment Case do zero para ele (`ensureInvestmentCase`, chamado por
+      // `viabilidade/page.tsx`), sem precisar de nenhuma reavaliação manual aqui.
+      const activation = await setActiveProjectAction(response.data.projectId);
+      if (!activation.ok) throw new Error(activation.error);
+      setEditorProject(null);
+      router.refresh();
+      return;
+    }
+
     setStudy(response.data);
     setProject(response.data.assumptions);
-    const reassessment = await reassessInvestmentCaseAction(investmentWorkspace.id, response.data.studyVersionId, landWorkspace.versionId || null);
-    if (reassessment.ok) setInvestmentWorkspace(reassessment.data);
+    const reassessment = await reassessInvestmentCaseAction(investmentWorkspace.id, response.data.studyVersionId, landWorkspace?.versionId || null);
+    if (!reassessment.ok) throw new Error(reassessment.error);
+    setInvestmentWorkspace(reassessment.data);
     setEditorProject(null);
     setScenario("base");
     router.refresh();
@@ -148,7 +170,7 @@ export function ViabilidadeWorkspace({
         </div>
       )}
 
-      {funcao === "land" && (
+      {funcao === "land" && landWorkspace && (
         <LandIntelligenceView
           initialLand={landWorkspace}
           onLandChange={(nextLand) => {
@@ -157,6 +179,14 @@ export function ViabilidadeWorkspace({
               if (response.ok) setInvestmentWorkspace(response.data);
             });
           }}
+        />
+      )}
+
+      {funcao === "land" && !landWorkspace && (
+        <EmptyState
+          icon={MapPinned}
+          title="Nenhum terreno vinculado a este empreendimento"
+          description="Este projeto ainda não tem um Land Asset associado. Vincular um terreno a um projeto ainda não é uma ação disponível no produto — fica registrado como pendência para fase futura."
         />
       )}
 

@@ -1,6 +1,7 @@
 import { FolderSearch } from "lucide-react";
 import { getCurrentOperationalContext } from "@/application/workspace/current-context";
 import { getContextSelectorOptions } from "@/application/workspace/context-options";
+import { ClearContextButton } from "@/components/clear-context-button";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { EmptyState } from "@/components/ui";
 
@@ -22,8 +23,10 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
           <EmptyState
             icon={FolderSearch}
             title="Nenhum empreendimento disponível"
-            description="Esta organização ainda não tem nenhum empreendimento cadastrado, ou o empreendimento selecionado não existe mais. Execute o seed de demonstração ou crie um novo estudo para começar."
-          />
+            description="Esta organização ainda não tem nenhum empreendimento cadastrado, ou o empreendimento selecionado não existe mais. Limpe a seleção para tentar o empreendimento mais antigo da organização, ou execute o seed de demonstração."
+          >
+            <ClearContextButton />
+          </EmptyState>
         </main>
       </div>
     );
