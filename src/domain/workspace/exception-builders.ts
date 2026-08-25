@@ -46,6 +46,8 @@ export interface LegalObligationSignal {
   title: string;
   dueAt: Date;
   amount: number | null;
+  /** `LegalObligation.responsibleId` — campo obrigatório na origem (plano §L, "responsavelId"). */
+  responsibleId?: string;
 }
 
 export interface LegalLicenseSignal {
@@ -53,6 +55,8 @@ export interface LegalLicenseSignal {
   code: string;
   title: string;
   expiresAt: Date;
+  /** `LegalLicense.responsibleId` — campo obrigatório na origem. */
+  responsibleId?: string;
 }
 
 export function buildLegalExceptions(ctx: ExceptionTenantContext, obligations: LegalObligationSignal[], licenses: LegalLicenseSignal[], referenceDate: Date): ExecutiveException[] {
@@ -84,6 +88,9 @@ export function buildLegalExceptions(ctx: ExceptionTenantContext, obligations: L
       occurredAt: referenceDate.toISOString(),
       href: "/juridico",
       reason: days < 0 ? `Vencida há ${Math.abs(days)} dia(s).` : `Vence em ${days} dia(s) (marco ${criticality}).`,
+      responsibleId: obligation.responsibleId,
+      status: "ABERTA",
+      evidence: [obligation.code],
     });
   }
 
@@ -113,6 +120,9 @@ export function buildLegalExceptions(ctx: ExceptionTenantContext, obligations: L
       occurredAt: referenceDate.toISOString(),
       href: "/juridico",
       reason: days < 0 ? `Vencida há ${Math.abs(days)} dia(s).` : `Vence em D-${days} (marco ${criticality}).`,
+      responsibleId: license.responsibleId,
+      status: "ABERTA",
+      evidence: [license.code],
     });
   }
 
@@ -129,6 +139,8 @@ export interface InstallmentSignal {
   counterpartyName: string | null;
   dueDate: Date;
   balance: number;
+  /** `PayableAccount.responsibleId`/`ReceivableAccount.responsibleId` — opcional na origem (plano §L). Nunca inventado quando ausente. */
+  responsibleId?: string | null;
 }
 
 export function buildFinancialExceptions(
@@ -164,6 +176,9 @@ export function buildFinancialExceptions(
           occurredAt: referenceDate.toISOString(),
           href: "/financeiro",
           reason: days < 0 ? `Saldo em aberto vencido há ${Math.abs(days)} dia(s).` : `Vence em ${days} dia(s) (janela de alerta ≤ 3 dias).`,
+          responsibleId: item.responsibleId,
+          status: "ABERTA",
+          evidence: [item.id],
         } satisfies ExecutiveException;
       })
       .filter((item): item is ExecutiveException => item !== null);
@@ -200,6 +215,9 @@ export function buildSalesExceptions(ctx: ExceptionTenantContext, overdueReceiva
         occurredAt: referenceDate.toISOString(),
         href: "/comercial",
         reason: `Recebível vencido há ${days} dia(s), sem baixa registrada.`,
+        responsibleId: item.responsibleId,
+        status: "ABERTA",
+        evidence: [item.id],
       } satisfies ExecutiveException;
     });
 }
@@ -215,6 +233,8 @@ export interface ProcurementNeedSignal {
   requiredAt: Date;
   expectedLeadDays: number;
   bufferDays: number;
+  /** `ProcurementNeed.requesterId` — campo obrigatório na origem; é quem solicitou a necessidade (plano §L). */
+  requesterId?: string;
 }
 
 export function buildProcurementExceptions(ctx: ExceptionTenantContext, criticalNeeds: ProcurementNeedSignal[], referenceDate: Date): ExecutiveException[] {
@@ -243,6 +263,9 @@ export function buildProcurementExceptions(ctx: ExceptionTenantContext, critical
         occurredAt: referenceDate.toISOString(),
         href: "/suprimentos",
         reason: `Prazo limite de contratação (lead time + margem) venceu há ${Math.max(0, daysPastDeadline)} dia(s) sem contrato.`,
+        responsibleId: need.requesterId,
+        status: "ABERTA",
+        evidence: [need.code],
       } satisfies ExecutiveException;
     });
 }
@@ -277,6 +300,11 @@ export function buildBudgetVarianceExceptions(ctx: ExceptionTenantContext, rows:
         occurredAt: referenceDate.toISOString(),
         href: "/engenharia-obra",
         reason: `Variação classificada como ${row.level} pela política de materialidade da organização.`,
+        // Sem responsável: `BudgetBridgeRow` agrega por categoria, não por um `BudgetLineItem`
+        // único — atribuir um responsável aqui seria inventar um fato que a origem não tem (ordem
+        // de serviço §4).
+        status: "ABERTA",
+        evidence: [row.category],
       } satisfies ExecutiveException;
     })
     .filter((item): item is ExecutiveException => item !== null);
@@ -318,6 +346,8 @@ export function buildIntegrationExceptions(organizationId: string, installations
         occurredAt: (installation.lastSyncAt ?? referenceDate).toISOString(),
         href: "/integracoes",
         reason: `Estado de saúde da instalação: ${uiState}.`,
+        status: "ABERTA",
+        evidence: [installation.id],
       } satisfies ExecutiveException;
     })
     .filter((item): item is ExecutiveException => item !== null);
@@ -367,6 +397,8 @@ export function buildViabilityExceptions(ctx: ExceptionTenantContext, findings: 
         occurredAt: referenceDate.toISOString(),
         href: "/viabilidade?f=risks",
         reason: finding.evidence,
+        status: "ABERTA",
+        evidence: [finding.id],
       } satisfies ExecutiveException;
     })
     .filter((item): item is ExecutiveException => item !== null);
@@ -384,6 +416,10 @@ export interface ApprovalRequestSignal {
   requestedAt: Date;
   projectId: string | null;
   projectName: string | null;
+  /** Quem solicitou a aprovação (`ApprovalRequest.requestedById`) — não é quem decide (isso é alçada, ver `requiredRole`). */
+  requestedById?: string;
+  /** Alçada da política vinculada (`ApprovalPolicy.requiredRole`), quando a solicitação tem uma política associada. */
+  requiredRole?: import("@prisma/client").MembershipRole | null;
 }
 
 export function buildApprovalExceptions(organizationId: string, requests: ApprovalRequestSignal[], referenceDate: Date): ExecutiveException[] {
@@ -405,5 +441,11 @@ export function buildApprovalExceptions(organizationId: string, requests: Approv
     occurredAt: referenceDate.toISOString(),
     href: request.entityType === "SALE" ? "/comercial" : "/suprimentos",
     reason: "Alçada de aprovação ainda não decidida (ApprovalRequest.status = PENDING).",
+    // `responsibleId` fica ausente de propósito: quem "resolve" uma aprovação é quem tem a alçada
+    // (role), não uma pessoa específica atribuída — inventar um responsável aqui violaria a regra
+    // de não atribuir artificialmente (plano §4/§M). `requestedById` fica só como evidência.
+    status: "ABERTA",
+    evidence: [request.id, ...(request.requestedById ? [request.requestedById] : [])],
+    approvalCapability: request.requiredRole ? { requiredRole: request.requiredRole } : null,
   }));
 }

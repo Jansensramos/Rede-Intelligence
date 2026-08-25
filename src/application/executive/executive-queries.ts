@@ -40,13 +40,13 @@ export async function queryLegalSignals(organizationId: string, projectId: strin
   const [obligations, licenses] = await Promise.all([
     prisma.legalObligation.findMany({
       where: { organizationId, projectId, status: { notIn: ["FULFILLED", "WAIVED", "CANCELLED"] } },
-      select: { id: true, code: true, title: true, dueAt: true, amount: true, updatedAt: true },
+      select: { id: true, code: true, title: true, dueAt: true, amount: true, updatedAt: true, responsibleId: true },
       orderBy: { dueAt: "asc" },
       take: 50,
     }),
     prisma.legalLicense.findMany({
       where: { organizationId, projectId, expiresAt: { not: null }, status: { notIn: ["REJECTED", "SUSPENDED", "EXPIRED"] } },
-      select: { id: true, code: true, title: true, expiresAt: true, updatedAt: true },
+      select: { id: true, code: true, title: true, expiresAt: true, updatedAt: true, responsibleId: true },
       orderBy: { expiresAt: "asc" },
       take: 50,
     }),
@@ -55,8 +55,9 @@ export async function queryLegalSignals(organizationId: string, projectId: strin
   // registros já buscados — nunca uma consulta adicional só para isso.
   const latestUpdatedAt = latestTimestamp([...obligations.map((item) => item.updatedAt), ...licenses.map((item) => item.updatedAt)]);
   return {
-    obligations: obligations.map((item) => ({ id: item.id, code: item.code, title: item.title, dueAt: item.dueAt, amount: item.amount ? Number(item.amount) : null })),
-    licenses: licenses.map((item) => ({ id: item.id, code: item.code, title: item.title, expiresAt: item.expiresAt! })),
+    // `responsibleId` é obrigatório na origem (`LegalObligation`/`LegalLicense`) — sempre presente aqui, nunca inventado (plano §L/9K.3).
+    obligations: obligations.map((item) => ({ id: item.id, code: item.code, title: item.title, dueAt: item.dueAt, amount: item.amount ? Number(item.amount) : null, responsibleId: item.responsibleId })),
+    licenses: licenses.map((item) => ({ id: item.id, code: item.code, title: item.title, expiresAt: item.expiresAt!, responsibleId: item.responsibleId })),
     latestUpdatedAt,
   };
 }
@@ -68,13 +69,15 @@ export async function queryLegalSignals(organizationId: string, projectId: strin
 // mesmo tempo (ordem de serviço §4, "não duplicar verdade").
 // ---------------------------------------------------------------------------
 
-function toInstallmentSignal(item: { id: string; currentAmount: unknown; dueDate: Date; description: string; counterpartyName: string | null; payments: { amount: unknown; status: string }[] }): InstallmentSignal {
+function toInstallmentSignal(item: { id: string; currentAmount: unknown; dueDate: Date; description: string; counterpartyName: string | null; responsibleId?: string | null; payments: { amount: unknown; status: string }[] }): InstallmentSignal {
   return {
     id: item.id,
     description: item.description,
     counterpartyName: item.counterpartyName,
     dueDate: item.dueDate,
     balance: computeInstallmentBalance(Number(item.currentAmount), item.payments.map((payment) => ({ amount: Number(payment.amount), status: payment.status as InstallmentPaymentLike["status"] }))),
+    // `PayableAccount.responsibleId`/`ReceivableAccount.responsibleId` são opcionais na origem — repassado tal como está, nunca inventado (plano §L/9K.3).
+    responsibleId: item.responsibleId ?? null,
   };
 }
 
@@ -83,13 +86,13 @@ export async function queryFinancialSignals(organizationId: string, projectId: s
   const [payables, receivables, cashRows] = await Promise.all([
     prisma.payableInstallment.findMany({
       where: { payableAccount: { organizationId, projectId }, status: { notIn: [...PAYABLE_TERMINAL_STATUSES] }, dueDate: { lte: horizon } },
-      select: { id: true, currentAmount: true, dueDate: true, updatedAt: true, payableAccount: { select: { description: true, supplier: { select: { name: true } } } }, payments: { select: { amount: true, status: true } } },
+      select: { id: true, currentAmount: true, dueDate: true, updatedAt: true, payableAccount: { select: { description: true, responsibleId: true, supplier: { select: { name: true } } } }, payments: { select: { amount: true, status: true } } },
       orderBy: { dueDate: "asc" },
       take: 100,
     }),
     prisma.receivableInstallment.findMany({
       where: { receivableAccount: { organizationId, projectId, saleId: null }, status: { notIn: [...RECEIVABLE_TERMINAL_STATUSES] }, dueDate: { lte: horizon } },
-      select: { id: true, currentAmount: true, dueDate: true, updatedAt: true, receivableAccount: { select: { description: true, customer: { select: { name: true } } } }, payments: { select: { amount: true, status: true } } },
+      select: { id: true, currentAmount: true, dueDate: true, updatedAt: true, receivableAccount: { select: { description: true, responsibleId: true, customer: { select: { name: true } } } }, payments: { select: { amount: true, status: true } } },
       orderBy: { dueDate: "asc" },
       take: 100,
     }),
@@ -110,8 +113,8 @@ export async function queryFinancialSignals(organizationId: string, projectId: s
   const latestUpdatedAt = latestTimestamp([...payables.map((item) => item.updatedAt), ...receivables.map((item) => item.updatedAt)]);
 
   return {
-    payables: payables.map((item) => toInstallmentSignal({ id: item.id, currentAmount: item.currentAmount, dueDate: item.dueDate, description: item.payableAccount.description, counterpartyName: item.payableAccount.supplier?.name ?? null, payments: item.payments })),
-    receivables: receivables.map((item) => toInstallmentSignal({ id: item.id, currentAmount: item.currentAmount, dueDate: item.dueDate, description: item.receivableAccount.description, counterpartyName: item.receivableAccount.customer?.name ?? null, payments: item.payments })),
+    payables: payables.map((item) => toInstallmentSignal({ id: item.id, currentAmount: item.currentAmount, dueDate: item.dueDate, description: item.payableAccount.description, counterpartyName: item.payableAccount.supplier?.name ?? null, responsibleId: item.payableAccount.responsibleId, payments: item.payments })),
+    receivables: receivables.map((item) => toInstallmentSignal({ id: item.id, currentAmount: item.currentAmount, dueDate: item.dueDate, description: item.receivableAccount.description, counterpartyName: item.receivableAccount.customer?.name ?? null, responsibleId: item.receivableAccount.responsibleId, payments: item.payments })),
     cashPosition,
     latestUpdatedAt,
   };
@@ -128,7 +131,7 @@ export async function querySalesSignals(organizationId: string, projectId: strin
     prisma.sale.aggregate({ where: { organizationId, projectId, status: "APPROVED" }, _sum: { soldPrice: true }, _count: { _all: true } }),
     prisma.receivableInstallment.findMany({
       where: { receivableAccount: { organizationId, projectId, saleId: { not: null } }, status: { notIn: [...RECEIVABLE_TERMINAL_STATUSES] }, dueDate: { lt: referenceDate } },
-      select: { id: true, currentAmount: true, dueDate: true, updatedAt: true, receivableAccount: { select: { description: true, customer: { select: { name: true } } } }, payments: { select: { amount: true, status: true } } },
+      select: { id: true, currentAmount: true, dueDate: true, updatedAt: true, receivableAccount: { select: { description: true, responsibleId: true, customer: { select: { name: true } } } }, payments: { select: { amount: true, status: true } } },
       orderBy: { dueDate: "asc" },
       take: 50,
     }),
@@ -141,7 +144,7 @@ export async function querySalesSignals(organizationId: string, projectId: strin
     unitsTotal: unitGroups.reduce((sum, group) => sum + group._count._all, 0),
     vgvVendido: Number(soldAggregate._sum.soldPrice ?? 0),
     salesApprovedCount: soldAggregate._count._all,
-    overdueReceivables: overdueReceivables.map((item) => toInstallmentSignal({ id: item.id, currentAmount: item.currentAmount, dueDate: item.dueDate, description: item.receivableAccount.description, counterpartyName: item.receivableAccount.customer?.name ?? null, payments: item.payments })),
+    overdueReceivables: overdueReceivables.map((item) => toInstallmentSignal({ id: item.id, currentAmount: item.currentAmount, dueDate: item.dueDate, description: item.receivableAccount.description, counterpartyName: item.receivableAccount.customer?.name ?? null, responsibleId: item.receivableAccount.responsibleId, payments: item.payments })),
     // Gate 3 (freshness real): agregados de venda/unidade são ao vivo; a única âncora real
     // disponível sem consulta extra é o `updatedAt` dos recebíveis já buscados.
     latestUpdatedAt: latestTimestamp(overdueReceivables.map((item) => item.updatedAt)),
@@ -156,7 +159,7 @@ export async function queryProcurementSignals(organizationId: string, projectId:
   const [needs, pendingMeasurements] = await Promise.all([
     prisma.procurementNeed.findMany({
       where: { organizationId, projectId, status: { notIn: ["DISCARDED"] } },
-      select: { id: true, code: true, description: true, requiredAt: true, expectedLeadDays: true, bufferDays: true, updatedAt: true },
+      select: { id: true, code: true, description: true, requiredAt: true, expectedLeadDays: true, bufferDays: true, updatedAt: true, requesterId: true },
       orderBy: { requiredAt: "asc" },
       take: 50,
     }),
@@ -239,11 +242,22 @@ export async function queryIntegrationSignals(organizationId: string) {
 export async function queryPendingApprovals(organizationId: string, projectIds?: string[]) {
   const requests = await prisma.approvalRequest.findMany({
     where: { organizationId, status: "PENDING", ...(projectIds ? { projectId: { in: projectIds } } : {}) },
-    select: { id: true, actType: true, entityType: true, amount: true, requestedAt: true, projectId: true },
+    // `policy` é opcional na origem (`ApprovalRequest.policyId` pode ser nulo) — `requiredRole` só
+    // existe quando há política vinculada; nunca inferido quando ausente (plano §L "alcada"/§AN).
+    select: { id: true, actType: true, entityType: true, amount: true, requestedAt: true, projectId: true, requestedById: true, policy: { select: { requiredRole: true } } },
     orderBy: { requestedAt: "asc" },
     take: 30,
   });
-  return requests.map((item) => ({ id: item.id, actType: item.actType, entityType: item.entityType, amount: Number(item.amount), requestedAt: item.requestedAt, projectId: item.projectId }));
+  return requests.map((item) => ({
+    id: item.id,
+    actType: item.actType,
+    entityType: item.entityType,
+    amount: Number(item.amount),
+    requestedAt: item.requestedAt,
+    projectId: item.projectId,
+    requestedById: item.requestedById,
+    requiredRole: item.policy?.requiredRole ?? null,
+  }));
 }
 
 export { projectForTenant };

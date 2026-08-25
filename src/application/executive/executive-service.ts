@@ -299,6 +299,42 @@ export async function getExecutiveProjectOverview(authContext: Pick<AuthContext,
   };
 }
 
+export interface ExecutiveOpenExceptions {
+  exceptions: ExecutiveException[];
+  authorizedDomains: ExecutiveDomain[];
+}
+
+/**
+ * Só a lista de exceções ABERTAS, com o mesmo gate 2 (RBAC por domínio) e a mesma ordenação de
+ * `getExecutiveProjectOverview` — para consumidores que precisam do CONJUNTO de exceções (Central
+ * de Ações, 9K.3) mas não do painel de KPIs/"o que mudou"/freshness da Gestão Executiva. Reaproveita
+ * `buildProjectExceptionsAndKpis` (a mesma função usada por `getExecutiveProjectOverview` e pela
+ * carteira) em vez de recalcular a montagem de exceções — nunca uma segunda implementação da mesma
+ * regra. Evita, deliberadamente, as consultas extras de `computeWhatChanged` (só relevantes para o
+ * bloco "o que mudou" da Gestão Executiva), o que torna esta função mais enxuta que a acima para
+ * quem só precisa da lista de ações.
+ */
+export async function getExecutiveOpenExceptions(authContext: Pick<AuthContext, "organizationId" | "role">, project: ExecutiveProjectRef, referenceDate = new Date()): Promise<ExecutiveOpenExceptions> {
+  const organizationId = authContext.organizationId;
+  const authorized = authorizedExecutiveDomains(authContext.role);
+
+  const [{ exceptions }, installations, pendingApprovals] = await Promise.all([
+    buildProjectExceptionsAndKpis(organizationId, project, referenceDate, authorized),
+    authorized.has("integrations") ? queryIntegrationSignals(organizationId) : Promise.resolve([]),
+    authorized.has("approvals") ? queryPendingApprovals(organizationId, [project.id]) : Promise.resolve([]),
+  ]);
+
+  const integrationExceptions = authorized.has("integrations") ? buildIntegrationExceptions(organizationId, installations, referenceDate) : [];
+  const approvalExceptions = authorized.has("approvals")
+    ? buildApprovalExceptions(organizationId, pendingApprovals.map((request) => ({ ...request, projectName: project.name })), referenceDate)
+    : [];
+
+  return {
+    exceptions: sortExceptionsByPriority([...exceptions, ...integrationExceptions, ...approvalExceptions]),
+    authorizedDomains: [...authorized],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Carteira / Central Corporativa (ordem de serviço §6/§8)
 // ---------------------------------------------------------------------------

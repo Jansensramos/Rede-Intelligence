@@ -19,7 +19,9 @@ import {
   BookOpenCheck,
   Boxes,
   Building2,
+  CalendarCheck2,
   ChevronDown,
+  ClipboardList,
   Database,
   GraduationCap,
   HandCoins,
@@ -115,6 +117,16 @@ export function WorkspaceShell({
           >
             <LayoutDashboard size={17} />
             <span>{primaryArea.label}</span>
+          </Link>
+
+          <div className="ds-nav-group-label">AÇÕES</div>
+          <Link href="/acoes" className={pathname === "/acoes" || pathname.startsWith("/acoes/") ? "is-active" : ""} onClick={() => setSidebarOpen(false)}>
+            <ClipboardList size={17} />
+            <span>Central de Ações</span>
+          </Link>
+          <Link href="/rotina" className={pathname === "/rotina" || pathname.startsWith("/rotina/") ? "is-active" : ""} onClick={() => setSidebarOpen(false)}>
+            <CalendarCheck2 size={17} />
+            <span>Minha Rotina</span>
           </Link>
 
           <div className="ds-nav-group-label">GRANDES ÁREAS</div>

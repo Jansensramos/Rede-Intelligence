@@ -12,8 +12,9 @@
  * `src/domain/workspace/exception-builders.ts`.
  */
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, BadgeCheck, Building2, CircleDollarSign, ClipboardCheck, Gauge, HandCoins, Landmark, Lock, Scale, TrendingUp } from "lucide-react";
+import { ArrowRight, BadgeCheck, Building2, CircleDollarSign, ClipboardCheck, ClipboardList, Gauge, HandCoins, Landmark, Lock, Scale, TrendingUp } from "lucide-react";
 import { DataTable, EmptyState, MetricCard, SectionTitle, SeverityBadge, type DataTableColumn } from "@/components/ui";
 import { SEVERITY_LABELS, type CanonicalSeverity } from "@/domain/workspace/severity";
 import type { ExecutiveDomain, ExecutiveException } from "@/domain/workspace/exceptions";
@@ -125,6 +126,9 @@ export function GestaoExecutivaView({ overview, portfolio }: { overview: Executi
             <SeverityBadge key={severity} severity={severity} label={`${overview.attentionSummary[severity]} ${SEVERITY_LABELS[severity].toLowerCase()}`} />
           ))}
           {overview.exceptions.length === 0 && <SeverityBadge severity="NORMAL" label="Nenhuma exceção aberta" />}
+          <Link href="/acoes" className="button button-secondary">
+            <ClipboardList size={15} /> Ver Central de Ações
+          </Link>
         </div>
       </section>
 

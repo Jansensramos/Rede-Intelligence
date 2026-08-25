@@ -15,6 +15,8 @@ function exception(overrides: Partial<ExecutiveException>): ExecutiveException {
     occurredAt: "2026-08-25T00:00:00.000Z",
     href: "/financeiro",
     reason: "r",
+    status: "ABERTA",
+    evidence: [],
     ...overrides,
   };
 }

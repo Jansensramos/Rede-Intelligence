@@ -1641,6 +1641,8 @@ button.table-row { width: 100%; border: 0; border-bottom: 1px solid var(--line-s
 .ds-exec-freshness { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); color: var(--ink-muted); font-size: var(--text-2xs); }
 .ds-exec-freshness span { white-space: nowrap; }
 
+.ds-restricted-note { margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--paper-deep); color: var(--ink-muted); font-size: var(--text-xs); }
+
 .ds-exception-list { display: grid; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
 .ds-exception-row { width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-3); align-items: center; padding: var(--space-3) var(--space-4); border: 0; border-bottom: 1px solid var(--line-soft); background: none; text-align: left; cursor: pointer; font: inherit; color: inherit; }
 .ds-exception-row:last-child { border-bottom: 0; }
