@@ -98,3 +98,24 @@ export function mapRiskFindingSeverity(value: RiskFindingSeverity): CanonicalSev
       return "CRITICO";
   }
 }
+
+/**
+ * operations: `MaterialityLevel` (`src/domain/operations/operations-engine.ts`), produzida por
+ * `materialityFor()` a partir de uma `MaterialityPolicy` (`prisma/schema.prisma:1554`, único
+ * modelo de materialidade compartilhado hoje — a 9K.2 reaproveita esta política em vez de inventar
+ * um segundo conceito de limiar, ver `src/domain/workspace/exception-builders.ts`).
+ */
+export type MaterialityLevel = "INFORMATIVO" | "ATENCAO" | "RELEVANTE" | "CRITICO";
+
+export function mapMaterialityLevel(value: MaterialityLevel): CanonicalSeverity {
+  switch (value) {
+    case "INFORMATIVO":
+      return "NORMAL";
+    case "ATENCAO":
+      return "ATENCAO";
+    case "RELEVANTE":
+      return "ACAO_NECESSARIA";
+    case "CRITICO":
+      return "CRITICO";
+  }
+}

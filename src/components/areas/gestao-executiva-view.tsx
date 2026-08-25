@@ -1,162 +1,292 @@
 "use client";
 
 /**
- * Fase 9K.1 — Gestão Executiva (§1): primeira área, porta de entrada principal. Conteúdo idêntico
- * ao antigo `view === "overview"` de `intelligence-workspace.tsx` — só a casca mudou (rota real em
- * vez de estado de componente). A reconstrução por exceção (Visão Executiva de verdade) é a 9K.2;
- * aqui só garantimos que a Gestão Executiva aparece primeiro e funciona como área principal.
+ * Fase 9K.2 — Nova Visão Executiva (ordem de serviço §1/§2/§14). Substitui integralmente a antiga
+ * "overview" (pilha de ~8 tabelas-resumo por módulo, sem priorização — ver histórico deste arquivo
+ * na 9K.1) por uma leitura por exceção: o que precisa de atenção primeiro, KPIs essenciais depois,
+ * "o que mudou" em seguida, desempenho por área, carteira (quando o contexto tiver mais de um
+ * empreendimento) e, por fim, a proveniência/freshness dos dados (ordem de serviço §10/§14).
  *
- * Links "Abrir X" / "Ver Y" que antes trocavam `view` local agora navegam para a rota real da
- * Grande Área correspondente — o mesmo destino de antes, só que via URL de verdade.
+ * Este componente é puramente de apresentação — toda a computação de severidade/materialidade,
+ * consultas enxutas e regras de não-duplicação vivem em `src/application/executive/` e
+ * `src/domain/workspace/exception-builders.ts`.
  */
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowDownRight, ArrowRight, Building2, Check, CircleDollarSign, Gauge, Scale, Sparkles, TrendingUp } from "lucide-react";
-import { CashFlowChart } from "@/components/cash-flow-chart";
-import { RedTeamSummary } from "@/components/red-team-view";
-import { ScoreSummary } from "@/components/score-summary";
-import { MetricCard } from "@/components/ui";
-import { analyzeRisk, type FindingSeverity } from "@/domain/risk/rules";
-import { calculateAllScenarios } from "@/domain/financial/engine";
-import { SCENARIOS } from "@/domain/financial/scenarios";
-import type { ScenarioKey } from "@/domain/financial/types";
-import type { PersistedStudyView } from "@/application/studies/contracts";
-import type { PeoplePerformanceWorkspaceView } from "@/application/people-performance/people-performance-service";
-import type { AccountingWorkspaceView } from "@/application/accounting/accounting-service";
-import type { IntegrationsWorkspaceView } from "@/application/integrations/integrations-service";
-import type { DataIntelligenceWorkspace } from "@/application/data-intelligence/data-intelligence-service";
-import type { MarketProductWorkspaceView } from "@/application/market-product";
+import { ArrowRight, BadgeCheck, Building2, CircleDollarSign, ClipboardCheck, Gauge, HandCoins, Landmark, Lock, Scale, TrendingUp } from "lucide-react";
+import { DataTable, EmptyState, MetricCard, SectionTitle, SeverityBadge, type DataTableColumn } from "@/components/ui";
+import { SEVERITY_LABELS, type CanonicalSeverity } from "@/domain/workspace/severity";
+import type { ExecutiveDomain, ExecutiveException } from "@/domain/workspace/exceptions";
+import type { ExecutiveFreshnessEntry, ExecutiveProjectOverview, ExecutivePortfolioEntry, ExecutivePortfolioOverview } from "@/application/executive/executive-service";
 
-const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const compactCurrency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact", maximumFractionDigits: 1 });
-const number = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
-const brl = (value: string) => currency.format(Number(value));
-const compactBrl = (value: string) => compactCurrency.format(Number(value));
-const percentage = (value: string | null) => (value === null ? "—" : `${number.format(Number(value) * 100)}%`);
-function statusClass(severity: FindingSeverity) {
-  return severity === "critical" ? "critical" : severity === "warning" ? "warning" : "positive";
+const percentage = (value: number) => `${(value * 100).toFixed(1)}%`;
+const relativeTime = new Intl.RelativeTimeFormat("pt-BR", { numeric: "auto" });
+const compactCurrencyOrNoData = (value: number | null) => (value === null ? "Sem dados" : compactCurrency.format(value));
+
+function timeAgo(iso: string): string {
+  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (minutes < 1) return "agora mesmo";
+  if (minutes < 60) return relativeTime.format(-minutes, "minute");
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return relativeTime.format(-hours, "hour");
+  return relativeTime.format(-Math.round(hours / 24), "day");
 }
 
-export function GestaoExecutivaView({
-  study,
-  peoplePerformance,
-  accounting,
-  integrations,
-  dataIntelligence,
-  marketProduct,
-}: {
-  study: PersistedStudyView;
-  peoplePerformance: PeoplePerformanceWorkspaceView;
-  accounting: AccountingWorkspaceView;
-  integrations: IntegrationsWorkspaceView;
-  dataIntelligence: DataIntelligenceWorkspace;
-  marketProduct: MarketProductWorkspaceView;
-}) {
+/**
+ * Fechamento da 9K.2, gate 3 ("freshness real"): renderiza a semântica correta por `kind` — nunca
+ * "Atualizado agora" quando o que se sabe de fato é "consultado agora" (ver
+ * `src/domain/workspace/freshness.ts`). `suppressHydrationWarning` só no texto relativo
+ * (`timeAgo`), que depende de `Date.now()` e por natureza diverge entre servidor e cliente — não é
+ * supressão de um erro de marcação real.
+ */
+function FreshnessText({ entry }: { entry: ExecutiveFreshnessEntry }) {
+  if (entry.kind === "source_updated") {
+    return (
+      <>
+        atualizado <span suppressHydrationWarning>{timeAgo(entry.updatedAt!)}</span>
+      </>
+    );
+  }
+  if (entry.kind === "queried_now") {
+    return (
+      <>
+        consultado <span suppressHydrationWarning>{timeAgo(entry.queriedAt!)}</span>
+      </>
+    );
+  }
+  return <>atualização da fonte indisponível</>;
+}
+
+/** Cartão "sem permissão" (gate 2 do fechamento): mostrado quando o backend nem consultou o domínio — nunca um valor fabricado, nunca um card escondido sem explicação. */
+function RestrictedAreaCard({ label }: { label: string }) {
+  return (
+    <div className="ds-area-card ds-area-card-restricted">
+      <span className="eyebrow">{label.toUpperCase()}</span>
+      <strong style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <Lock size={16} /> Sem permissão
+      </strong>
+      <small>Seu perfil não tem a capacidade de visualizar este domínio.</small>
+    </div>
+  );
+}
+
+const ATTENTION_ORDER: CanonicalSeverity[] = ["CRITICO", "DECISAO", "ACAO_NECESSARIA", "ATENCAO"];
+
+/** Rótulos em português para enums técnicos exibidos nesta tela (critério de aceite: "interface 100% em português", inclusive rótulos técnicos). */
+const SCHEDULE_STATUS_LABELS: Record<string, string> = { DRAFT: "Rascunho", UNDER_REVIEW: "Em revisão", APPROVED: "Aprovado", SUPERSEDED: "Substituído", CLOSED: "Encerrado" };
+const BUDGET_STATUS_LABELS: Record<string, string> = { DRAFT: "Rascunho", UNDER_REVIEW: "Em revisão", APPROVED: "Aprovado", ARCHIVED: "Arquivado", OFFICIAL: "Oficial", SUPERSEDED: "Substituído", CLOSED: "Encerrado" };
+const ACCOUNTING_STATUS_LABELS: Record<string, string> = { OPEN: "Aberto", UNDER_REVIEW: "Em revisão", CLOSED: "Fechado", REOPENED: "Reaberto", ADJUSTMENT: "Em ajuste" };
+const translateStatus = (map: Record<string, string>, value: string | null) => (value === null ? null : (map[value] ?? value));
+
+function ExceptionRow({ exception, onOpen }: { exception: ExecutiveException; onOpen: () => void }) {
+  return (
+    <button className="ds-exception-row" type="button" onClick={onOpen}>
+      <SeverityBadge severity={exception.severity} />
+      <span>
+        <strong>{exception.title}</strong>
+        <span className="ds-exception-row-summary">{exception.summary}</span>
+      </span>
+      <ArrowRight size={16} />
+    </button>
+  );
+}
+
+export function GestaoExecutivaView({ overview, portfolio }: { overview: ExecutiveProjectOverview; portfolio: ExecutivePortfolioOverview | null }) {
   const router = useRouter();
-  const [scenario, setScenario] = useState<ScenarioKey>("base");
-  const project = study.assumptions;
+  const [expanded, setExpanded] = useState(false);
+  const { kpis } = overview;
 
-  const results = useMemo(() => calculateAllScenarios(project), [project]);
-  const result = results[scenario];
-  const score = study.analytics.scores[scenario];
-  const recommendation = useMemo(() => analyzeRisk(result), [result]);
-  const criticalCount = recommendation.findings.filter((item) => item.severity === "critical").length;
-  const warningCount = recommendation.findings.filter((item) => item.severity === "warning").length;
+  const visibleExceptions = expanded ? overview.exceptions : overview.exceptions.slice(0, 7);
+  const decisions = useMemo(() => [...overview.exceptions, ...(portfolio?.scopeExceptions ?? [])].filter((item) => item.severity === "DECISAO"), [overview.exceptions, portfolio]);
+  const isAuthorized = (domain: ExecutiveDomain) => overview.authorizedDomains.includes(domain);
 
-  const decisionTone = recommendation.status === "NAO_AVANCAR" ? "decision-critical" : recommendation.status === "AVANCAR_COM_AJUSTES" ? "decision-warning" : "decision-positive";
-  const maxCost = Number(result.metrics.totalCost);
-  const costSegments = [
-    { label: "Construção", value: Number(result.metrics.constructionCost), color: "#173d4f" },
-    { label: "Terreno", value: Number(result.metrics.landCost), color: "#b98a43" },
-    { label: "Comercial e tributos", value: Number(result.metrics.commission) + Number(result.metrics.marketing) + Number(result.metrics.taxes), color: "#789194" },
-    { label: "Demais custos", value: Number(result.metrics.indirectCosts) + Number(result.metrics.contingency) + Number(result.metrics.financingCost), color: "#d9d2c4" },
+  const portfolioColumns: DataTableColumn<ExecutivePortfolioEntry>[] = [
+    { key: "project", header: "Empreendimento", priority: "essential", render: (row) => <strong>{row.project.name}</strong> },
+    { key: "severity", header: "Severidade", priority: "essential", align: "left", render: (row) => <SeverityBadge severity={row.topSeverity} /> },
+    { key: "exceptions", header: "Exceções", priority: "default", render: (row) => row.exceptionCount },
+    { key: "vgv", header: "VGV vendido", priority: "default", render: (row) => compactCurrencyOrNoData(row.headline.vgvVendido) },
+    { key: "overdue", header: "Financeiro vencido", priority: "default", render: (row) => compactCurrencyOrNoData(row.headline.overdueFinancialAmount) },
+    { key: "cash", header: "Caixa", priority: "optional", render: (row) => compactCurrencyOrNoData(row.headline.cashPosition) },
   ];
-  let angle = 0;
-  const donut = `conic-gradient(${costSegments.map((segment) => { const start = angle; angle += (segment.value / maxCost) * 360; return `${segment.color} ${start}deg ${angle}deg`; }).join(",")})`;
 
   return (
     <div className="view-stack">
-      <div className="project-heading">
-        <div className="scenario-switch" aria-label="Cenário ativo">
-          {(["conservative", "base", "aggressive"] as ScenarioKey[]).map((key) => (
-            <button key={key} className={scenario === key ? "is-active" : ""} onClick={() => setScenario(key)}>{SCENARIOS[key].label}</button>
+      <section className="ds-exec-header">
+        <div>
+          <span className="eyebrow">GESTÃO EXECUTIVA</span>
+          <h1>{overview.project.name}</h1>
+          <p>
+            {[overview.project.companyName, overview.project.economicGroupName].filter(Boolean).join(" · ") || "Sem empresa/grupo vinculado"} · {overview.project.city}/{overview.project.state}
+          </p>
+        </div>
+        <div className="ds-exec-summary">
+          {ATTENTION_ORDER.filter((severity) => overview.attentionSummary[severity] > 0).map((severity) => (
+            <SeverityBadge key={severity} severity={severity} label={`${overview.attentionSummary[severity]} ${SEVERITY_LABELS[severity].toLowerCase()}`} />
+          ))}
+          {overview.exceptions.length === 0 && <SeverityBadge severity="NORMAL" label="Nenhuma exceção aberta" />}
+        </div>
+      </section>
+
+      <section>
+        <SectionTitle eyebrow="PRIORIDADE" title="O que precisa da sua atenção agora" description="Consolidado dos módulos operacionais, ordenado por severidade e materialidade — não é uma segunda fonte de dado, cada item aponta para o registro original." />
+        {overview.exceptions.length === 0 ? (
+          <EmptyState icon={BadgeCheck} title="Nenhuma exceção relevante agora" description="Com os dados e a política de materialidade atuais da organização, nenhum item cruzou o limiar de atenção executiva." />
+        ) : (
+          <>
+            <div className="ds-exception-list">
+              {visibleExceptions.map((exception) => (
+                <ExceptionRow key={exception.id} exception={exception} onOpen={() => router.push(exception.href)} />
+              ))}
+            </div>
+            {overview.exceptions.length > 7 && (
+              <button className="text-button" style={{ marginTop: 10 }} type="button" onClick={() => setExpanded((value) => !value)}>
+                {expanded ? "Mostrar só as principais" : `Ver todas (${overview.exceptions.length})`} <ArrowRight size={15} />
+              </button>
+            )}
+          </>
+        )}
+      </section>
+
+      <section>
+        <SectionTitle eyebrow="RESULTADOS" title="Principais indicadores" description="Poucos números que respondem a uma pergunta executiva — não é um inventário de tudo que existe no banco." />
+        <div className="metrics-grid">
+          {kpis.viability ? (
+            <>
+              <MetricCard label="VGV do estudo ativo" value={compactCurrency.format(kpis.viability.vgv)} meta={`Cenário ${kpis.viability.scenarioLabel}`} icon={Building2} />
+              <MetricCard label="Margem sobre VGV" value={percentage(kpis.viability.marginOnVgv)} meta="Estudo de viabilidade ativo" tone={kpis.viability.marginOnVgv >= 0 ? "positive" : "negative"} icon={Gauge} />
+              <MetricCard label="Exposição máxima de caixa" value={compactCurrency.format(kpis.viability.maximumCashExposure)} meta="Pico projetado pelo estudo" icon={TrendingUp} />
+            </>
+          ) : (
+            <MetricCard label="Viabilidade" value="Sem estudo ativo" meta="Crie ou promova um estudo em Viabilidade" icon={Scale} />
+          )}
+          {kpis.commercial ? (
+            <>
+              <MetricCard label="Unidades vendidas / disponíveis" value={`${kpis.commercial.unitsSold} / ${kpis.commercial.unitsAvailable}`} meta={`${kpis.commercial.unitsTotal} unidade(s) no total`} icon={HandCoins} />
+              <MetricCard label="VGV vendido (aprovado)" value={compactCurrency.format(kpis.commercial.vgvVendido)} meta="Vendas com status aprovado" icon={CircleDollarSign} />
+            </>
+          ) : (
+            <MetricCard label="Comercial" value="Sem permissão" meta="Seu perfil não tem a capacidade Comercial" icon={Lock} />
+          )}
+          {kpis.financial ? (
+            <>
+              <MetricCard label="Caixa (contas da empresa)" value={kpis.financial.cashPosition === null ? "Sem dados" : compactCurrency.format(kpis.financial.cashPosition)} meta="Saldo agregado das contas bancárias" icon={Landmark} />
+              <MetricCard
+                label="Vencido (a pagar + a receber)"
+                value={compactCurrency.format(kpis.financial.overduePayablesAmount + kpis.financial.overdueReceivablesAmount)}
+                meta={`${kpis.financial.overduePayablesCount + kpis.financial.overdueReceivablesCount} parcela(s) em aberto`}
+                tone={kpis.financial.overduePayablesAmount + kpis.financial.overdueReceivablesAmount > 0 ? "negative" : "positive"}
+                icon={CircleDollarSign}
+              />
+            </>
+          ) : (
+            <MetricCard label="Financeiro" value="Sem permissão" meta="Seu perfil não tem a capacidade Financeiro" icon={Lock} />
+          )}
+        </div>
+      </section>
+
+      <section>
+        <SectionTitle eyebrow="DESDE A ÚLTIMA JANELA" title={`O que mudou nos últimos ${overview.windowDays} dias`} description="Janela fixa e determinística — este contexto ainda não persiste 'última visita' por usuário (ver relatório de entrega da 9K.2)." />
+        {overview.whatChanged.length === 0 ? (
+          <EmptyState title="Nenhuma mudança relevante na janela" description={`Nenhuma venda, obrigação, conta ou licença nova nos últimos ${overview.windowDays} dias.`} />
+        ) : (
+          <div className="ds-whatchanged">
+            {overview.whatChanged.map((item) => (
+              <button key={item.id} className="ds-whatchanged-item" type="button" onClick={() => router.push(item.href)} style={{ textAlign: "left", cursor: "pointer" }}>
+                <strong>{item.label}</strong>
+                {item.detail}
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <SectionTitle eyebrow="ÁREAS" title="Desempenho por área" description="Um recorte por módulo — abrir a área para o detalhamento completo." />
+        <div className="ds-area-grid">
+          {kpis.legal ? (
+            <button className="ds-area-card" type="button" onClick={() => router.push("/juridico")}>
+              <span className="eyebrow">JURÍDICO</span>
+              <strong>{kpis.legal.obligationsAtRisk + kpis.legal.licensesAtRisk}</strong>
+              <small>{kpis.legal.obligationsAtRisk} obrigação(ões) · {kpis.legal.licensesAtRisk} licença(s) em janela de atenção</small>
+            </button>
+          ) : (
+            <RestrictedAreaCard label="Jurídico" />
+          )}
+          {kpis.procurement ? (
+            <button className="ds-area-card" type="button" onClick={() => router.push("/suprimentos")}>
+              <span className="eyebrow">SUPRIMENTOS</span>
+              <strong>{kpis.procurement.criticalPurchases}</strong>
+              <small>compra(s) crítica(s) · {kpis.procurement.pendingMeasurements} medição(ões) pendente(s)</small>
+            </button>
+          ) : (
+            <RestrictedAreaCard label="Suprimentos" />
+          )}
+          <button className="ds-area-card" type="button" onClick={() => router.push("/engenharia-obra")}>
+            <span className="eyebrow">OBRA / ENGENHARIA</span>
+            <strong>{translateStatus(SCHEDULE_STATUS_LABELS, kpis.operations.scheduleStatus) ?? "Sem cronograma"}</strong>
+            <small>Orçamento: {translateStatus(BUDGET_STATUS_LABELS, kpis.operations.budgetStatus) ?? "sem orçamento oficial"} · {kpis.operations.criticalVarianceCategories} categoria(s) com variação relevante</small>
+          </button>
+          {isAuthorized("accounting") ? (
+            <button className="ds-area-card" type="button" onClick={() => router.push("/contabilidade-controladoria")}>
+              <span className="eyebrow">CONTABILIDADE</span>
+              <strong>{kpis.accounting ? (ACCOUNTING_STATUS_LABELS[kpis.accounting.status] ?? kpis.accounting.status) : "Sem dados"}</strong>
+              <small>{kpis.accounting ? `Competência ${kpis.accounting.referenceMonth}` : "Nenhum período contábil aberto para esta empresa"}</small>
+            </button>
+          ) : (
+            <RestrictedAreaCard label="Contabilidade" />
+          )}
+          {kpis.integrations ? (
+            <button className="ds-area-card" type="button" onClick={() => router.push("/integracoes")}>
+              <span className="eyebrow">INTEGRAÇÕES</span>
+              <strong>{kpis.integrations.criticalInstallations + kpis.integrations.attentionInstallations}</strong>
+              <small>{kpis.integrations.criticalInstallations} crítica(s) · {kpis.integrations.attentionInstallations} em atenção · {kpis.integrations.expiringCredentials} credencial(is) expirando</small>
+            </button>
+          ) : (
+            <RestrictedAreaCard label="Integrações" />
+          )}
+        </div>
+      </section>
+
+      {decisions.length > 0 && (
+        <section>
+          <SectionTitle eyebrow="DECISÕES" title="Aguardando aprovação" description="Reaproveita o mecanismo de alçada já existente (ApprovalRequest) — a Gestão Executiva não cria um segundo fluxo de aprovação." action={<ClipboardCheck size={18} />} />
+          <div className="ds-exception-list">
+            {decisions.map((exception) => (
+              <ExceptionRow key={exception.id} exception={exception} onOpen={() => router.push(exception.href)} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {portfolio && (
+        <section>
+          <SectionTitle eyebrow="CARTEIRA" title={`Carteira — ${portfolio.scopeLabel}`} description="Ordenada por severidade e materialidade, não por ordem alfabética. Clique em um empreendimento para abrir sua leitura executiva." />
+          <DataTable columns={portfolioColumns} rows={portfolio.entries} rowKey={(row) => row.project.id} onRowClick={(row) => router.push(row.href)} />
+          {portfolio.scopeExceptions.filter((item) => item.severity !== "DECISAO").length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <SectionTitle eyebrow="CARTEIRA" title="Exceções em nível de grupo/organização" description="Ex.: integrações — instalações cobrem Grupo/Empresa/SPE/Empreendimento simultaneamente, nunca duplicadas por projeto." />
+              <div className="ds-exception-list">
+                {portfolio.scopeExceptions
+                  .filter((item) => item.severity !== "DECISAO")
+                  .map((exception) => (
+                    <ExceptionRow key={exception.id} exception={exception} onOpen={() => router.push(exception.href)} />
+                  ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      <section>
+        <SectionTitle eyebrow="CONFIANÇA DO DADO" title="Atualização e fonte" description="Dados nativos REDE refletem o estado corrente do banco no momento da leitura; dados de conectores externos mostram a última sincronização conhecida." />
+        <div className="ds-exec-freshness">
+          {overview.freshness.map((entry) => (
+            <span key={entry.domain}>
+              <strong>{entry.label}:</strong> {entry.source} · <FreshnessText entry={entry} />
+            </span>
           ))}
         </div>
-      </div>
-
-      <section className={`decision-banner ${decisionTone}`}>
-        <div className="decision-icon">{recommendation.status === "AVANCAR" ? <Check size={21} /> : <AlertTriangle size={21} />}</div>
-        <div><span>RECOMENDAÇÃO DO MOTOR · CENÁRIO {result.scenarioLabel.toUpperCase()}</span><strong>{recommendation.label}</strong><p>Motivo dominante: {recommendation.dominantReason}.</p></div>
-        <button onClick={() => router.push("/viabilidade?f=risks")}>Ver evidências <ArrowRight size={16} /></button>
-      </section>
-
-      <section className="metrics-grid">
-        <MetricCard label="VGV" value={compactBrl(result.metrics.vgv)} meta={`${brl(result.assumptions.unitPrice)} por unidade`} icon={Building2} />
-        <MetricCard label="Margem sobre VGV" value={percentage(result.metrics.marginOnVgv)} meta={`Política: ≥ ${project.policy.minimumMarginRate}%`} tone={Number(result.metrics.marginOnVgv) * 100 >= Number(project.policy.minimumMarginRate) ? "positive" : "negative"} icon={Gauge} />
-        <MetricCard label="ROI do equity" value={percentage(result.metrics.roi)} meta={`Política: ≥ ${project.policy.minimumRoiRate}%`} tone={result.metrics.roi && Number(result.metrics.roi) * 100 >= Number(project.policy.minimumRoiRate) ? "positive" : "negative"} icon={TrendingUp} />
-        <MetricCard label="TIR anual" value={percentage(result.metrics.annualIrr)} meta={`Política: ≥ ${project.policy.minimumIrrRate}% a.a.`} tone={result.metrics.annualIrr && Number(result.metrics.annualIrr) * 100 >= Number(project.policy.minimumIrrRate) ? "positive" : "negative"} icon={Sparkles} />
-        <MetricCard label="Exposição máxima" value={compactBrl(result.metrics.maximumCashExposure)} meta={`Pico no mês ${result.metrics.maximumExposureMonth}`} tone={Number(result.metrics.maximumCashExposure) <= Number(project.policy.maximumExposure) ? "positive" : "negative"} icon={ArrowDownRight} />
-        <MetricCard label="Capital próprio" value={compactBrl(result.metrics.equityCapitalRequired)} meta={`${brl(result.assumptions.financingLimit)} de funding`} icon={CircleDollarSign} />
-        <MetricCard label="VPL" value={compactBrl(result.metrics.npv)} meta={`Desconto: ${result.assumptions.annualDiscountRate}% a.a.`} tone={Number(result.metrics.npv) >= 0 ? "positive" : "negative"} icon={Scale} />
-      </section>
-
-      <section className="overview-main-grid">
-        <article className="panel chart-panel">
-          <div className="panel-heading"><div><span className="eyebrow">CAIXA MENSAL</span><h2>Curva de exposição e recuperação</h2></div><button className="text-button" onClick={() => router.push("/viabilidade?f=cashflow")}>Ver fluxo completo <ArrowRight size={15} /></button></div>
-          <CashFlowChart rows={result.cashFlow} />
-          <div className="chart-stat-row"><div><span>Mês crítico</span><strong>M{result.metrics.maximumExposureMonth}</strong></div><div><span>Payback</span><strong>{result.metrics.paybackMonth === null ? "Não atingido" : `M${result.metrics.paybackMonth}`}</strong></div><div><span>Break-even</span><strong>{result.metrics.breakEvenUnits} un. · {percentage(result.metrics.breakEvenRate)}</strong></div></div>
-        </article>
-
-        <article className="panel cost-panel">
-          <div className="panel-heading"><div><span className="eyebrow">ESTRUTURA</span><h2>Composição do custo</h2></div><strong className="panel-total">{compactBrl(result.metrics.totalCost)}</strong></div>
-          <div className="cost-visual"><div className="cost-donut" style={{ background: donut }}><div><strong>{percentage(new String(Number(result.metrics.totalCost) / Number(result.metrics.vgv)).toString())}</strong><span>do VGV</span></div></div></div>
-          <div className="cost-legend">{costSegments.map((segment) => <div key={segment.label}><i style={{ background: segment.color }} /><span>{segment.label}</span><strong>{compactCurrency.format(segment.value)}</strong></div>)}</div>
-        </article>
-      </section>
-
-      <section className="overview-bottom-grid">
-        <article className="panel risks-panel">
-          <div className="panel-heading"><div><span className="eyebrow">PRIMEIRA LEITURA</span><h2>Riscos que pedem decisão</h2></div><div className="risk-totals"><span className="risk-critical">{criticalCount} críticos</span><span>{warningCount} alertas</span></div></div>
-          <div className="finding-list">{recommendation.findings.filter((item) => item.severity !== "positive").slice(0, 3).map((finding) => <button key={finding.id} onClick={() => router.push("/viabilidade?f=risks")} className="finding-row"><span className={`finding-marker ${statusClass(finding.severity)}`}><AlertTriangle size={15} /></span><span><strong>{finding.title}</strong><small>{finding.evidence}</small></span><ArrowRight size={16} /></button>)}</div>
-        </article>
-        <ScoreSummary score={score} onOpen={() => router.push("/viabilidade?f=sensitivity")} />
-      </section>
-
-      <RedTeamSummary report={study.redTeam} onOpen={() => router.push("/viabilidade?f=redteam")} />
-
-      <section className="panel scenario-strip">
-        <div className="panel-heading"><div><span className="eyebrow">PESSOAS E EFICIÊNCIA</span><h2>Capacidade, desvios e ações do empreendimento</h2></div><button className="text-button" onClick={() => router.push("/pessoas")}>Abrir gestão <ArrowRight size={15} /></button></div>
-        <div className="scenario-table compact-table"><div className="table-row table-head"><span>Profissionais</span><span>Equipes</span><span>Alocações</span><span>Desvios ativos</span><span>Ações ativas</span><span>Custo mensal</span></div><div className="table-row"><strong>{peoplePerformance.summary.people}</strong><strong>{peoplePerformance.summary.teams}</strong><strong>{peoplePerformance.summary.allocations}</strong><strong>{peoplePerformance.summary.activeVarianceCases}</strong><strong>{peoplePerformance.summary.activeActions}</strong><strong>{peoplePerformance.summary.totalMonthlyCost === null ? "Restrito" : currency.format(peoplePerformance.summary.totalMonthlyCost)}</strong></div></div>
-      </section>
-
-      <section className="panel scenario-strip">
-        <div className="panel-heading"><div><span className="eyebrow">CONTABILIDADE E CONTROLADORIA</span><h2>Razão, resultado, estoque, fiscal e fechamento</h2></div><button className="text-button" onClick={() => router.push("/contabilidade-controladoria")}>Abrir contabilidade <ArrowRight size={15} /></button></div>
-        <div className="scenario-table compact-table"><div className="table-row table-head"><span>Receita contábil</span><span>Custo reconhecido</span><span>Margem bruta</span><span>Estoque</span><span>Tributos</span><span>Divergências</span></div><div className="table-row"><strong>{currency.format(accounting.summary.recognizedRevenue)}</strong><strong>{currency.format(accounting.summary.accountedCost)}</strong><strong>{currency.format(accounting.summary.grossMargin)}</strong><strong>{currency.format(accounting.summary.inventory)}</strong><strong>{currency.format(accounting.summary.taxesDue)}</strong><strong>{accounting.summary.divergences}</strong></div></div>
-      </section>
-
-      <section className="panel scenario-strip">
-        <div className="panel-heading"><div><span className="eyebrow">CENTRAL DE INTEGRAÇÕES</span><h2>Conectores, proveniência e sincronização</h2></div><button className="text-button" onClick={() => router.push("/integracoes")}>Abrir integrações <ArrowRight size={15} /></button></div>
-        <div className="scenario-table compact-table"><div className="table-row table-head"><span>Instalações</span><span>Críticas</span><span>Atenção</span><span>Conflitos abertos</span><span>Quarentena</span><span>Credenciais expirando</span></div><div className="table-row"><strong>{integrations.summary.installations}</strong><strong>{integrations.summary.criticalInstallations}</strong><strong>{integrations.summary.attentionInstallations}</strong><strong>{integrations.summary.openConflicts}</strong><strong>{integrations.summary.pendingQuarantine}</strong><strong>{integrations.summary.expiringCredentials}</strong></div></div>
-      </section>
-
-      <section className="panel scenario-strip">
-        <div className="panel-heading"><div><span className="eyebrow">INTELIGÊNCIA DE DADOS</span><h2>Comparativos, previsto x realizado e qualidade dos dados</h2></div><button className="text-button" onClick={() => router.push("/inteligencia-dados")}>Abrir Inteligência de Dados <ArrowRight size={15} /></button></div>
-        <div className="scenario-table compact-table"><div className="table-row table-head"><span>Fatos analíticos</span><span>Comparativos</span><span>Confiança do último</span><span>Erro % médio (previsto x realizado)</span><span>Achados de qualidade abertos</span><span>Orçamento Inteligente</span></div><div className="table-row"><strong>{dataIntelligence.facts.length}</strong><strong>{dataIntelligence.benchmarks.length}</strong><strong>{dataIntelligence.benchmarks[0] ? { HIGH: "Alta", MEDIUM: "Média", LOW: "Baixa" }[dataIntelligence.benchmarks[0].confidenceLevel] ?? dataIntelligence.benchmarks[0].confidenceLevel : "—"}</strong><strong>{dataIntelligence.biasSummary.averagePercentError != null ? `${(dataIntelligence.biasSummary.averagePercentError * 100).toFixed(1)}%` : "—"}</strong><strong>{dataIntelligence.dataQuality.openIssues.length}</strong><strong>{dataIntelligence.autoBudgetProposals[0]?.status ?? "—"}</strong></div></div>
-      </section>
-
-      <section className="panel scenario-strip">
-        <div className="panel-heading"><div><span className="eyebrow">MERCADO LOCAL</span><h2>Preço, pressão competitiva e velocidade da região</h2></div><button className="text-button" onClick={() => router.push("/mercado-produto?f=mercado")}>Abrir Inteligência de Mercado <ArrowRight size={15} /></button></div>
-        <div className="scenario-table compact-table"><div className="table-row table-head"><span>Preço médio da região</span><span>Estoque ativo</span><span>Velocidade de vendas</span><span>Nível de Confiança</span></div><div className="table-row"><strong>{marketProduct.overview && marketProduct.overview.priceStats.median > 0 ? `${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(marketProduct.overview.priceStats.median)}/m²` : "—"}</strong><strong>{marketProduct.overview ? marketProduct.overview.competitors.filter((c) => c.eligible).length : 0} concorrentes</strong><strong>{marketProduct.overview ? `${number.format(marketProduct.overview.aggregateVsoPercentage * 100)}% a.m.` : "—"}</strong><strong>{marketProduct.overview ? { HIGH: "Alta", MEDIUM: "Média", LOW: "Baixa" }[marketProduct.overview.confidence.level] : "—"}</strong></div></div>
-      </section>
-
-      <section className="panel scenario-strip">
-        <div className="panel-heading"><div><span className="eyebrow">PRODUTO EM ESTUDO</span><h2>Cenário recomendado, delta de VGV e status de aprovação</h2></div><button className="text-button" onClick={() => router.push("/mercado-produto?f=produto")}>Abrir Inteligência de Produto <ArrowRight size={15} /></button></div>
-        <div className="scenario-table compact-table"><div className="table-row table-head"><span>Cenário recomendado</span><span>VGV projetado</span><span>Margem projetada</span><span>Status</span></div><div className="table-row"><strong>{marketProduct.scenarios.find((s) => s.kind === "BASE")?.name ?? "Nenhum cenário gerado"}</strong><strong>{marketProduct.scenarios.find((s) => s.kind === "BASE") ? compactBrl(marketProduct.scenarios.find((s) => s.kind === "BASE")!.targetVgv.toString()) : "—"}</strong><strong>{(() => { const base = marketProduct.scenarios.find((s) => s.kind === "BASE"); const metrics = base?.engineResultsJson as { metrics?: { marginOnVgv?: string } } | null; return metrics?.metrics?.marginOnVgv ? percentage(metrics.metrics.marginOnVgv) : "—"; })()}</strong><strong>{marketProduct.scenarios.find((s) => s.kind === "BASE") ? { DRAFT: "Rascunho", UNDER_REVIEW: "Em Análise", RECOMMENDED: "Recomendado", APPROVED: "Aprovado", REJECTED: "Rejeitado", SUPERSEDED: "Substituído" }[marketProduct.scenarios.find((s) => s.kind === "BASE")!.status] : "—"}</strong></div></div>
-      </section>
-
-      <section className="panel scenario-strip">
-        <div className="panel-heading"><div><span className="eyebrow">DOWNSIDE × UPSIDE</span><h2>Comparação rápida de cenários</h2></div><button className="text-button" onClick={() => router.push("/viabilidade?f=scenarios")}>Abrir análise <ArrowRight size={15} /></button></div>
-        <div className="scenario-table compact-table"><div className="table-row table-head"><span>Cenário</span><span>VGV</span><span>Lucro</span><span>Margem</span><span>TIR</span><span>Exposição</span></div>{(["conservative", "base", "aggressive"] as ScenarioKey[]).map((key) => { const item = results[key]; return <button key={key} onClick={() => setScenario(key)} className={`table-row ${scenario === key ? "selected" : ""}`}><span><i className={`scenario-dot dot-${key}`} />{SCENARIOS[key].label}</span><strong>{compactBrl(item.metrics.vgv)}</strong><strong>{compactBrl(item.metrics.profit)}</strong><strong>{percentage(item.metrics.marginOnVgv)}</strong><strong>{percentage(item.metrics.annualIrr)}</strong><strong>{compactBrl(item.metrics.maximumCashExposure)}</strong></button>; })}</div>
       </section>
     </div>
   );

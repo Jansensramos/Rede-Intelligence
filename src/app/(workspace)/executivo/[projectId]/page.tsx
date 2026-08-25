@@ -1,17 +1,20 @@
+import { notFound } from "next/navigation";
 import { requireAuthContext } from "@/application/auth/session";
-import { getCurrentOperationalContext } from "@/application/workspace/current-context";
+import { resolveOperationalContext } from "@/application/workspace/operational-context";
 import { getExecutiveProjectOverview, getExecutivePortfolioOverview } from "@/application/executive/executive-service";
 import { GestaoExecutivaView } from "@/components/areas/gestao-executiva-view";
 
 /**
- * Fase 9K.2 — Gestão Executiva (ordem de serviço §1/§6/§AG): porta de entrada principal. Lê o
- * empreendimento ativo do contexto operacional (9K.0/9K.1) e, quando o contexto permitir nível de
- * grupo/empresa com mais de um empreendimento, também a carteira consolidada (ordem de serviço §6/
- * §8) — nunca os 15 workspaces de módulo inteiros de uma vez (ordem de serviço §18/§AS).
+ * Fase 9K.2 — Central Executiva do Empreendimento (plano §AH), rota de drill-down a partir da
+ * Carteira (ordem de serviço §6/§8/§11). Resolve o `projectId` explicitamente e revalida contra o
+ * tenant do usuário (mesmo padrão de `resolveOperationalContext`, prioridade A) — nunca troca o
+ * empreendimento ativo global (cookie da 9K.1): é só uma leitura, não uma navegação de contexto.
  */
-export default async function ExecutivoPage() {
-  const [authContext, context] = await Promise.all([requireAuthContext(), getCurrentOperationalContext()]);
-  if (!context.project) return null;
+export default async function ExecutivoProjectPage({ params }: { params: Promise<{ projectId: string }> }) {
+  const { projectId } = await params;
+  const authContext = await requireAuthContext();
+  const context = await resolveOperationalContext(authContext, { projectId });
+  if (!context.project) notFound();
 
   const [overview, portfolio] = await Promise.all([
     getExecutiveProjectOverview(authContext, {

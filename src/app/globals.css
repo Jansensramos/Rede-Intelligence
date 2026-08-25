@@ -1629,3 +1629,35 @@ button.table-row { width: 100%; border: 0; border-bottom: 1px solid var(--line-s
  * REDE AI) listados no relatório de entrega da 9K.0.
  */
 .integration-error-banner { padding: 12px 16px; border: 1px solid #e5c5bf; border-left: 3px solid var(--red); background: #fbf2ef; color: #8a4a41; font-size: 10px; display: flex; align-items: center; gap: 8px; }
+
+/*
+ * Fase 9K.2 — Gestão Executiva por exceção. Componentes novos, todos ≥12px (plano §Y/§7 do prompt
+ * da 9K.2), reaproveitando os tokens `--text-*`/`--space-*` já definidos para os primitivos `ds-*`.
+ */
+.ds-exec-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+.ds-exec-header h1 { margin: 6px 0 0; font-family: var(--font-display); font-size: 26px; font-weight: 500; }
+.ds-exec-header p { margin: 5px 0 0; color: var(--ink-muted); font-size: var(--text-sm); }
+.ds-exec-summary { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+.ds-exec-freshness { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); color: var(--ink-muted); font-size: var(--text-2xs); }
+.ds-exec-freshness span { white-space: nowrap; }
+
+.ds-exception-list { display: grid; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.ds-exception-row { width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-3); align-items: center; padding: var(--space-3) var(--space-4); border: 0; border-bottom: 1px solid var(--line-soft); background: none; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.ds-exception-row:last-child { border-bottom: 0; }
+.ds-exception-row:hover { background: var(--paper-deep); }
+.ds-exception-row strong { display: block; font-size: var(--text-sm); font-weight: 650; }
+.ds-exception-row-summary { display: block; margin-top: 4px; color: var(--ink-muted); font-size: var(--text-xs); }
+.ds-exception-row > svg { color: var(--ink-muted); flex-shrink: 0; }
+
+.ds-whatchanged { display: grid; gap: var(--space-2); grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.ds-whatchanged-item { padding: var(--space-3); border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--surface); font-size: var(--text-xs); color: var(--ink-muted); }
+.ds-whatchanged-item strong { display: block; font-size: var(--text-sm); color: var(--ink); font-weight: 650; }
+
+.ds-area-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-3); }
+.ds-area-card { padding: var(--space-3) var(--space-4); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); display: grid; gap: 6px; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.ds-area-card:hover { background: var(--paper-deep); }
+.ds-area-card span.eyebrow { margin-bottom: 2px; }
+.ds-area-card strong { font-size: var(--text-md); }
+.ds-area-card small { color: var(--ink-muted); font-size: var(--text-xs); }
+.ds-area-card-restricted { cursor: default; border-style: dashed; color: var(--ink-muted); }
+.ds-area-card-restricted:hover { background: var(--surface); }

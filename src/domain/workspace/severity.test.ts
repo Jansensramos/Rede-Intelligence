@@ -6,6 +6,7 @@ import {
   mapFinancialDueSeverity,
   mapIntegrationUiState,
   mapLegalAlertSeverity,
+  mapMaterialityLevel,
   mapRiskFindingSeverity,
 } from "./severity";
 
@@ -36,6 +37,13 @@ describe("normalização de severidade canônica (9K.0, plano §I)", () => {
     expect(mapRiskFindingSeverity("positive")).toBe("NORMAL");
     expect(mapRiskFindingSeverity("warning")).toBe("ATENCAO");
     expect(mapRiskFindingSeverity("critical")).toBe("CRITICO");
+  });
+
+  it("mapeia materialidade (MaterialityLevel de MaterialityPolicy/operations-engine)", () => {
+    expect(mapMaterialityLevel("INFORMATIVO")).toBe("NORMAL");
+    expect(mapMaterialityLevel("ATENCAO")).toBe("ATENCAO");
+    expect(mapMaterialityLevel("RELEVANTE")).toBe("ACAO_NECESSARIA");
+    expect(mapMaterialityLevel("CRITICO")).toBe("CRITICO");
   });
 
   it("toda severidade canônica tem rótulo em português e tom visual", () => {

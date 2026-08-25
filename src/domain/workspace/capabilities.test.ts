@@ -44,7 +44,21 @@ describe("capacidades transversais da experiência operacional (9K.0)", () => {
       WORKSPACE_APPROVE: false,
       INTEGRATIONS_CONFIGURE: false,
       CONFIDENTIAL_VIEW: false,
+      FINANCIAL_VIEW: true,
+      LEGAL_VIEW: true,
+      COMMERCIAL_VIEW: true,
+      PROCUREMENT_VIEW: true,
     });
     expect(JSON.parse(JSON.stringify(set))).toEqual(set);
+  });
+
+  it("visibilidade por domínio na Gestão Executiva (9K.2, gate 2): só VIEWER fica sem FINANCIAL_VIEW/LEGAL_VIEW/COMMERCIAL_VIEW/PROCUREMENT_VIEW", () => {
+    for (const capability of ["FINANCIAL_VIEW", "LEGAL_VIEW", "COMMERCIAL_VIEW", "PROCUREMENT_VIEW"] as const) {
+      expect(hasWorkspaceCapability("VIEWER", capability)).toBe(false);
+      expect(hasWorkspaceCapability("REVIEWER", capability)).toBe(true);
+      expect(hasWorkspaceCapability("ANALYST", capability)).toBe(true);
+      expect(hasWorkspaceCapability("ADMIN", capability)).toBe(true);
+      expect(hasWorkspaceCapability("OWNER", capability)).toBe(true);
+    }
   });
 });
