@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildApprovalExceptions,
   buildBudgetVarianceExceptions,
+  buildCapitalExceptions,
   buildCommercialClosingExceptions,
   buildFinancialExceptions,
   buildIntegrationExceptions,
@@ -194,5 +195,45 @@ describe("buildApprovalExceptions (plano §12 — reaproveita ApprovalRequest, n
     const [result] = buildApprovalExceptions("org-1", [{ id: "req-1", actType: "SALE_DISCOUNT", entityType: "SALE", amount: 25000, requestedAt: referenceDate, projectId: "project-1", projectName: "START BUTANTÃ" }], referenceDate);
     expect(result.severity).toBe("DECISAO");
     expect(result.href).toBe("/comercial");
+  });
+});
+
+describe("buildCapitalExceptions (Fase 9N — condição/covenant/desembolso/proposta, sempre a partir do fato oficial)", () => {
+  it("condição precedente vencida vira CRITICO; ainda não vencida some da lista se severidade for NORMAL", () => {
+    const overdue = { id: "cond-1", proposalId: "prop-1", code: "CP-01", category: "GARANTIA" as const, description: "Registrar garantia", dueAt: days(-5) };
+    const farAway = { id: "cond-2", proposalId: "prop-1", code: "CP-02", category: "SEGURO" as const, description: "Contratar seguro", dueAt: days(90) };
+    const result = buildCapitalExceptions(ctx, [overdue, farAway], [], [], [], referenceDate);
+    expect(result).toHaveLength(1);
+    expect(result[0].severity).toBe("CRITICO");
+    expect(result[0].type).toBe("condition_pending");
+  });
+
+  it("covenant BREACHED é sempre CRITICO; WARNING é ACAO_NECESSARIA; OK nunca vira exceção", () => {
+    const breached = { id: "cov-1", proposalId: "prop-1", code: "DSCR", description: "Cobertura mínima", status: "BREACHED" as const, nextTestDate: null };
+    const warning = { id: "cov-2", proposalId: "prop-1", code: "LTV", description: "Loan to value", status: "WARNING" as const, nextTestDate: null };
+    const ok = { id: "cov-3", proposalId: "prop-1", code: "OK-1", description: "Sem risco", status: "OK" as const, nextTestDate: null };
+    const result = buildCapitalExceptions(ctx, [], [breached, warning, ok], [], [], referenceDate);
+    expect(result).toHaveLength(2);
+    expect(result.find((r) => r.evidence.includes("DSCR"))?.severity).toBe("CRITICO");
+    expect(result.find((r) => r.evidence.includes("LTV"))?.severity).toBe("ACAO_NECESSARIA");
+  });
+
+  it("desembolso previsto e não realizado (data já passou) vira exceção; ainda dentro do prazo não", () => {
+    const late = { id: "disb-1", proposalId: "prop-1", sequence: 1, status: "APPROVED" as const, expectedDate: days(-10), expectedAmount: 500000 };
+    const onTime = { id: "disb-2", proposalId: "prop-1", sequence: 2, status: "PLANNED" as const, expectedDate: days(30), expectedAmount: 200000 };
+    const disbursed = { id: "disb-3", proposalId: "prop-1", sequence: 3, status: "DISBURSED" as const, expectedDate: days(-30), expectedAmount: 300000 };
+    const result = buildCapitalExceptions(ctx, [], [], [late, onTime, disbursed], [], referenceDate);
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe("disbursement_delayed");
+    expect(result[0].materialityValue).toBe(500000);
+  });
+
+  it("proposta aguardando decisão perto da validade vira DECISAO; DRAFT/APPROVED nunca aparecem aqui", () => {
+    const expiringSoon = { id: "prop-1", code: "BANCO-X-01", providerName: "Banco X", amount: 1_000_000, status: "SUBMITTED" as const, validUntil: days(3) };
+    const draft = { id: "prop-2", code: "BANCO-Y-01", providerName: "Banco Y", amount: 500_000, status: "DRAFT" as const, validUntil: null };
+    const result = buildCapitalExceptions(ctx, [], [], [], [expiringSoon, draft], referenceDate);
+    expect(result).toHaveLength(1);
+    expect(result[0].severity).toBe("DECISAO");
+    expect(result[0].evidence).toEqual(["BANCO-X-01"]);
   });
 });

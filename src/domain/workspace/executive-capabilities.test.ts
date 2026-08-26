@@ -37,6 +37,10 @@ describe("canViewExecutiveDomain (9K.2, fechamento — gate 2 RBAC/capabilities)
     for (const role of ALL_ROLES) expect(canViewExecutiveDomain(role, "integrations")).toBe(true);
   });
 
+  it("Capital & Funding delega para CAPITAL_VIEW (9N) — VIEWER só enxerga, nunca aprova/edita", () => {
+    for (const role of ALL_ROLES) expect(canViewExecutiveDomain(role, "capital")).toBe(true);
+  });
+
   it("Viabilidade e Obra/Engenharia não têm gate de leitura (mesma política das telas de módulo hoje)", () => {
     for (const role of ALL_ROLES) {
       expect(canViewExecutiveDomain(role, "viability")).toBe(true);
@@ -50,9 +54,9 @@ describe("canViewExecutiveDomain (9K.2, fechamento — gate 2 RBAC/capabilities)
 });
 
 describe("authorizedExecutiveDomains", () => {
-  it("VIEWER só recebe os domínios sem gate (viability, operations, accounting, integrations)", () => {
+  it("VIEWER só recebe os domínios sem gate (viability, operations, accounting, integrations, capital)", () => {
     const allowed = authorizedExecutiveDomains("VIEWER");
-    expect([...allowed].sort()).toEqual(["accounting", "integrations", "operations", "viability"].sort());
+    expect([...allowed].sort()).toEqual(["accounting", "capital", "integrations", "operations", "viability"].sort());
   });
 
   it("OWNER recebe todos os domínios", () => {

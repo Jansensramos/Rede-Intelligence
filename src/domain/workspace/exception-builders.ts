@@ -10,6 +10,7 @@
  * cópia derivada, para não arriscar contagem dupla entre o fato e sua cópia.
  */
 import { daysUntil, DEFAULT_LEGAL_MILESTONES, milestonesReached, type DeadlineMilestone } from "@/domain/legal/engine";
+import type { FundingConditionCategory, FundingCovenantStatus, FundingDisbursementStatus, FundingProposalStatus } from "@prisma/client";
 import { isCriticalPurchase, requiredContractingDate } from "@/domain/procurement/engine";
 import { classifyDueSeverity } from "@/domain/financial-ops/engine";
 import type { BudgetBridgeRow } from "@/domain/operations/operations-engine";
@@ -524,4 +525,176 @@ export function buildApprovalExceptions(organizationId: string, requests: Approv
     evidence: [request.id, ...(request.requestedById ? [request.requestedById] : [])],
     approvalCapability: request.requiredRole ? { requiredRole: request.requiredRole } : null,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Capital & Funding (Fase 9N) — condição precedente, covenant, desembolso não realizado, proposta
+// aguardando decisão. Severidade sempre a partir do MESMO campo que a tela de módulo usa
+// (`FundingCondition.dueAt`, `FundingCovenant.status`, `FundingDisbursement.expectedDate`) —
+// nunca uma cópia derivada.
+// ---------------------------------------------------------------------------
+
+export interface FundingConditionSignal {
+  id: string;
+  proposalId: string;
+  code: string;
+  category: FundingConditionCategory;
+  description: string;
+  dueAt: Date | null;
+  responsibleId?: string | null;
+}
+
+export interface FundingCovenantSignal {
+  id: string;
+  proposalId: string;
+  code: string;
+  description: string;
+  status: FundingCovenantStatus;
+  nextTestDate: Date | null;
+}
+
+export interface FundingDisbursementSignal {
+  id: string;
+  proposalId: string;
+  sequence: number;
+  status: FundingDisbursementStatus;
+  expectedDate: Date;
+  expectedAmount: number;
+}
+
+export interface FundingProposalDecisionSignal {
+  id: string;
+  code: string;
+  providerName: string;
+  amount: number;
+  status: FundingProposalStatus;
+  validUntil: Date | null;
+}
+
+export function buildCapitalExceptions(
+  ctx: ExceptionTenantContext,
+  conditions: FundingConditionSignal[],
+  covenants: FundingCovenantSignal[],
+  disbursements: FundingDisbursementSignal[],
+  proposalsAwaitingDecision: FundingProposalDecisionSignal[],
+  referenceDate: Date,
+): ExecutiveException[] {
+  const exceptions: ExecutiveException[] = [];
+
+  for (const condition of conditions) {
+    if (!condition.dueAt) continue;
+    const days = daysUntil(condition.dueAt, referenceDate);
+    const severity = mapFinancialDueSeverity(classifyDueSeverity(days));
+    if (severity === "NORMAL") continue;
+    exceptions.push({
+      id: buildExceptionId(ctx.organizationId, "capital", "condition_pending", condition.id),
+      organizationId: ctx.organizationId,
+      economicGroupId: ctx.economicGroupId,
+      companyId: ctx.companyId,
+      projectId: ctx.projectId,
+      projectName: ctx.projectName,
+      domain: "capital",
+      type: "condition_pending",
+      title: days < 0 ? `Condição precedente vencida: ${condition.code}` : `Condição precedente ${condition.code} vence em ${days} dia(s)`,
+      summary: condition.description,
+      severity,
+      impact: { financial: undefined },
+      materialityValue: null,
+      dueDate: condition.dueAt.toISOString(),
+      confidence: ALTA,
+      source: "REDE",
+      occurredAt: referenceDate.toISOString(),
+      href: "/capital-funding",
+      reason: days < 0 ? `Vencida há ${Math.abs(days)} dia(s).` : `Vence em ${days} dia(s).`,
+      responsibleId: condition.responsibleId,
+      status: "ABERTA",
+      evidence: [condition.code, condition.proposalId],
+    });
+  }
+
+  for (const covenant of covenants) {
+    if (covenant.status !== "WARNING" && covenant.status !== "BREACHED") continue;
+    const severity = covenant.status === "BREACHED" ? ("CRITICO" as const) : ("ACAO_NECESSARIA" as const);
+    exceptions.push({
+      id: buildExceptionId(ctx.organizationId, "capital", "covenant_at_risk", covenant.id),
+      organizationId: ctx.organizationId,
+      economicGroupId: ctx.economicGroupId,
+      companyId: ctx.companyId,
+      projectId: ctx.projectId,
+      projectName: ctx.projectName,
+      domain: "capital",
+      type: "covenant_at_risk",
+      title: covenant.status === "BREACHED" ? `Covenant violado: ${covenant.code}` : `Covenant ${covenant.code} em atenção`,
+      summary: covenant.description,
+      severity,
+      dueDate: covenant.nextTestDate?.toISOString() ?? null,
+      confidence: ALTA,
+      source: "REDE",
+      occurredAt: referenceDate.toISOString(),
+      href: "/capital-funding",
+      reason: covenant.status === "BREACHED" ? "Último teste do covenant resultou em violação." : "Último teste do covenant está fora da margem de segurança.",
+      status: "ABERTA",
+      evidence: [covenant.code, covenant.proposalId],
+    });
+  }
+
+  for (const disbursement of disbursements) {
+    if (disbursement.status === "DISBURSED" || disbursement.status === "CANCELLED") continue;
+    const days = daysUntil(disbursement.expectedDate, referenceDate);
+    if (days > 0) continue; // ainda não venceu — não é exceção
+    exceptions.push({
+      id: buildExceptionId(ctx.organizationId, "capital", "disbursement_delayed", disbursement.id),
+      organizationId: ctx.organizationId,
+      economicGroupId: ctx.economicGroupId,
+      companyId: ctx.companyId,
+      projectId: ctx.projectId,
+      projectName: ctx.projectName,
+      domain: "capital",
+      type: "disbursement_delayed",
+      title: `Desembolso #${disbursement.sequence} previsto e não realizado`,
+      summary: `R$ ${disbursement.expectedAmount.toLocaleString("pt-BR")} previsto para ${disbursement.expectedDate.toISOString().slice(0, 10)}.`,
+      severity: "ACAO_NECESSARIA",
+      impact: { financial: disbursement.expectedAmount },
+      materialityValue: disbursement.expectedAmount,
+      dueDate: disbursement.expectedDate.toISOString(),
+      confidence: ALTA,
+      source: "REDE",
+      occurredAt: referenceDate.toISOString(),
+      href: "/capital-funding",
+      reason: `Previsto há ${Math.abs(days)} dia(s) e status ainda é ${disbursement.status}.`,
+      status: "ABERTA",
+      evidence: [disbursement.proposalId, String(disbursement.sequence)],
+    });
+  }
+
+  for (const proposal of proposalsAwaitingDecision) {
+    if (proposal.status !== "SUBMITTED" && proposal.status !== "UNDER_REVIEW") continue;
+    const daysToExpire = proposal.validUntil ? daysUntil(proposal.validUntil, referenceDate) : null;
+    const severity = daysToExpire !== null && daysToExpire <= 7 ? "DECISAO" : "ATENCAO";
+    exceptions.push({
+      id: buildExceptionId(ctx.organizationId, "capital", "proposal_awaiting_decision", proposal.id),
+      organizationId: ctx.organizationId,
+      economicGroupId: ctx.economicGroupId,
+      companyId: ctx.companyId,
+      projectId: ctx.projectId,
+      projectName: ctx.projectName,
+      domain: "capital",
+      type: "proposal_awaiting_decision",
+      title: `Proposta de funding aguardando decisão: ${proposal.code}`,
+      summary: `${proposal.providerName} · R$ ${proposal.amount.toLocaleString("pt-BR")}`,
+      severity,
+      impact: { financial: proposal.amount },
+      materialityValue: proposal.amount,
+      dueDate: proposal.validUntil?.toISOString() ?? null,
+      confidence: ALTA,
+      source: "REDE",
+      occurredAt: referenceDate.toISOString(),
+      href: "/capital-funding",
+      reason: daysToExpire !== null ? `Validade da proposta em ${daysToExpire} dia(s).` : "Sem prazo de validade informado.",
+      status: "ABERTA",
+      evidence: [proposal.code],
+    });
+  }
+
+  return exceptions;
 }

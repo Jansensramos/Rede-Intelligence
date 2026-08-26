@@ -31,6 +31,7 @@ import {
   Layers3,
   Menu,
   PanelLeftClose,
+  PiggyBank,
   Plug,
   Radar,
   Scale,
@@ -127,6 +128,10 @@ export function WorkspaceShell({
           <Link href="/rotina" className={pathname === "/rotina" || pathname.startsWith("/rotina/") ? "is-active" : ""} onClick={() => setSidebarOpen(false)}>
             <CalendarCheck2 size={17} />
             <span>Minha Rotina</span>
+          </Link>
+          <Link href="/capital-funding" className={pathname === "/capital-funding" || pathname.startsWith("/capital-funding/") ? "is-active" : ""} onClick={() => setSidebarOpen(false)}>
+            <PiggyBank size={17} />
+            <span>Capital & Funding</span>
           </Link>
 
           <div className="ds-nav-group-label">GRANDES ÁREAS</div>

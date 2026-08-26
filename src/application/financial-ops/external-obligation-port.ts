@@ -25,7 +25,7 @@ export interface ExternalPayableCommand {
   description: string;
   responsibleId: string;
   createdById: string;
-  origin?: "MEASUREMENT" | "CONTRACT" | "LEGAL" | "MANUAL";
+  origin?: "MEASUREMENT" | "CONTRACT" | "LEGAL" | "MANUAL" | "FUNDING";
 }
 
 export async function createExternalPayableObligation(tx: Prisma.TransactionClient, command: ExternalPayableCommand) {

@@ -289,4 +289,36 @@ export async function queryPendingApprovals(organizationId: string, projectIds?:
   }));
 }
 
+// ---------------------------------------------------------------------------
+// Capital & Funding (Fase 9N) — só o subconjunto usado pelos builders de exceção; o workspace
+// completo (propostas, garantias, cronograma) vive em `application/capital/capital-queries.ts`.
+// ---------------------------------------------------------------------------
+
+export async function queryCapitalSignals(organizationId: string, projectId: string) {
+  const proposals = await prisma.fundingProposal.findMany({
+    where: { organizationId, projectId },
+    select: {
+      id: true, code: true, providerName: true, amount: true, status: true, validUntil: true, updatedAt: true,
+      conditions: { where: { status: "PENDING" }, select: { id: true, code: true, category: true, description: true, dueAt: true, responsibleId: true } },
+      covenants: { where: { status: { in: ["WARNING", "BREACHED"] } }, select: { id: true, code: true, description: true, status: true, nextTestDate: true } },
+      disbursements: { where: { status: { notIn: ["DISBURSED", "CANCELLED"] } }, select: { id: true, sequence: true, status: true, expectedDate: true, expectedAmount: true } },
+    },
+    take: 50,
+  });
+
+  const conditions = proposals.flatMap((p) => p.conditions.map((c) => ({ ...c, proposalId: p.id })));
+  const covenants = proposals.flatMap((p) => p.covenants.map((c) => ({ ...c, proposalId: p.id })));
+  const disbursements = proposals.flatMap((p) => p.disbursements.map((d) => ({ id: d.id, proposalId: p.id, sequence: d.sequence, status: d.status, expectedDate: d.expectedDate, expectedAmount: Number(d.expectedAmount) })));
+  const proposalsAwaitingDecision = proposals.filter((p) => p.status === "SUBMITTED" || p.status === "UNDER_REVIEW").map((p) => ({ id: p.id, code: p.code, providerName: p.providerName, amount: Number(p.amount), status: p.status, validUntil: p.validUntil }));
+
+  return {
+    conditions,
+    covenants,
+    disbursements,
+    proposalsAwaitingDecision,
+    fundingContratado: proposals.filter((p) => p.status === "APPROVED").reduce((sum, p) => sum + Number(p.amount), 0),
+    latestUpdatedAt: latestTimestamp(proposals.map((p) => p.updatedAt)),
+  };
+}
+
 export { projectForTenant };

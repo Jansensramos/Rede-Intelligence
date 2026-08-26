@@ -1021,6 +1021,8 @@ model Organization {
   incomeObservations              IncomeObservation[]
   productScenarios                ProductScenario[]
   productDecisionRecords          ProductDecisionRecord[]
+  fundingProposals                FundingProposal[]
+  fundingFinancialEvents          FundingFinancialEvent[]
 
   @@map("organizations")
 }
@@ -1210,6 +1212,8 @@ model Project {
   bimQuantityMappings          BimQuantityMapping[]
   marketAreas                  MarketArea[]
   productScenarios             ProductScenario[]
+  fundingProposals             FundingProposal[]
+  fundingFinancialEvents       FundingFinancialEvent[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -4666,25 +4670,25 @@ model Supplier {
 }
 
 model Customer {
-  id                 String              @id @default(cuid())
-  organizationId     String              @map("organization_id")
-  name               String
-  personType         PartyType           @default(INDIVIDUAL) @map("person_type")
-  taxId              String?             @map("tax_id")
-  email              String?
-  phone              String?
-  status             PartyStatus         @default(ACTIVE)
-  createdById        String              @map("created_by_id")
-  createdAt          DateTime            @default(now()) @map("created_at")
-  updatedAt          DateTime            @updatedAt @map("updated_at")
-  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  receivableAccounts ReceivableAccount[]
-  salesProposals     SalesProposal[]
-  salesReservations  SalesReservation[]
-  saleParties        SaleParty[]
-  postSaleRequests   PostSaleRequest[]
-  signatureParties           SignatureParty[]
-  creditBureauConsultations  CreditBureauConsultation[]
+  id                        String                     @id @default(cuid())
+  organizationId            String                     @map("organization_id")
+  name                      String
+  personType                PartyType                  @default(INDIVIDUAL) @map("person_type")
+  taxId                     String?                    @map("tax_id")
+  email                     String?
+  phone                     String?
+  status                    PartyStatus                @default(ACTIVE)
+  createdById               String                     @map("created_by_id")
+  createdAt                 DateTime                   @default(now()) @map("created_at")
+  updatedAt                 DateTime                   @updatedAt @map("updated_at")
+  organization              Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  receivableAccounts        ReceivableAccount[]
+  salesProposals            SalesProposal[]
+  salesReservations         SalesReservation[]
+  saleParties               SaleParty[]
+  postSaleRequests          PostSaleRequest[]
+  signatureParties          SignatureParty[]
+  creditBureauConsultations CreditBureauConsultation[]
 
   @@unique([organizationId, taxId])
   @@index([organizationId, status])
@@ -4998,6 +5002,7 @@ model BankTransaction {
   reconciliationMatches ReconciliationMatch[]
   transferAsFrom        FinancialTransfer?    @relation("TransferFromTransaction")
   transferAsTo          FinancialTransfer?    @relation("TransferToTransaction")
+  fundingDisbursement   FundingDisbursement?
 
   @@unique([bankAccountId, checksum])
   @@index([organizationId, status])
@@ -6955,14 +6960,14 @@ model SalesProposal {
   createdAt               DateTime            @default(now()) @map("created_at")
   updatedAt               DateTime            @updatedAt @map("updated_at")
 
-  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project      Project            @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  salesUnit    SalesUnit          @relation(fields: [salesUnitId], references: [id], onDelete: Restrict)
-  customer     Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  broker       Supplier?          @relation(fields: [brokerId], references: [id], onDelete: SetNull)
-  priceTable   SalesPriceTable    @relation(fields: [priceTableId], references: [id], onDelete: Restrict)
-  reservations SalesReservation[]
-  sale         Sale?
+  organization              Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project                   Project                    @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  salesUnit                 SalesUnit                  @relation(fields: [salesUnitId], references: [id], onDelete: Restrict)
+  customer                  Customer                   @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  broker                    Supplier?                  @relation(fields: [brokerId], references: [id], onDelete: SetNull)
+  priceTable                SalesPriceTable            @relation(fields: [priceTableId], references: [id], onDelete: Restrict)
+  reservations              SalesReservation[]
+  sale                      Sale?
   creditBureauConsultations CreditBureauConsultation[]
 
   @@index([organizationId, status])
@@ -7082,11 +7087,11 @@ model SalesContract {
   createdAt           DateTime                     @default(now()) @map("created_at")
   updatedAt           DateTime                     @updatedAt @map("updated_at")
 
-  organization      Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project           Project                   @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  company           Company                   @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  sale              Sale                      @relation(fields: [saleId], references: [id], onDelete: Restrict)
-  templateVersion   ContractTemplateVersion?  @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
+  organization      Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project           Project                  @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  company           Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  sale              Sale                     @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  templateVersion   ContractTemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
   documents         ContractDocument[]
   signatureRequests SignatureRequest[]
 
@@ -7304,7 +7309,9 @@ enum SignaturePartyStatus {
   DECLINED
 }
 
-/** Só transições de DOMÍNIO (o transporte/recebimento cru do webhook é `IntegrationInboxEvent.status`, 9H — não duplicado aqui). */
+/**
+ * Só transições de DOMÍNIO (o transporte/recebimento cru do webhook é `IntegrationInboxEvent.status`, 9H — não duplicado aqui).
+ */
 enum SignatureEventType {
   CREATED
   SENT
@@ -7338,7 +7345,9 @@ enum CreditConsultationResult {
   REQUER_ANALISE
 }
 
-/** Modelo contratual por empreendimento (item 1 do plano). Nunca editado após ter uma versão APROVADA — só nova versão via `ContractTemplateVersion`. */
+/**
+ * Modelo contratual por empreendimento (item 1 do plano). Nunca editado após ter uma versão APROVADA — só nova versão via `ContractTemplateVersion`.
+ */
 model ContractTemplate {
   id             String                 @id @default(cuid())
   organizationId String                 @map("organization_id")
@@ -7349,8 +7358,8 @@ model ContractTemplate {
   createdAt      DateTime               @default(now()) @map("created_at")
   updatedAt      DateTime               @updatedAt @map("updated_at")
 
-  organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project      Project                    @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  organization Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project      Project                   @relation(fields: [projectId], references: [id], onDelete: Restrict)
   versions     ContractTemplateVersion[]
 
   @@unique([projectId, name])
@@ -9691,7 +9700,9 @@ model IntegrationInboxEvent {
   errorMessage    String?               @map("error_message") @db.Text
   syncRunId       String?               @map("sync_run_id")
   installation    ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict)
-  /** 9K.4: projeção de domínio opcional quando este evento cru é um webhook de assinatura — ver `SignatureEvent`. */
+  /**
+   * 9K.4: projeção de domínio opcional quando este evento cru é um webhook de assinatura — ver `SignatureEvent`.
+   */
   signatureEvent  SignatureEvent?
 
   @@unique([installationId, provider, eventId])
@@ -10820,9 +10831,9 @@ model MarketArea {
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
-  organization     Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  landAsset        LandAsset?                @relation(fields: [landAssetId], references: [id], onDelete: SetNull)
-  project          Project?                  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  landAsset        LandAsset?               @relation(fields: [landAssetId], references: [id], onDelete: SetNull)
+  project          Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
   developments     MarketDevelopment[]
   demographics     DemographicObservation[]
   incomeRecords    IncomeObservation[]
@@ -10834,23 +10845,23 @@ model MarketArea {
 }
 
 model DemographicObservation {
-  id                   String       @id @default(cuid())
-  organizationId       String       @map("organization_id")
-  marketAreaId         String       @map("market_area_id")
-  referenceYear        Int          @map("reference_year")
-  totalPopulation      Int          @map("total_population")
-  projectedPopulation  Int?         @map("projected_population")
-  annualGrowthRate     Decimal?     @map("annual_growth_rate") @db.Decimal(6, 4)
-  totalHouseholds      Int          @map("total_households")
-  personsPerHousehold  Decimal      @map("persons_per_household") @db.Decimal(4, 2)
-  urbanizationRate     Decimal?     @map("urbanization_rate") @db.Decimal(6, 4)
-  ageDistribution      Json         @map("age_distribution")
-  householdComposition Json         @map("household_composition")
-  educationLevels      Json?        @map("education_levels")
-  sourceProvider       String       @map("source_provider")
-  confidenceScore      Float        @default(1.0) @map("confidence_score")
+  id                   String   @id @default(cuid())
+  organizationId       String   @map("organization_id")
+  marketAreaId         String   @map("market_area_id")
+  referenceYear        Int      @map("reference_year")
+  totalPopulation      Int      @map("total_population")
+  projectedPopulation  Int?     @map("projected_population")
+  annualGrowthRate     Decimal? @map("annual_growth_rate") @db.Decimal(6, 4)
+  totalHouseholds      Int      @map("total_households")
+  personsPerHousehold  Decimal  @map("persons_per_household") @db.Decimal(4, 2)
+  urbanizationRate     Decimal? @map("urbanization_rate") @db.Decimal(6, 4)
+  ageDistribution      Json     @map("age_distribution")
+  householdComposition Json     @map("household_composition")
+  educationLevels      Json?    @map("education_levels")
+  sourceProvider       String   @map("source_provider")
+  confidenceScore      Float    @default(1.0) @map("confidence_score")
   provenance           Json
-  createdAt            DateTime     @default(now()) @map("created_at")
+  createdAt            DateTime @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   marketArea   MarketArea   @relation(fields: [marketAreaId], references: [id], onDelete: Cascade)
@@ -10860,18 +10871,18 @@ model DemographicObservation {
 }
 
 model IncomeObservation {
-  id                        String       @id @default(cuid())
-  organizationId            String       @map("organization_id")
-  marketAreaId              String       @map("market_area_id")
-  referenceYear             Int          @map("reference_year")
-  averageHouseholdIncome    Decimal      @map("average_household_income") @db.Decimal(14, 2)
-  medianHouseholdIncome     Decimal      @map("median_household_income") @db.Decimal(14, 2)
-  perCapitaIncome           Decimal?     @map("per_capita_income") @db.Decimal(14, 2)
-  totalIncomeMassMonthly    Decimal?     @map("total_income_mass_monthly") @db.Decimal(18, 2)
-  incomeBracketDistribution Json         @map("income_bracket_distribution")
-  sourceProvider            String       @map("source_provider")
+  id                        String   @id @default(cuid())
+  organizationId            String   @map("organization_id")
+  marketAreaId              String   @map("market_area_id")
+  referenceYear             Int      @map("reference_year")
+  averageHouseholdIncome    Decimal  @map("average_household_income") @db.Decimal(14, 2)
+  medianHouseholdIncome     Decimal  @map("median_household_income") @db.Decimal(14, 2)
+  perCapitaIncome           Decimal? @map("per_capita_income") @db.Decimal(14, 2)
+  totalIncomeMassMonthly    Decimal? @map("total_income_mass_monthly") @db.Decimal(18, 2)
+  incomeBracketDistribution Json     @map("income_bracket_distribution")
+  sourceProvider            String   @map("source_provider")
   provenance                Json
-  createdAt                 DateTime     @default(now()) @map("created_at")
+  createdAt                 DateTime @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   marketArea   MarketArea   @relation(fields: [marketAreaId], references: [id], onDelete: Cascade)
@@ -10883,17 +10894,17 @@ model IncomeObservation {
 // Política versionada de capacidade de financiamento (plano 9J, seção I) — externaliza regras de
 // crédito como parâmetros, nunca constantes bancárias universais embutidas no motor.
 model AffordabilityPolicy {
-  id                   String   @id @default(cuid())
-  organizationId       String   @map("organization_id")
-  name                 String
-  version              Int      @default(1)
-  maxCommitmentRate    Decimal  @map("max_commitment_rate") @db.Decimal(6, 4)
-  annualInterestRate   Decimal  @map("annual_interest_rate") @db.Decimal(6, 4)
-  termMonths           Int      @map("term_months")
-  minDownPaymentRate   Decimal  @map("min_down_payment_rate") @db.Decimal(6, 4)
-  isActive             Boolean  @default(true) @map("is_active")
-  createdById          String   @map("created_by_id")
-  createdAt            DateTime @default(now()) @map("created_at")
+  id                 String   @id @default(cuid())
+  organizationId     String   @map("organization_id")
+  name               String
+  version            Int      @default(1)
+  maxCommitmentRate  Decimal  @map("max_commitment_rate") @db.Decimal(6, 4)
+  annualInterestRate Decimal  @map("annual_interest_rate") @db.Decimal(6, 4)
+  termMonths         Int      @map("term_months")
+  minDownPaymentRate Decimal  @map("min_down_payment_rate") @db.Decimal(6, 4)
+  isActive           Boolean  @default(true) @map("is_active")
+  createdById        String   @map("created_by_id")
+  createdAt          DateTime @default(now()) @map("created_at")
 
   @@unique([organizationId, name, version])
   @@map("affordability_policies")
@@ -10902,19 +10913,19 @@ model AffordabilityPolicy {
 // Pesos versionados de similaridade de concorrentes (plano 9J, seção V) — parâmetros auditáveis,
 // nunca hardcoded silenciosamente na consulta.
 model MarketComparabilityPolicy {
-  id                 String   @id @default(cuid())
-  organizationId     String   @map("organization_id")
-  name               String
-  version            Int      @default(1)
-  distanceWeight     Decimal  @map("distance_weight") @db.Decimal(6, 4)
-  standardWeight     Decimal  @map("standard_weight") @db.Decimal(6, 4)
-  typologyWeight     Decimal  @map("typology_weight") @db.Decimal(6, 4)
-  pricePointWeight   Decimal  @map("price_point_weight") @db.Decimal(6, 4)
-  recencyWeight      Decimal  @map("recency_weight") @db.Decimal(6, 4)
-  minimumSampleSize  Int      @default(3) @map("minimum_sample_size")
-  isActive           Boolean  @default(true) @map("is_active")
-  createdById        String   @map("created_by_id")
-  createdAt          DateTime @default(now()) @map("created_at")
+  id                String   @id @default(cuid())
+  organizationId    String   @map("organization_id")
+  name              String
+  version           Int      @default(1)
+  distanceWeight    Decimal  @map("distance_weight") @db.Decimal(6, 4)
+  standardWeight    Decimal  @map("standard_weight") @db.Decimal(6, 4)
+  typologyWeight    Decimal  @map("typology_weight") @db.Decimal(6, 4)
+  pricePointWeight  Decimal  @map("price_point_weight") @db.Decimal(6, 4)
+  recencyWeight     Decimal  @map("recency_weight") @db.Decimal(6, 4)
+  minimumSampleSize Int      @default(3) @map("minimum_sample_size")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdById       String   @map("created_by_id")
+  createdAt         DateTime @default(now()) @map("created_at")
 
   @@unique([organizationId, name, version])
   @@map("market_comparability_policies")
@@ -10923,16 +10934,16 @@ model MarketComparabilityPolicy {
 // Catálogo estruturado de atributos e lazer (plano 9J, seção AD) — cada item carrega custo e
 // relevância observada, nunca recomendado por modismo.
 model AmenityCatalogItem {
-  id                   String   @id @default(cuid())
-  organizationId       String   @map("organization_id")
-  code                 String
-  name                 String
-  category             String
-  estimatedCostPerM2   Decimal  @map("estimated_cost_per_m2") @db.Decimal(12, 2)
-  areaRequiredM2       Decimal  @map("area_required_m2") @db.Decimal(10, 2)
-  relevanceRate        Decimal? @map("relevance_rate") @db.Decimal(6, 4)
-  isActive             Boolean  @default(true) @map("is_active")
-  createdAt            DateTime @default(now()) @map("created_at")
+  id                 String   @id @default(cuid())
+  organizationId     String   @map("organization_id")
+  code               String
+  name               String
+  category           String
+  estimatedCostPerM2 Decimal  @map("estimated_cost_per_m2") @db.Decimal(12, 2)
+  areaRequiredM2     Decimal  @map("area_required_m2") @db.Decimal(10, 2)
+  relevanceRate      Decimal? @map("relevance_rate") @db.Decimal(6, 4)
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at")
 
   @@unique([organizationId, code])
   @@map("amenity_catalog_items")
@@ -10980,24 +10991,24 @@ model MarketDevelopment {
 }
 
 model MarketPriceObservation {
-  id                  String            @id @default(cuid())
-  organizationId      String            @map("organization_id")
-  developmentId       String            @map("development_id")
-  typologyDescription String            @map("typology_description")
+  id                  String          @id @default(cuid())
+  organizationId      String          @map("organization_id")
+  developmentId       String          @map("development_id")
+  typologyDescription String          @map("typology_description")
   bedrooms            Int
-  suites              Int               @default(0)
-  bathrooms           Int               @default(1)
-  parkingSpaces       Int               @default(1) @map("parking_spaces")
-  privateAreaM2       Decimal           @map("private_area_m2") @db.Decimal(10, 2)
-  totalPrice          Decimal           @map("total_price") @db.Decimal(14, 2)
-  pricePerSqm         Decimal           @map("price_per_sqm") @db.Decimal(12, 2)
-  priceType           MarketPriceType   @default(LIST_PRICE) @map("price_type")
-  discountRate        Decimal?          @map("discount_rate") @db.Decimal(6, 4)
-  observedAt          DateTime          @map("observed_at") @db.Date
-  sourceProvider      String            @map("source_provider")
-  confidenceScore     Float             @default(1.0) @map("confidence_score")
+  suites              Int             @default(0)
+  bathrooms           Int             @default(1)
+  parkingSpaces       Int             @default(1) @map("parking_spaces")
+  privateAreaM2       Decimal         @map("private_area_m2") @db.Decimal(10, 2)
+  totalPrice          Decimal         @map("total_price") @db.Decimal(14, 2)
+  pricePerSqm         Decimal         @map("price_per_sqm") @db.Decimal(12, 2)
+  priceType           MarketPriceType @default(LIST_PRICE) @map("price_type")
+  discountRate        Decimal?        @map("discount_rate") @db.Decimal(6, 4)
+  observedAt          DateTime        @map("observed_at") @db.Date
+  sourceProvider      String          @map("source_provider")
+  confidenceScore     Float           @default(1.0) @map("confidence_score")
   provenance          Json
-  createdAt           DateTime          @default(now()) @map("created_at")
+  createdAt           DateTime        @default(now()) @map("created_at")
 
   organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   development  MarketDevelopment @relation(fields: [developmentId], references: [id], onDelete: Cascade)
@@ -11009,19 +11020,19 @@ model MarketPriceObservation {
 // Estoque imobiliário de mercado estritamente temporal — nunca sobrescreve um registro passado
 // (plano 9J, seção N.1); cada observação é uma linha nova carimbada por asOfDate.
 model MarketInventorySnapshot {
-  id                  String            @id @default(cuid())
-  organizationId      String            @map("organization_id")
-  developmentId       String            @map("development_id")
-  asOfDate            DateTime          @map("as_of_date") @db.Date
-  totalUnits          Int               @map("total_units")
-  availableUnits      Int               @map("available_units")
-  soldUnits           Int               @map("sold_units")
-  reservedUnits       Int               @default(0) @map("reserved_units")
-  vsoPeriodPercentage Decimal?          @map("vso_period_percentage") @db.Decimal(6, 4)
-  monthsOfInventory   Decimal?          @map("months_of_inventory") @db.Decimal(6, 2)
-  sourceProvider      String            @map("source_provider")
+  id                  String   @id @default(cuid())
+  organizationId      String   @map("organization_id")
+  developmentId       String   @map("development_id")
+  asOfDate            DateTime @map("as_of_date") @db.Date
+  totalUnits          Int      @map("total_units")
+  availableUnits      Int      @map("available_units")
+  soldUnits           Int      @map("sold_units")
+  reservedUnits       Int      @default(0) @map("reserved_units")
+  vsoPeriodPercentage Decimal? @map("vso_period_percentage") @db.Decimal(6, 4)
+  monthsOfInventory   Decimal? @map("months_of_inventory") @db.Decimal(6, 2)
+  sourceProvider      String   @map("source_provider")
   provenance          Json
-  createdAt           DateTime          @default(now()) @map("created_at")
+  createdAt           DateTime @default(now()) @map("created_at")
 
   organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   development  MarketDevelopment @relation(fields: [developmentId], references: [id], onDelete: Cascade)
@@ -11033,17 +11044,17 @@ model MarketInventorySnapshot {
 // Histórico temporal de lançamentos (plano 9J, seção M) — preserva a curva de velocidade dos
 // primeiros 6 meses tal como observada na época, sem retroatividade.
 model MarketLaunchHistory {
-  id                       String   @id @default(cuid())
-  organizationId           String   @map("organization_id")
-  developmentId            String   @map("development_id")
-  launchDate               DateTime @map("launch_date") @db.Date
-  launchedVgv              Decimal  @map("launched_vgv") @db.Decimal(18, 2)
-  unitsOffered             Int      @map("units_offered")
-  averagePricePerSqmAtLaunch Decimal @map("average_price_per_sqm_at_launch") @db.Decimal(12, 2)
-  velocityCurveFirst6Months Json    @map("velocity_curve_first_6_months")
-  sourceProvider           String   @map("source_provider")
-  provenance               Json
-  createdAt                DateTime @default(now()) @map("created_at")
+  id                         String   @id @default(cuid())
+  organizationId             String   @map("organization_id")
+  developmentId              String   @map("development_id")
+  launchDate                 DateTime @map("launch_date") @db.Date
+  launchedVgv                Decimal  @map("launched_vgv") @db.Decimal(18, 2)
+  unitsOffered               Int      @map("units_offered")
+  averagePricePerSqmAtLaunch Decimal  @map("average_price_per_sqm_at_launch") @db.Decimal(12, 2)
+  velocityCurveFirst6Months  Json     @map("velocity_curve_first_6_months")
+  sourceProvider             String   @map("source_provider")
+  provenance                 Json
+  createdAt                  DateTime @default(now()) @map("created_at")
 
   development MarketDevelopment @relation(fields: [developmentId], references: [id], onDelete: Cascade)
 
@@ -11096,21 +11107,21 @@ model ProductScenario {
 }
 
 model ProductScenarioMixLine {
-  id                   String          @id @default(cuid())
-  scenarioId           String          @map("scenario_id")
-  typologyCode         String          @map("typology_code")
+  id                   String   @id @default(cuid())
+  scenarioId           String   @map("scenario_id")
+  typologyCode         String   @map("typology_code")
   name                 String
   bedrooms             Int
-  suites               Int             @default(0)
-  bathrooms            Int             @default(1)
-  parkingSpaces        Int             @default(1) @map("parking_spaces")
-  privateAreaM2        Decimal         @map("private_area_m2") @db.Decimal(8, 2)
-  unitCount            Int             @map("unit_count")
-  mixPercentage        Decimal         @map("mix_percentage") @db.Decimal(6, 4)
-  targetPricePerSqm    Decimal         @map("target_price_per_sqm") @db.Decimal(12, 2)
-  targetUnitPrice      Decimal         @map("target_unit_price") @db.Decimal(14, 2)
-  expectedMonthlySales Decimal?        @map("expected_monthly_sales") @db.Decimal(6, 2)
-  sortOrder            Int             @default(0) @map("sort_order")
+  suites               Int      @default(0)
+  bathrooms            Int      @default(1)
+  parkingSpaces        Int      @default(1) @map("parking_spaces")
+  privateAreaM2        Decimal  @map("private_area_m2") @db.Decimal(8, 2)
+  unitCount            Int      @map("unit_count")
+  mixPercentage        Decimal  @map("mix_percentage") @db.Decimal(6, 4)
+  targetPricePerSqm    Decimal  @map("target_price_per_sqm") @db.Decimal(12, 2)
+  targetUnitPrice      Decimal  @map("target_unit_price") @db.Decimal(14, 2)
+  expectedMonthlySales Decimal? @map("expected_monthly_sales") @db.Decimal(6, 2)
+  sortOrder            Int      @default(0) @map("sort_order")
 
   scenario ProductScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
 
@@ -11121,17 +11132,17 @@ model ProductScenarioMixLine {
 // Memória imutável da decisão (plano 9J, seção AM) — snapshot recomendado + snapshot aprovado +
 // deltas + justificativa; nunca editada após criada.
 model ProductDecisionRecord {
-  id                  String          @id @default(cuid())
-  organizationId      String          @map("organization_id")
-  scenarioId          String          @map("scenario_id")
-  recommendedSnapshot Json            @map("recommended_snapshot")
-  approvedSnapshot    Json            @map("approved_snapshot")
-  deltasJson          Json            @map("deltas_json")
+  id                  String                 @id @default(cuid())
+  organizationId      String                 @map("organization_id")
+  scenarioId          String                 @map("scenario_id")
+  recommendedSnapshot Json                   @map("recommended_snapshot")
+  approvedSnapshot    Json                   @map("approved_snapshot")
+  deltasJson          Json                   @map("deltas_json")
   decision            ProductLifecycleStatus
-  decisionRationale   String          @map("decision_rationale") @db.Text
-  decidedById         String          @map("decided_by_id")
-  decidedAt           DateTime        @default(now()) @map("decided_at")
-  engineVersion       String          @map("engine_version")
+  decisionRationale   String                 @map("decision_rationale") @db.Text
+  decidedById         String                 @map("decided_by_id")
+  decidedAt           DateTime               @default(now()) @map("decided_at")
+  engineVersion       String                 @map("engine_version")
   checksum            String
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
@@ -11139,4 +11150,441 @@ model ProductDecisionRecord {
 
   @@index([organizationId, decidedAt])
   @@map("product_decision_records")
+}
+
+// ============================================================================
+// FASE 9N — CAPITAL & FUNDING INTELLIGENCE (PROPOSTA — NÃO MIGRADA)
+// ============================================================================
+// Revisão final (2ª rodada) após checagem explícita de duplicação com a 9D (Jurídico).
+// Necessidade de capital e comparação de propostas (`domain/capital/needs-engine.ts`,
+// `comparator-engine.ts`, `scenarios.ts`) são puro cálculo em memória sobre a Base Aprovada
+// (`CalculationRun`/`FinancialResult`/`CashFlowEntry`, 100% reaproveitados, nenhum campo novo) e
+// não exigem nenhuma tabela nova.
+//
+// Nenhuma tabela 9D foi duplicada — ver relatório para a checagem modelo a modelo
+// (LegalGuarantee/LegalContractCondition são hard-FK em OperationalContract, não servem a uma
+// garantia/CP de financiamento; InvestmentCondition é do Comitê, não da operação de crédito).
+// Reaproveitado de fato: `ProcurementDocumentLink` (evidência/documento, via `evidenceDocumentIds`
+// — mesmo padrão de `LegalChecklistItem`), `LegalTimelineEvent.sourceType/sourceId` (padrão de
+// referência polimórfica reaproveitado em `FundingCondition.sourceType/sourceId`), e o port
+// `application/financial-ops/external-obligation-port.ts` (`createExternalPayableObligation`) —
+// o MESMO usado por 9D/9C/9E — para materializar o serviço da dívida como `FinancialObligation`
+// (origin=FUNDING, já existente) + `PayableAccount`/`PayableInstallment`. `FundingFinancialEvent`
+// é só a camada de idempotência/auditoria em cima desse port (mesmo papel de `LegalFinancialEvent`
+// sobre o mesmo port do lado Legal) — nunca cria payable diretamente.
+
+enum FundingProposalKind {
+  EQUITY_PROPRIO
+  INVESTIDOR
+  MUTUO
+  BANCO
+  FINANCIAMENTO_PRODUCAO
+  SBPE
+  FGTS
+  CRI
+  SECURITIZACAO
+  FUNDO
+  MEZANINO
+  PERMUTA_FINANCEIRA
+  PERMUTA_ECONOMICA
+  HIBRIDO
+  OUTRO
+}
+
+enum FundingIndexer {
+  CDI
+  IPCA
+  IGPM
+  TR
+  SELIC
+  PRE_FIXADO
+  OUTRO
+}
+
+enum FundingAmortizationSystem {
+  PRICE
+  SAC
+  BULLET
+}
+
+/**
+ * Hoje só MONTHLY é suportado pelo motor (`domain/capital/amortization.ts`). Os demais valores
+ * existem para registrar fielmente o que a proposta real diz — o schema de validação
+ * (`domain/capital/schemas.ts`) deve recusar qualquer valor != MONTHLY até o motor suportar
+ * outras periodicidades (gap explícito, não "inventar" um cálculo mensal sob rótulo trimestral).
+ */
+enum FundingPaymentFrequency {
+  MONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  ANNUAL
+  BULLET_AT_MATURITY
+}
+
+/**
+ * Mutável em DRAFT/SUBMITTED/UNDER_REVIEW. APPROVED congela os termos econômicos (ver
+ * `FundingProposal.version`/`previousVersionId`) — qualquer alteração relevante depois disso
+ * cria uma NOVA versão, nunca sobrescreve a linha aprovada.
+ */
+enum FundingProposalStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+  WITHDRAWN
+}
+
+enum FundingGuaranteeType {
+  GARANTIA_REAL
+  CESSAO_FIDUCIARIA
+  RECEBIVEIS
+  QUOTAS_ACOES
+  AVAL_FIANCA
+  CONTA_VINCULADA
+  OUTRA
+}
+
+enum FundingGuaranteeStatus {
+  PENDING
+  FORMALIZED
+  ACTIVE
+  RELEASED
+}
+
+enum FundingCovenantStatus {
+  OK
+  WARNING
+  BREACHED
+  WAIVED
+}
+
+enum FundingConditionCategory {
+  DOCUMENTO
+  LICENCA
+  REGISTRO
+  GARANTIA
+  SEGURO
+  APORTE
+  VENDA_MINIMA
+  OBRA_MINIMA
+  OUTRO
+}
+
+enum FundingConditionStatus {
+  PENDING
+  SATISFIED
+  WAIVED
+  REJECTED
+}
+
+/**
+ * Só DISBURSED pode ser somado como caixa realizado (`getCapitalNeedForProject`/`fundingDisbursed`
+ * deve filtrar `status: DISBURSED` e somar `actualAmount` — nunca `expectedAmount`).
+ */
+enum FundingDisbursementStatus {
+  PLANNED
+  REQUESTED
+  APPROVED
+  DISBURSED
+  CANCELLED
+}
+
+enum FundingFinancialEventStatus {
+  PENDING
+  PROCESSED
+  REVERSED
+  FAILED
+}
+
+model FundingProposal {
+  id                String              @id @default(cuid())
+  organizationId    String              @map("organization_id")
+  projectId         String              @map("project_id")
+  /**
+   * Identificador humano estável, único por projeto+versão — mesmo padrão de `LegalLicense.code`.
+   */
+  code              String
+  version           Int                 @default(1)
+  previousVersionId String?             @map("previous_version_id")
+  providerName      String              @map("provider_name")
+  kind              FundingProposalKind
+  amount            Decimal             @db.Decimal(20, 2)
+  currency          String              @default("BRL") @db.Char(3)
+
+  indexer             FundingIndexer
+  /**
+   * Spread contratual em pontos percentuais ao ano (ex.: 4.5000 = 4,5% a.a.). Convenção única do
+   * domínio inteiro (ver `domain/financial/math.ts#rate`): SEMPRE pontos percentuais 0–100,
+   * NUNCA fração (0–1) nem basis points — mesmo padrão de `taxRate`/`annualFinancingRate` da
+   * REDE Engine, para não repetir uma convenção divergente por campo.
+   */
+  spreadRate          Decimal        @map("spread_rate") @db.Decimal(8, 4)
+  /**
+   * Taxa do indexador capturada no momento do registro (ex.: CDI anual). Null quando indexer=PRE_FIXADO.
+   */
+  indexerRateSnapshot Decimal?       @map("indexer_rate_snapshot") @db.Decimal(8, 4)
+  /**
+   * `spreadRate + (indexerRateSnapshot ?? 0)`, calculado e congelado uma única vez no registro/
+   * aprovação — o motor (`buildDebtServiceSchedule`) sempre lê este campo, nunca recalcula a
+   * soma em tempo de leitura (evita deriva se o indexador se mover depois).
+   */
+  annualNominalRate   Decimal        @map("annual_nominal_rate") @db.Decimal(8, 4)
+
+  termMonths             Int                       @map("term_months")
+  graceMonths            Int                       @map("grace_months")
+  amortizationSystem     FundingAmortizationSystem @map("amortization_system")
+  paymentFrequency       FundingPaymentFrequency   @default(MONTHLY) @map("payment_frequency")
+  upfrontFeeRate         Decimal                   @default(0) @map("upfront_fee_rate") @db.Decimal(6, 4)
+  recurringFeeRateAnnual Decimal                   @default(0) @map("recurring_fee_rate_annual") @db.Decimal(6, 4)
+  /**
+   * IOF quando aplicável — pontos percentuais sobre o principal, cobrado junto ao desembolso.
+   * Mantido separado de `upfrontFeeRate` porque é um componente de custo nomeado e auditável à
+   * parte (regime tributário), não uma taxa de estruturação do financiador.
+   */
+  iofRate                Decimal?                  @map("iof_rate") @db.Decimal(6, 4)
+
+  disbursementSchedule Json?                 @map("disbursement_schedule")
+  validUntil           DateTime?             @map("valid_until") @db.Date
+  notes                String?               @db.Text
+  status               FundingProposalStatus @default(DRAFT)
+  submittedAt          DateTime?             @map("submitted_at")
+  /**
+   * Snapshot imutável do `ProposalComparisonResult` usado na decisão — mesmo espírito de `ProductDecisionRecord`.
+   */
+  decisionSnapshot     Json?                 @map("decision_snapshot")
+  decidedById          String?               @map("decided_by_id")
+  decidedAt            DateTime?             @map("decided_at")
+  rejectionReason      String?               @map("rejection_reason") @db.Text
+  createdById          String                @map("created_by_id")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+
+  organization    Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project         Project                 @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  previousVersion FundingProposal?        @relation("FundingProposalVersions", fields: [previousVersionId], references: [id], onDelete: Restrict)
+  nextVersions    FundingProposal[]       @relation("FundingProposalVersions")
+  guarantees      FundingGuarantee[]
+  covenants       FundingCovenant[]
+  conditions      FundingCondition[]
+  disbursements   FundingDisbursement[]
+  financialEvents FundingFinancialEvent[]
+
+  @@unique([projectId, code, version])
+  @@index([organizationId, projectId, status])
+  @@map("funding_proposals")
+}
+
+/**
+ * Cronograma de liberação. `expected*` é o planejado (nunca contado como caixa realizado) e nunca
+ * é somado como capital disponível. `status = DISBURSED` sozinho NÃO basta para contar como caixa
+ * real: só é permitido (regra de aplicação, a validar no serviço) quando `bankTransactionId`
+ * aponta para um `BankTransaction` com `direction = CREDIT` e `status = RECONCILED` — a MESMA
+ * tesouraria do 9B, nenhuma nova. `actualAmount`/`actualDate` são uma cópia (cache de leitura) do
+ * valor/data desse `BankTransaction` no momento da confirmação, nunca digitados à mão; a soma de
+ * "funding desembolsado" (`getCapitalNeedForProject`) deve ler a partir do `BankTransaction`
+ * vinculado (ou recusar a linha se ele não estiver `RECONCILED`), não confiar cegamente no cache.
+ * `@@unique` em `bankTransactionId` impede a mesma transação bancária virar dois desembolsos.
+ */
+model FundingDisbursement {
+  id                String                    @id @default(cuid())
+  proposalId        String                    @map("proposal_id")
+  sequence          Int
+  expectedDate      DateTime                  @map("expected_date") @db.Date
+  expectedAmount    Decimal                   @map("expected_amount") @db.Decimal(20, 2)
+  status            FundingDisbursementStatus @default(PLANNED)
+  requestedAt       DateTime?                 @map("requested_at")
+  approvedAt        DateTime?                 @map("approved_at")
+  /**
+   * Fato financeiro real que confirma o desembolso — mesma tesouraria do 9B, sem duplicar.
+   */
+  bankTransactionId String?                   @unique @map("bank_transaction_id")
+  actualDate        DateTime?                 @map("actual_date")
+  actualAmount      Decimal?                  @map("actual_amount") @db.Decimal(20, 2)
+  externalReference String?                   @map("external_reference")
+  createdById       String                    @map("created_by_id")
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
+
+  proposal        FundingProposal  @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  bankTransaction BankTransaction? @relation(fields: [bankTransactionId], references: [id], onDelete: Restrict)
+
+  @@unique([proposalId, sequence])
+  @@index([proposalId, status])
+  @@map("funding_disbursements")
+}
+
+/**
+ * Distinta de `LegalGuarantee` (que é hard-FK em `OperationalContract` — garantia de um contrato
+ * de fornecimento/obra, beneficiário é a própria SPE) — aqui o beneficiário é o financiador e o
+ * fato garante uma dívida, não a execução de um contrato de suprimentos. Semântica diferente,
+ * FK-pai diferente; reaproveitar exigiria tornar `contractId` opcional/polimórfico em 9D
+ * (redesenho vetado). Documentos/evidência apontam para `ProcurementDocumentLink` (já genérico,
+ * `entityType="FUNDING_GUARANTEE"`) em vez de duplicar armazenamento de arquivo.
+ */
+model FundingGuarantee {
+  id                  String                 @id @default(cuid())
+  proposalId          String                 @map("proposal_id")
+  type                FundingGuaranteeType
+  description         String                 @db.Text
+  amount              Decimal?               @db.Decimal(20, 2)
+  beneficiary         String?
+  status              FundingGuaranteeStatus @default(PENDING)
+  /**
+   * Ids de `ProcurementDocumentLink` (entityType="FUNDING_GUARANTEE", entityId=this.id) — nunca um arquivo novo.
+   */
+  evidenceDocumentIds Json?                  @map("evidence_document_ids")
+  createdById         String                 @map("created_by_id")
+  createdAt           DateTime               @default(now()) @map("created_at")
+  updatedAt           DateTime               @updatedAt @map("updated_at")
+
+  proposal FundingProposal @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+
+  @@index([proposalId, status])
+  @@map("funding_guarantees")
+}
+
+/**
+ * Sem equivalente em 9D (`LegalObligation` é prazo+valor regulatório; covenant é teste periódico
+ * de métrica/índice). `lastStatus/lastValue/lastCheckedAt` são um CACHE do teste mais recente
+ * para leitura rápida (dashboard) — o histórico completo e auditável vive em
+ * `FundingCovenantEvaluation` (necessário: um lender/auditor precisa ver TODOS os testes, não só
+ * o último; sobrescrever em linha perderia evidência de uma quebra passada já sanada).
+ */
+model FundingCovenant {
+  id                String                @id @default(cuid())
+  proposalId        String                @map("proposal_id")
+  code              String
+  description       String                @db.Text
+  metric            String
+  thresholdOperator String                @map("threshold_operator")
+  thresholdValue    String                @map("threshold_value")
+  periodicity       String                @map("periodicity")
+  nextTestDate      DateTime?             @map("next_test_date") @db.Date
+  status            FundingCovenantStatus @default(OK)
+  lastCheckedAt     DateTime?             @map("last_checked_at")
+  lastValue         String?               @map("last_value")
+  createdById       String                @map("created_by_id")
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+
+  proposal    FundingProposal             @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  evaluations FundingCovenantEvaluation[]
+
+  @@unique([proposalId, code])
+  @@index([proposalId, status, nextTestDate])
+  @@map("funding_covenants")
+}
+
+/**
+ * Um registro por teste de covenant — histórico imutável (nunca update, só insert).
+ */
+model FundingCovenantEvaluation {
+  id            String                @id @default(cuid())
+  covenantId    String                @map("covenant_id")
+  testedAt      DateTime              @map("tested_at") @db.Date
+  observedValue String                @map("observed_value")
+  result        FundingCovenantStatus
+  evidence      Json?
+  testedById    String                @map("tested_by_id")
+  createdAt     DateTime              @default(now()) @map("created_at")
+
+  covenant FundingCovenant @relation(fields: [covenantId], references: [id], onDelete: Restrict)
+
+  @@unique([covenantId, testedAt])
+  @@index([covenantId, result])
+  @@map("funding_covenant_evaluations")
+}
+
+/**
+ * Distinta de `LegalContractCondition` (hard-FK em `OperationalContract`) e de
+ * `InvestmentCondition` (hard-FK em `InvestmentCase`, condição de decisão do Comitê — pode nem
+ * existir para o projeto, ou ser sobre outro assunto). Uma condição precedente de crédito é da
+ * PROPOSTA de financiamento, que pode existir sem nenhuma das outras duas. Quando a condição É
+ * literalmente algo já rastreado na 9D (ex.: "obter esta licença", "quitar esta obrigação legal"),
+ * `sourceType`/`sourceId` apontam para lá — mesmo padrão polimórfico de
+ * `LegalTimelineEvent.sourceType/sourceId` — em vez de duplicar o registro.
+ */
+model FundingCondition {
+  id            String                   @id @default(cuid())
+  proposalId    String                   @map("proposal_id")
+  code          String
+  category      FundingConditionCategory
+  description   String                   @db.Text
+  status        FundingConditionStatus   @default(PENDING)
+  dueAt         DateTime?                @map("due_at") @db.Date
+  responsibleId String?                  @map("responsible_id")
+  /**
+   * Ex.: "LEGAL_LICENSE"/"LEGAL_OBLIGATION"/"LEGAL_AUTHORITY_PROCESS" + id — opcional, só quando a 9D já rastreia o mesmo fato.
+   */
+  sourceType    String?                  @map("source_type")
+  sourceId      String?                  @map("source_id")
+  evidence      Json?
+  satisfiedAt   DateTime?                @map("satisfied_at")
+  createdById   String                   @map("created_by_id")
+  updatedById   String                   @map("updated_by_id")
+  createdAt     DateTime                 @default(now()) @map("created_at")
+  updatedAt     DateTime                 @updatedAt @map("updated_at")
+
+  proposal FundingProposal @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+
+  @@unique([proposalId, code])
+  @@index([proposalId, status, dueAt])
+  @@map("funding_conditions")
+}
+
+/**
+ * Ponte idempotente Funding→Financeiro — só isso. NÃO recria a lógica de contas a
+ * pagar/pagamento: chama `createExternalPayableObligation` (`application/financial-ops/
+ * external-obligation-port.ts`), o MESMO port que 9C/9D/9E já usam, que por sua vez cria
+ * `FinancialObligation` (origin=FUNDING, já existente no schema) + `PayableAccount` +
+ * `PayableInstallment` — dali em diante o ciclo de vida é 100% o já existente do 9B
+ * (`transitionPayableInstallment`/`registerPayablePayment`). O desembolso (entrada de caixa) NÃO
+ * passa por aqui: é o `FundingDisbursement.bankTransactionId` (9B genérico).
+ * `scheduleVersion` e `installmentNumber` são conceitos SEPARADOS (não um `sourceVersion` só):
+ * `installmentNumber` é a posição da parcela na vida do empréstimo (1..N, estável — a parcela #7
+ * continua sendo a #7 depois de um reschedule); `scheduleVersion` é a versão do cronograma inteiro
+ * (incrementa quando o cronograma é regerado — mudança de taxa, desembolso adicional, etc.).
+ * `eventType` esperado: `DEBT_SERVICE_INSTALLMENT_SCHEDULED` (uma linha por parcela futura do
+ * cronograma vigente) e `DEBT_SERVICE_INSTALLMENT_REVISED` (quando o cronograma é regerado).
+ * Reschedule (`scheduleVersion` N → N+1): para cada `installmentNumber` do cronograma N cujo
+ * `PayableInstallment` ainda está em aberto (não pago), reverte o evento N via
+ * `reverseExternalPayableObligation` (mesma disciplina de `reverseLegalFinancialEvent`) e cria um
+ * NOVO evento com `scheduleVersion=N+1`, MESMO `installmentNumber` — nunca uma linha in-place.
+ * Parcelas já pagas na versão N ficam de fora do reschedule (o próprio port se recusa a reverter
+ * uma obrigação com pagamento efetivo — `hasEffectivePayment` em `external-obligation-port.ts`) e
+ * seu evento N permanece como histórico imutável. `@@unique([proposalId, eventType,
+ * scheduleVersion, installmentNumber])` garante zero colisão entre versões e zero dupla obrigação
+ * (nunca duas linhas ativas para a mesma parcela).
+ */
+model FundingFinancialEvent {
+  id                    String                      @id @default(cuid())
+  organizationId        String                      @map("organization_id")
+  projectId             String                      @map("project_id")
+  proposalId            String                      @map("proposal_id")
+  scheduleVersion       Int                         @default(1) @map("schedule_version")
+  installmentNumber     Int                         @map("installment_number")
+  financialObligationId String?                     @map("financial_obligation_id")
+  payableAccountId      String?                     @map("payable_account_id")
+  eventType             String                      @map("event_type")
+  idempotencyKey        String                      @unique @map("idempotency_key")
+  payloadChecksum       String                      @map("payload_checksum")
+  payload               Json
+  status                FundingFinancialEventStatus @default(PENDING)
+  processedAt           DateTime?                   @map("processed_at")
+  reversedAt            DateTime?                   @map("reversed_at")
+  lastError             String?                     @map("last_error") @db.Text
+  createdById           String                      @map("created_by_id")
+  createdAt             DateTime                    @default(now()) @map("created_at")
+  updatedAt             DateTime                    @updatedAt @map("updated_at")
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project      Project         @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  proposal     FundingProposal @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+
+  @@unique([proposalId, eventType, scheduleVersion, installmentNumber])
+  @@index([organizationId, projectId, status])
+  @@index([proposalId, installmentNumber])
+  @@map("funding_financial_events")
 }

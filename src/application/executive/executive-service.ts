@@ -13,12 +13,14 @@
 import type { AuthContext } from "@/application/auth/session";
 import { prisma } from "@/infrastructure/database/prisma";
 import { getOperationsWorkspace } from "@/application/operations/operations-service";
+import { getCapitalNeedForProject } from "@/application/capital/capital-queries";
 import { getLatestStudyForProject } from "@/application/studies/study-service";
 import { calculateAllScenarios } from "@/domain/financial/engine";
 import { analyzeRisk } from "@/domain/risk/rules";
 import {
   buildApprovalExceptions,
   buildBudgetVarianceExceptions,
+  buildCapitalExceptions,
   buildCommercialClosingExceptions,
   buildFinancialExceptions,
   buildIntegrationExceptions,
@@ -35,6 +37,7 @@ import { latestTimestamp, resolveDomainFreshness, type DomainFreshness } from "@
 import type { OperationalContext } from "@/application/workspace/operational-context";
 import {
   queryAccountingSignal,
+  queryCapitalSignals,
   queryFinancialSignals,
   queryIntegrationSignals,
   queryLegalSignals,
@@ -107,6 +110,7 @@ export interface ExecutiveProjectKpis {
   legal?: { obligationsAtRisk: number; licensesAtRisk: number };
   accounting?: { referenceMonth: string; status: string } | null;
   integrations?: { criticalInstallations: number; attentionInstallations: number; expiringCredentials: number };
+  capital?: { fundingNecessario: number; fundingContratado: number; covenantsEmRisco: number; condicoesPendentes: number };
 }
 
 export interface ExecutiveProjectOverview {
@@ -157,7 +161,7 @@ async function computeWhatChanged(organizationId: string, projectId: string, ref
  * descartada depois). `operations`/`study` (Viabilidade) não têm gate nesta sprint.
  */
 async function loadProjectSignals(organizationId: string, project: ExecutiveProjectRef, referenceDate: Date, authorized: Set<ExecutiveDomain>) {
-  const [legal, financial, sales, procurement, operations, accounting, study, studyUpdatedAt] = await Promise.all([
+  const [legal, financial, sales, procurement, operations, accounting, study, studyUpdatedAt, capital] = await Promise.all([
     authorized.has("legal") ? queryLegalSignals(organizationId, project.id) : Promise.resolve(null),
     authorized.has("financial") ? queryFinancialSignals(organizationId, project.id, project.companyId, referenceDate) : Promise.resolve(null),
     authorized.has("sales") ? querySalesSignals(organizationId, project.id, referenceDate) : Promise.resolve(null),
@@ -166,13 +170,15 @@ async function loadProjectSignals(organizationId: string, project: ExecutiveProj
     authorized.has("accounting") ? queryAccountingSignal(organizationId, project.companyId) : Promise.resolve(null),
     getLatestStudyForProject(organizationId, project.id),
     queryStudyUpdatedAt(organizationId, project.id),
+    authorized.has("capital") ? queryCapitalSignals(organizationId, project.id) : Promise.resolve(null),
   ]);
-  return { legal, financial, sales, procurement, operations, accounting, study, studyUpdatedAt };
+  return { legal, financial, sales, procurement, operations, accounting, study, studyUpdatedAt, capital };
 }
 
 /** Núcleo por-projeto (sem integrações/aprovações — organizacionais, buscadas uma única vez pelo chamador). */
 async function buildProjectExceptionsAndKpis(organizationId: string, project: ExecutiveProjectRef, referenceDate: Date, authorized: Set<ExecutiveDomain>) {
-  const { legal, financial, sales, procurement, operations, accounting, study, studyUpdatedAt } = await loadProjectSignals(organizationId, project, referenceDate, authorized);
+  const { legal, financial, sales, procurement, operations, accounting, study, studyUpdatedAt, capital } = await loadProjectSignals(organizationId, project, referenceDate, authorized);
+  const capitalNeed = authorized.has("capital") ? await getCapitalNeedForProject({ organizationId }, project.id) : null;
 
   const ctx: ExceptionTenantContext = {
     organizationId,
@@ -190,6 +196,7 @@ async function buildProjectExceptionsAndKpis(organizationId: string, project: Ex
     exceptions.push(...buildCommercialClosingExceptions(ctx, sales, referenceDate));
   }
   if (authorized.has("procurement") && procurement) exceptions.push(...buildProcurementExceptions(ctx, procurement.needs, referenceDate));
+  if (authorized.has("capital") && capital) exceptions.push(...buildCapitalExceptions(ctx, capital.conditions, capital.covenants, capital.disbursements, capital.proposalsAwaitingDecision, referenceDate));
 
   let viability: ExecutiveViabilityKpis | null = null;
   if (study) {
@@ -223,6 +230,9 @@ async function buildProjectExceptionsAndKpis(organizationId: string, project: Ex
   if (authorized.has("procurement") && procurement) kpis.procurement = { criticalPurchases: procurement.needs.length, pendingMeasurements: procurement.pendingMeasurements };
   if (authorized.has("legal") && legal) kpis.legal = { obligationsAtRisk: legal.obligations.length, licensesAtRisk: legal.licenses.length };
   if (authorized.has("accounting")) kpis.accounting = accounting ? { referenceMonth: accounting.referenceMonth.toISOString().slice(0, 7), status: accounting.status } : null;
+  if (authorized.has("capital") && capital && capitalNeed) {
+    kpis.capital = { fundingNecessario: Number(capitalNeed.fundingStillNeeded), fundingContratado: capital.fundingContratado, covenantsEmRisco: capital.covenants.length, condicoesPendentes: capital.conditions.length };
+  }
 
   // Gate 3 do fechamento da 9K.2 (freshness real): timestamp real quando existir na própria
   // consulta já feita (nunca uma consulta nova só para isso); "queried_now" só para agregados ao
@@ -238,6 +248,7 @@ async function buildProjectExceptionsAndKpis(organizationId: string, project: Ex
   if (authorized.has("procurement") && procurement) freshnessByDomain.procurement = resolveDomainFreshness(procurement.latestUpdatedAt, referenceDate, true);
   if (authorized.has("legal") && legal) freshnessByDomain.legal = resolveDomainFreshness(legal.latestUpdatedAt, referenceDate, true);
   if (authorized.has("accounting")) freshnessByDomain.accounting = resolveDomainFreshness(accounting?.updatedAt ?? null, referenceDate, Boolean(project.companyId));
+  if (authorized.has("capital") && capital) freshnessByDomain.capital = resolveDomainFreshness(capital.latestUpdatedAt, referenceDate, true);
 
   return { exceptions, kpis, freshnessByDomain };
 }
@@ -282,6 +293,7 @@ export async function getExecutiveProjectOverview(authContext: Pick<AuthContext,
     accounting: { label: "Contabilidade", source: "REDE" },
     integrations: { label: "Integrações", source: "Conectores externos (ver cada item)" },
     approvals: { label: "Decisões", source: "REDE" },
+    capital: { label: "Capital & Funding", source: "REDE" },
   };
 
   // Gate 2 + gate 3: só entram no payload os domínios autorizados (§2), e cada um carrega a
