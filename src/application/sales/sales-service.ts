@@ -617,12 +617,13 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
     },
     units: units.map((unit) => ({ id: unit.id, code: unit.code, floor: unit.floor, typology: unit.typology, privateAreaM2: Number(unit.privateAreaM2), status: unit.status, listPrice: activeLineByUnit.get(unit.id) ? Number(activeLineByUnit.get(unit.id)!.listPrice) : null, pricePerM2: activeLineByUnit.get(unit.id) ? Number(engine.pricePerM2(activeLineByUnit.get(unit.id)!.listPrice, unit.privateAreaM2)) : null, activeBlock: unit.blocks[0] ? { origin: unit.blocks[0].origin, reason: unit.blocks[0].reason } : null })),
     priceTables: priceTables.map((table) => ({ id: table.id, version: table.version, status: table.status, validFrom: table.validFrom.toISOString(), lines: table.lines.length })),
-    proposals: proposals.map((proposal) => ({ id: proposal.id, unit: proposal.salesUnit.code, customer: proposal.customer.name, broker: proposal.broker?.name ?? null, proposedPrice: Number(proposal.proposedPrice), discountAmount: Number(proposal.discountAmount), validUntil: proposal.validUntil.toISOString(), status: proposal.status, creditConsultation: proposal.creditBureauConsultations[0] ? { status: proposal.creditBureauConsultations[0].status, result: proposal.creditBureauConsultations[0].result, cpfMasked: proposal.creditBureauConsultations[0].cpfMasked, requestedAt: proposal.creditBureauConsultations[0].requestedAt.toISOString() } : null })),
-    reservations: reservations.map((reservation) => ({ id: reservation.id, unit: reservation.salesUnit.code, customer: reservation.customer.name, expiresAt: reservation.expiresAt.toISOString(), status: reservation.status, expired: engine.isReservationExpired(reservation.expiresAt, reservation.status, referenceDate) })),
+    proposals: proposals.map((proposal) => ({ id: proposal.id, unit: proposal.salesUnit.code, customer: proposal.customer.name, customerId: proposal.customerId, broker: proposal.broker?.name ?? null, proposedPrice: Number(proposal.proposedPrice), discountAmount: Number(proposal.discountAmount), validUntil: proposal.validUntil.toISOString(), status: proposal.status, creditConsultation: proposal.creditBureauConsultations[0] ? { status: proposal.creditBureauConsultations[0].status, result: proposal.creditBureauConsultations[0].result, cpfMasked: proposal.creditBureauConsultations[0].cpfMasked, requestedAt: proposal.creditBureauConsultations[0].requestedAt.toISOString() } : null })),
+    reservations: reservations.map((reservation) => ({ id: reservation.id, unit: reservation.salesUnit.code, customer: reservation.customer.name, customerId: reservation.customerId, expiresAt: reservation.expiresAt.toISOString(), status: reservation.status, expired: engine.isReservationExpired(reservation.expiresAt, reservation.status, referenceDate) })),
     sales: sales.map((sale) => {
       const signatureRequest = sale.contract?.signatureRequests[0] ?? null;
+      const buyer = sale.parties.find((party) => party.role === "BUYER") ?? sale.parties[0] ?? null;
       return {
-        id: sale.id, unit: sale.salesUnit.code, buyers: sale.parties.map((party) => party.customer.name), broker: sale.broker?.name ?? null, soldPrice: Number(sale.soldPrice), discountAmount: Number(sale.discountAmount), status: sale.status,
+        id: sale.id, unit: sale.salesUnit.code, buyers: sale.parties.map((party) => party.customer.name), buyerCustomerId: buyer?.customerId ?? null, broker: sale.broker?.name ?? null, soldPrice: Number(sale.soldPrice), discountAmount: Number(sale.discountAmount), status: sale.status,
         contractId: sale.contract?.id ?? null, contractNumber: sale.contract?.number ?? null, contractDocuments: sale.contract?.documents.map((doc) => ({ id: doc.id, kind: doc.kind, status: doc.status, version: doc.version, fileName: doc.fileName })) ?? [],
         signatureStatus: sale.contract?.signatureStatus ?? null,
         signatureRequest: signatureRequest ? { id: signatureRequest.id, status: signatureRequest.status, provider: signatureRequest.provider, signedCount: signatureRequest.parties.filter((party) => party.status === "SIGNED").length, totalParties: signatureRequest.parties.length } : null,
@@ -633,10 +634,32 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
     commissionPolicies: commissionPolicies.map((policy) => ({ id: policy.id, triggerEvent: policy.triggerEvent, percentage: Number(policy.percentage), basis: policy.basis })),
     commissions: sales.flatMap((sale) => sale.commissions.map((commission) => ({ id: commission.id, sale: sale.id, broker: commission.broker.name, amount: Number(commission.amount), status: commission.status }))),
     inspections: inspections.map((inspection) => ({ id: inspection.id, unit: inspection.salesUnit.code, scheduledAt: inspection.scheduledAt.toISOString(), outcome: inspection.outcome })),
-    postSaleRequests: postSaleRequests.map((request) => ({ id: request.id, unit: request.salesUnit.code, customer: request.customer.name, category: request.category, status: request.status, updates: request.updates.length })),
+    postSaleRequests: postSaleRequests.map((request) => ({ id: request.id, unit: request.salesUnit.code, customer: request.customer.name, customerId: request.customerId, category: request.category, status: request.status, updates: request.updates.length })),
     brokers: brokerProfiles.map((profile) => ({ id: profile.id, name: profile.supplier.name, creci: profile.creci, defaultCommissionRate: profile.defaultCommissionRate ? Number(profile.defaultCommissionRate) : null })),
     contractTemplates: contractTemplates.map((template) => ({ id: template.id, name: template.name, status: template.status, versions: template.versions.map((version) => ({ id: version.id, version: version.version, status: version.status })) })),
+    // Entrada para o Cliente 360 (Fase 9K.4B, item 1) — nenhum dado novo: só agrupa por cliente o
+    // que este mesmo workspace já buscou (propostas/reservas/vendas/pós-venda), sem consulta extra.
+    customers: buildCustomerSummaries(proposals, reservations, sales, postSaleRequests),
   };
+}
+
+function buildCustomerSummaries(
+  proposals: { customerId: string; customer: { name: string } }[],
+  reservations: { customerId: string; customer: { name: string } }[],
+  sales: { parties: { customerId: string; role: string; customer: { name: string } }[] }[],
+  postSaleRequests: { customerId: string; customer: { name: string } }[],
+) {
+  const summaries = new Map<string, { id: string; name: string; proposals: number; reservations: number; sales: number; postSaleRequests: number }>();
+  const touch = (id: string, name: string, field: "proposals" | "reservations" | "sales" | "postSaleRequests") => {
+    const entry = summaries.get(id) ?? { id, name, proposals: 0, reservations: 0, sales: 0, postSaleRequests: 0 };
+    entry[field] += 1;
+    summaries.set(id, entry);
+  };
+  for (const proposal of proposals) touch(proposal.customerId, proposal.customer.name, "proposals");
+  for (const reservation of reservations) touch(reservation.customerId, reservation.customer.name, "reservations");
+  for (const sale of sales) { const buyer = sale.parties.find((party) => party.role === "BUYER") ?? sale.parties[0]; if (buyer) touch(buyer.customerId, buyer.customer.name, "sales"); }
+  for (const request of postSaleRequests) touch(request.customerId, request.customer.name, "postSaleRequests");
+  return [...summaries.values()].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 }
 
 export type SalesWorkspaceView = Awaited<ReturnType<typeof getSalesWorkspace>>;

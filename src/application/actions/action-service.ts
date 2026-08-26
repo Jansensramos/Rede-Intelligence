@@ -39,8 +39,8 @@ export interface ActionCenterOverview {
   responsibleNames: Record<string, string>;
 }
 
-/** Resolve nome de exibição só para os `responsibleId` realmente presentes nas exceções desta leitura — uma única consulta enxuta, nunca a lista de membros da organização inteira. */
-async function resolveResponsibleNames(exceptions: ExecutiveException[]): Promise<Record<string, string>> {
+/** Resolve nome de exibição só para os `responsibleId` realmente presentes nas exceções desta leitura — uma única consulta enxuta, nunca a lista de membros da organização inteira. Exportada para reuso pelo Cliente 360 (Fase 9K.4B) — mesmo padrão, não um segundo resolvedor. */
+export async function resolveResponsibleNames(exceptions: ExecutiveException[]): Promise<Record<string, string>> {
   const ids = [...new Set(exceptions.map((item) => item.responsibleId).filter((id): id is string => Boolean(id)))];
   if (ids.length === 0) return {};
   const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
