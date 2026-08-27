@@ -145,6 +145,30 @@ export function GestaoExecutivaView({
       </section>
 
       <section>
+        <SectionTitle
+          eyebrow="OPERAÇÃO DE HOJE"
+          title="Exceções que exigem atenção agora"
+          description={`${overview.operationToday.summary.criticalActions} crítica(s) · ${overview.operationToday.summary.overdueActions} vencida(s) · ${overview.operationToday.summary.pendingApprovals} decisão(ões) pendente(s) · ${overview.operationToday.changedLast24h} mudança(s) nas últimas 24h.`}
+        />
+        {overview.operationToday.items.length === 0 ? (
+          <EmptyState icon={BadgeCheck} title="Operação sob controle" description="Nenhuma exceção crítica, vencida ou decisão pendente no momento." />
+        ) : (
+          <div className="ds-exception-list">
+            {overview.operationToday.items.map((action) => (
+              <button key={action.id} className="ds-exception-row" type="button" onClick={() => router.push(action.href)}>
+                <SeverityBadge severity={action.severity} />
+                <span>
+                  <strong>{action.title}</strong>
+                  <span className="ds-exception-row-summary">Próximo passo: {action.nextStep.what}</span>
+                </span>
+                <ArrowRight size={16} />
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section>
         <SectionTitle eyebrow="PRIORIDADE" title="O que precisa da sua atenção agora" description="Consolidado dos módulos operacionais, ordenado por severidade e materialidade — não é uma segunda fonte de dado, cada item aponta para o registro original." />
         {overview.exceptions.length === 0 ? (
           <EmptyState icon={BadgeCheck} title="Nenhuma exceção relevante agora" description="Com os dados e a política de materialidade atuais da organização, nenhum item cruzou o limiar de atenção executiva." />
@@ -204,7 +228,7 @@ export function GestaoExecutivaView({
       <DecisionInsightsPanel insights={insights} simulableUnits={simulableUnits} />
 
       <section>
-        <SectionTitle eyebrow="DESDE A ÚLTIMA JANELA" title={`O que mudou nos últimos ${overview.windowDays} dias`} description="Janela fixa e determinística — este contexto ainda não persiste 'última visita' por usuário (ver relatório de entrega da 9K.2)." />
+        <SectionTitle eyebrow="LINHA DO TEMPO OPERACIONAL" title={`O que mudou nos últimos ${overview.windowDays} dias`} description="Eventos reais da trilha de auditoria, com origem e horário. O antes/depois só aparece quando a fonte o registrou." />
         {overview.whatChanged.length === 0 ? (
           <EmptyState title="Nenhuma mudança relevante na janela" description={`Nenhuma venda, obrigação, conta ou licença nova nos últimos ${overview.windowDays} dias.`} />
         ) : (
@@ -212,7 +236,8 @@ export function GestaoExecutivaView({
             {overview.whatChanged.map((item) => (
               <button key={item.id} className="ds-whatchanged-item" type="button" onClick={() => router.push(item.href)} style={{ textAlign: "left", cursor: "pointer" }}>
                 <strong>{item.label}</strong>
-                {item.detail}
+                <span>{item.detail} {new Date(item.occurredAt).toLocaleString("pt-BR")} · {item.source}</span>
+                {item.beforeAfter && <span>{item.beforeAfter}</span>}
               </button>
             ))}
           </div>

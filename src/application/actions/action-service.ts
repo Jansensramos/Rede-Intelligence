@@ -16,6 +16,7 @@ import { authorizedExecutiveDomains } from "@/domain/workspace/executive-capabil
 import { buildResolvedApprovalExceptions, buildResolvedFinancialExceptions, buildResolvedLegalExceptions } from "@/domain/workspace/resolved-actions";
 import type { ExceptionTenantContext } from "@/domain/workspace/exception-builders";
 import type { ExecutiveDomain, ExecutiveException } from "@/domain/workspace/exceptions";
+import { buildDailyOperationalSummary, deriveOperationalActions, type DailyOperationalSummary, type OperationalAction } from "@/domain/workspace/operational-live";
 import { queryResolvedApprovals, queryResolvedFinancialSignals, queryResolvedLegalSignals } from "./action-queries";
 
 /** "Recentemente concluída" — janela fixa e documentada, mesma filosofia de `WHAT_CHANGED_WINDOW_DAYS` (executive-service.ts): sem "última visita" persistida nesta sprint. */
@@ -27,9 +28,11 @@ export interface ActionCenterOverview {
   /** Domínios que o papel do usuário está autorizado a ver (gate 2, mesmo mecanismo da Gestão Executiva). */
   authorizedDomains: ExecutiveDomain[];
   /** ABERTA — mesma lista, mesma ordenação de RBAC de `getExecutiveOpenExceptions`. */
-  openActions: ExecutiveException[];
+  openActions: OperationalAction[];
   /** RESOLVIDA — recentemente concluídas dentro de `RECENTLY_RESOLVED_WINDOW_DAYS`. */
-  resolvedActions: ExecutiveException[];
+  resolvedActions: OperationalAction[];
+  /** Resumo determinístico do dia; não depende de IA. */
+  dailySummary: DailyOperationalSummary;
   /**
    * Nome de exibição por `responsibleId` (só os ids que de fato aparecem em `openActions`/
    * `resolvedActions` — nunca a organização inteira, para não virar uma segunda forma de carregar
@@ -78,14 +81,17 @@ export async function getActionCenterOverview(authContext: Pick<AuthContext, "or
     getExecutiveOpenExceptions(authContext, project, referenceDate),
     loadResolvedActions(organizationId, project, windowStart, authorized),
   ]);
-  const responsibleNames = await resolveResponsibleNames([...exceptions, ...resolvedActions]);
+  const openActions = deriveOperationalActions(exceptions);
+  const completedActions = deriveOperationalActions(resolvedActions);
+  const responsibleNames = await resolveResponsibleNames([...openActions, ...completedActions]);
 
   return {
     project,
     generatedAt: referenceDate.toISOString(),
     authorizedDomains,
-    openActions: exceptions,
-    resolvedActions,
+    openActions,
+    resolvedActions: completedActions,
+    dailySummary: buildDailyOperationalSummary(openActions, referenceDate),
     responsibleNames,
   };
 }

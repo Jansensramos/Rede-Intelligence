@@ -11,6 +11,7 @@
  *    alfabeticamente (ordem de serviço §8).
  */
 import type { AuthContext } from "@/application/auth/session";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/infrastructure/database/prisma";
 import { getOperationsWorkspace } from "@/application/operations/operations-service";
 import { getCapitalExecutiveSummary } from "@/application/capital/capital-queries";
@@ -26,6 +27,7 @@ import {
   buildIntegrationExceptions,
   buildLegalExceptions,
   buildProcurementExceptions,
+  buildPendingMeasurementExceptions,
   buildSalesExceptions,
   buildViabilityExceptions,
   type ExceptionTenantContext,
@@ -34,6 +36,7 @@ import { sortExceptionsByPriority, summarizeExceptionsBySeverity, highestSeverit
 import { CANONICAL_SEVERITY_ORDER, type CanonicalSeverity } from "@/domain/workspace/severity";
 import { authorizedExecutiveDomains } from "@/domain/workspace/executive-capabilities";
 import { latestTimestamp, resolveDomainFreshness, type DomainFreshness } from "@/domain/workspace/freshness";
+import { buildDailyOperationalSummary, deriveOperationalActions, type DailyOperationalSummary, type OperationalAction } from "@/domain/workspace/operational-live";
 import type { OperationalContext } from "@/application/workspace/operational-context";
 import {
   queryAccountingSignal,
@@ -49,9 +52,6 @@ import {
 
 /** Janela determinística de "O que mudou" (ordem de serviço §9): sem `lastSeenAt` persistido nesta sprint, a comparação usa uma janela fixa e documentada. */
 export const WHAT_CHANGED_WINDOW_DAYS = 7;
-/** Janela de "licença entrando em D-N" (regra fixa, não é diff — ordem de serviço §9, exemplo "licença entra em D-14"). */
-const LICENSE_HORIZON_DAYS = 14;
-
 export interface ExecutiveProjectRef {
   id: string;
   name: string;
@@ -67,8 +67,13 @@ export interface WhatChangedItem {
   id: string;
   label: string;
   detail: string;
-  domain: string;
+  domain: ExecutiveDomain;
   href: string;
+  occurredAt: string;
+  sourceType: string;
+  sourceId: string;
+  source: string;
+  beforeAfter?: string;
 }
 
 /**
@@ -131,6 +136,12 @@ export interface ExecutiveProjectOverview {
   exceptions: ExecutiveException[];
   attentionSummary: Record<CanonicalSeverity, number>;
   whatChanged: WhatChangedItem[];
+  operationToday: {
+    summary: DailyOperationalSummary;
+    items: OperationalAction[];
+    changedLast24h: number;
+    materialImpacts: number;
+  };
   kpis: ExecutiveProjectKpis;
   freshness: ExecutiveFreshnessEntry[];
 }
@@ -141,27 +152,92 @@ function sumBalance(items: { balance: number }[]) {
 
 async function computeWhatChanged(organizationId: string, projectId: string, referenceDate: Date, authorized: Set<ExecutiveDomain>): Promise<WhatChangedItem[]> {
   const windowStart = new Date(referenceDate.getTime() - WHAT_CHANGED_WINDOW_DAYS * 86_400_000);
-  const licenseHorizon = new Date(referenceDate.getTime() + LICENSE_HORIZON_DAYS * 86_400_000);
-  // Gate 2 do fechamento da 9K.2: quando o papel não tem a capacidade do domínio, a consulta nem
-  // dispara (placeholder resolvido localmente) — nunca é só filtrada depois de buscada.
-  const [newSales, newObligations, newPayables, enteringLicenses] = await Promise.all([
-    authorized.has("sales") ? prisma.sale.count({ where: { organizationId, projectId, status: "APPROVED", approvedAt: { gte: windowStart } } }) : Promise.resolve(0),
-    authorized.has("legal") ? prisma.legalObligation.count({ where: { organizationId, projectId, createdAt: { gte: windowStart } } }) : Promise.resolve(0),
-    authorized.has("financial") ? prisma.payableInstallment.count({ where: { payableAccount: { organizationId, projectId }, createdAt: { gte: windowStart } } }) : Promise.resolve(0),
-    authorized.has("legal")
-      ? prisma.legalLicense.findMany({ where: { organizationId, projectId, expiresAt: { gte: referenceDate, lte: licenseHorizon } }, select: { id: true, title: true, expiresAt: true }, take: 10 })
-      : Promise.resolve([]),
-  ]);
+  const rules: Array<{ domain: ExecutiveDomain; prefixes: string[]; href: string }> = [
+    { domain: "financial", prefixes: ["PAYABLE_", "RECEIVABLE_", "BANK_", "FINANCIAL_"], href: "/financeiro" },
+    { domain: "sales", prefixes: ["SALE_", "SALES_", "SIGNATURE_", "CREDIT_"], href: "/comercial" },
+    { domain: "procurement", prefixes: ["PROCUREMENT_", "PURCHASE_", "MEASUREMENT_", "SUPPLIER_", "CONTRACT_"], href: "/suprimentos" },
+    { domain: "legal", prefixes: ["LEGAL_", "LICENSE_", "OBLIGATION_"], href: "/juridico" },
+    { domain: "capital", prefixes: ["FUNDING_"], href: "/capital-funding" },
+    { domain: "operations", prefixes: ["BUDGET_", "SCHEDULE_", "OPERATIONAL_"], href: "/engenharia-obra" },
+    { domain: "accounting", prefixes: ["ACCOUNTING_", "TAX_"], href: "/contabilidade-controladoria" },
+    { domain: "integrations", prefixes: ["INTEGRATION_", "API_", "CONNECTOR_"], href: "/integracoes" },
+    { domain: "viability", prefixes: ["STUDY_", "CALCULATION_", "SCENARIO_"], href: "/viabilidade" },
+    { domain: "approvals", prefixes: ["APPROVAL_"], href: "/acoes" },
+  ];
+  const allowed = rules.filter((rule) => authorized.has(rule.domain));
+  const actionFilters: Prisma.AuditLogWhereInput[] = allowed.flatMap((rule) => rule.prefixes.map((prefix) => ({ action: { startsWith: prefix } })));
+  if (actionFilters.length === 0) return [];
 
-  const items: WhatChangedItem[] = [];
-  if (newSales > 0) items.push({ id: "sales:new", label: `${newSales} nova(s) venda(s) aprovada(s)`, detail: `Nos últimos ${WHAT_CHANGED_WINDOW_DAYS} dias.`, domain: "sales", href: "/comercial" });
-  if (newObligations > 0) items.push({ id: "legal:new-obligations", label: `${newObligations} nova(s) obrigação(ões) jurídica(s)`, detail: `Cadastradas nos últimos ${WHAT_CHANGED_WINDOW_DAYS} dias.`, domain: "legal", href: "/juridico" });
-  if (newPayables > 0) items.push({ id: "financial:new-payables", label: `${newPayables} nova(s) conta(s) a pagar`, detail: `Lançadas nos últimos ${WHAT_CHANGED_WINDOW_DAYS} dias.`, domain: "financial", href: "/financeiro" });
-  for (const license of enteringLicenses) {
-    const days = Math.round((license.expiresAt!.getTime() - referenceDate.getTime()) / 86_400_000);
-    items.push({ id: `legal:license:${license.id}`, label: `Licença "${license.title}" entra em D-${days}`, detail: "Regra de janela fixa, não depende de última visita.", domain: "legal", href: "/juridico" });
-  }
-  return items;
+  const logs = await prisma.auditLog.findMany({
+    where: { organizationId, projectId, createdAt: { gte: windowStart }, OR: actionFilters },
+    select: { id: true, action: true, entityType: true, entityId: true, before: true, after: true, createdAt: true, user: { select: { name: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+
+  const entityLabels: Record<string, string> = {
+    PayableAccount: "Conta a pagar", ReceivableAccount: "Conta a receber", Sale: "Venda", LegalObligation: "Obrigação",
+    LegalLicense: "Licença", ProcurementNeed: "Necessidade de compra", PurchaseOrder: "Pedido de compra",
+    MeasurementCertificate: "Medição", FundingProposal: "Proposta de financiamento", FundingDisbursement: "Desembolso",
+    FundingCondition: "Condição de financiamento", Budget: "Orçamento", OperationalSchedule: "Cronograma", ApprovalRequest: "Aprovação",
+  };
+  const statusLabels: Record<string, string> = { PENDING: "Pendente", APPROVED: "Aprovado", REJECTED: "Rejeitado", COMPLETED: "Concluído", PAID: "Pago", RECEIVED: "Recebido", DRAFT: "Rascunho", ACTIVE: "Ativo", CLOSED: "Fechado", FAILED: "Falha" };
+  const auditValue = (value: unknown) => typeof value === "number" ? value.toLocaleString("pt-BR") : String(value);
+  const beforeAfter = (before: Prisma.JsonValue | null, after: Prisma.JsonValue | null): string | undefined => {
+    if (!before || !after || Array.isArray(before) || Array.isArray(after) || typeof before !== "object" || typeof after !== "object") return undefined;
+    const labels: Record<string, string> = { status: "Status", amount: "Valor", currentAmount: "Valor atual", expectedAmount: "Valor previsto", dueAt: "Prazo", dueDate: "Vencimento" };
+    for (const key of Object.keys(labels)) {
+      const previous = (before as Prisma.JsonObject)[key];
+      const current = (after as Prisma.JsonObject)[key];
+      if (previous != null && current != null && JSON.stringify(previous) !== JSON.stringify(current)) {
+        if (key === "status") {
+          const previousLabel = typeof previous === "string" ? statusLabels[previous] : undefined;
+          const currentLabel = typeof current === "string" ? statusLabels[current] : undefined;
+          return previousLabel && currentLabel ? `${labels[key]}: ${previousLabel} → ${currentLabel}` : undefined;
+        }
+        return `${labels[key]}: ${auditValue(previous)} → ${auditValue(current)}`;
+      }
+    }
+    return undefined;
+  };
+  // O fato REAL de pagamento/recebimento/desembolso é gravado pelo módulo de origem com um nome de
+  // ação próprio (nunca termina em "_PAID"/"_RECEIVED" — ver `financial-service.ts`/`capital-
+  // service.ts`), então esses casos precisam de correspondência exata antes dos sufixos genéricos
+  // abaixo (auditoria adversarial 9L: sem isso, o pagamento/recebimento real caía no rótulo vago
+  // "Atualização de..." — nunca chegou a rotular como algo que NÃO aconteceu, mas ficava menos
+  // informativo que o fato realmente ocorrido).
+  const exactActionLabel: Record<string, string> = {
+    PAYABLE_PAYMENT_REGISTERED: "Pagamento de conta a pagar",
+    RECEIVABLE_PAYMENT_REGISTERED: "Recebimento de conta a receber",
+    FUNDING_DISBURSEMENT_CONFIRMED: "Desembolso confirmado (transação bancária conciliada)",
+  };
+  const actionLabel = (action: string, entityType: string) => {
+    if (exactActionLabel[action]) return exactActionLabel[action];
+    const subject = entityLabels[entityType] ?? "Registro operacional";
+    const lowerSubject = subject.toLocaleLowerCase("pt-BR");
+    if (action.endsWith("_CREATED")) return `Criação de ${lowerSubject}`;
+    if (action.endsWith("_APPROVED")) return `Aprovação de ${lowerSubject}`;
+    if (action.endsWith("_SIGNED")) return `Assinatura de ${lowerSubject}`;
+    if (action.endsWith("_FAILED")) return `Falha registrada em ${subject.toLowerCase()}`;
+    return `Atualização de ${lowerSubject}`;
+  };
+
+  return logs.flatMap((log): WhatChangedItem[] => {
+    const rule = allowed.find((candidate) => candidate.prefixes.some((prefix) => log.action.startsWith(prefix)));
+    if (!rule) return [];
+    return [{
+      id: log.id,
+      label: actionLabel(log.action, log.entityType),
+      detail: `Registrado por ${log.user.name}.`,
+      domain: rule.domain,
+      href: rule.href,
+      occurredAt: log.createdAt.toISOString(),
+      sourceType: log.entityType,
+      sourceId: log.entityId,
+      source: "Trilha de auditoria REDE",
+      beforeAfter: beforeAfter(log.before, log.after),
+    }];
+  });
 }
 
 /**
@@ -206,7 +282,10 @@ async function buildProjectExceptionsAndKpis(organizationId: string, project: Ex
     exceptions.push(...buildSalesExceptions(ctx, sales.overdueReceivables, referenceDate));
     exceptions.push(...buildCommercialClosingExceptions(ctx, sales, referenceDate));
   }
-  if (authorized.has("procurement") && procurement) exceptions.push(...buildProcurementExceptions(ctx, procurement.needs, referenceDate));
+  if (authorized.has("procurement") && procurement) {
+    exceptions.push(...buildProcurementExceptions(ctx, procurement.needs, referenceDate));
+    exceptions.push(...buildPendingMeasurementExceptions(ctx, procurement.pendingMeasurements, referenceDate));
+  }
   if (authorized.has("capital") && capital) exceptions.push(...buildCapitalExceptions(ctx, capital.conditions, capital.covenants, capital.disbursements, capital.proposalsAwaitingDecision, referenceDate));
 
   let viability: ExecutiveViabilityKpis | null = null;
@@ -238,7 +317,7 @@ async function buildProjectExceptionsAndKpis(organizationId: string, project: Ex
       overdueReceivablesAmount: sumBalance(financial.receivables),
     };
   }
-  if (authorized.has("procurement") && procurement) kpis.procurement = { criticalPurchases: procurement.needs.length, pendingMeasurements: procurement.pendingMeasurements };
+  if (authorized.has("procurement") && procurement) kpis.procurement = { criticalPurchases: procurement.needs.length, pendingMeasurements: procurement.pendingMeasurements.length };
   if (authorized.has("legal") && legal) kpis.legal = { obligationsAtRisk: legal.obligations.length, licensesAtRisk: legal.licenses.length };
   if (authorized.has("accounting")) kpis.accounting = accounting ? { referenceMonth: accounting.referenceMonth.toISOString().slice(0, 7), status: accounting.status } : null;
   if (authorized.has("capital") && capitalSummary) {
@@ -302,6 +381,14 @@ export async function getExecutiveProjectOverview(authContext: Pick<AuthContext,
     : [];
 
   const allExceptions = sortExceptionsByPriority([...exceptions, ...integrationExceptions, ...approvalExceptions]);
+  const operationalActions = deriveOperationalActions(allExceptions);
+  const last24h = referenceDate.getTime() - 86_400_000;
+  const operationToday = {
+    summary: buildDailyOperationalSummary(operationalActions, referenceDate),
+    items: operationalActions.filter((item) => item.severity === "CRITICO" || item.severity === "DECISAO" || (item.dueDate != null && new Date(item.dueDate).getTime() <= referenceDate.getTime())).slice(0, 5),
+    changedLast24h: whatChanged.filter((item) => new Date(item.occurredAt).getTime() >= last24h).length,
+    materialImpacts: operationalActions.filter((item) => (item.materialityValue ?? 0) > 0).length,
+  };
 
   const domainLabels: Record<ExecutiveDomain, { label: string; source: string }> = {
     viability: { label: "Viabilidade", source: "REDE" },
@@ -330,6 +417,7 @@ export async function getExecutiveProjectOverview(authContext: Pick<AuthContext,
     exceptions: allExceptions,
     attentionSummary: summarizeExceptionsBySeverity(allExceptions),
     whatChanged,
+    operationToday,
     kpis,
     freshness,
   };

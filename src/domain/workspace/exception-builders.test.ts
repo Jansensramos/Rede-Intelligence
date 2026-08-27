@@ -8,6 +8,7 @@ import {
   buildIntegrationExceptions,
   buildLegalExceptions,
   buildProcurementExceptions,
+  buildPendingMeasurementExceptions,
   buildSalesExceptions,
   buildViabilityExceptions,
   type ExceptionTenantContext,
@@ -64,9 +65,14 @@ describe("buildFinancialExceptions (plano §7 FINANCEIRO — via classifyDueSeve
     expect(result.href).toBe("/financeiro");
   });
 
-  it("parcela que vence em 20 dias não é exceção (fora da janela de alerta de 3 dias)", () => {
+  it("parcela que vence em 20 dias não é exceção (fora da janela operacional de 7 dias)", () => {
     const result = buildFinancialExceptions(ctx, [{ id: "p-3", description: "Boleto", counterpartyName: null, dueDate: days(20), balance: 100 }], [], referenceDate);
     expect(result).toHaveLength(0);
+  });
+
+  it("parcela que vence em 7 dias vira ATENCAO pela janela operacional 9L", () => {
+    const [result] = buildFinancialExceptions(ctx, [{ id: "p-d7", description: "Boleto", counterpartyName: null, dueDate: days(7), balance: 100 }], [], referenceDate);
+    expect(result.severity).toBe("ATENCAO");
   });
 
   it("recebível e pagável não se confundem no tipo/domínio", () => {
@@ -140,6 +146,15 @@ describe("buildProcurementExceptions (plano §7 SUPRIMENTOS — via isCriticalPu
   it("necessidade com prazo confortável não vira exceção", () => {
     const result = buildProcurementExceptions(ctx, [{ id: "need-2", code: "NEC-2", description: "Cimento", requiredAt: days(120), expectedLeadDays: 15, bufferDays: 5 }], referenceDate);
     expect(result).toHaveLength(0);
+  });
+});
+
+describe("buildPendingMeasurementExceptions (Fase 9L — medição pendente)", () => {
+  it("medição vencida vira crítica, com responsável e origem reais", () => {
+    const [result] = buildPendingMeasurementExceptions(ctx, [{ id: "med-1", contractNumber: "CT-01", number: 3, dueDate: days(-2), netAmount: 80_000, responsibleId: "user-1", status: "IN_APPROVAL" }], referenceDate);
+    expect(result.severity).toBe("CRITICO");
+    expect(result.responsibleId).toBe("user-1");
+    expect(result.evidence).toContain("med-1");
   });
 });
 
@@ -226,6 +241,15 @@ describe("buildCapitalExceptions (Fase 9N — condição/covenant/desembolso/pro
     expect(result).toHaveLength(1);
     expect(result[0].type).toBe("disbursement_delayed");
     expect(result[0].materialityValue).toBe(500000);
+  });
+
+  it("desembolso em até 5 dias com condição precedente pendente vira exceção crítica idempotente", () => {
+    const condition = { id: "cond-urgent", proposalId: "prop-urgent", code: "CP-URG", category: "DOCUMENTO" as const, description: "Enviar certidão", dueAt: days(3), responsibleId: "user-1" };
+    const disbursement = { id: "disb-urgent", proposalId: "prop-urgent", sequence: 1, status: "PLANNED" as const, expectedDate: days(5), expectedAmount: 750000 };
+    const [result] = buildCapitalExceptions(ctx, [condition], [], [disbursement], [], referenceDate).filter((item) => item.type === "disbursement_blocked");
+    expect(result.severity).toBe("CRITICO");
+    expect(result.responsibleId).toBe("user-1");
+    expect(result.id).toContain("disb-urgent");
   });
 
   it("proposta aguardando decisão perto da validade vira DECISAO; DRAFT/APPROVED nunca aparecem aqui", () => {

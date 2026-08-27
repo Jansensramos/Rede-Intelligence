@@ -155,7 +155,10 @@ export function buildFinancialExceptions(
       .filter((item) => item.balance > 0.005)
       .map((item): ExecutiveException | null => {
         const days = daysUntil(item.dueDate, referenceDate);
-        const severity = mapFinancialDueSeverity(classifyDueSeverity(days));
+        const classified = mapFinancialDueSeverity(classifyDueSeverity(days));
+        // A régua operacional 9L antecipa informação em D-7 sem alterar a régua financeira
+        // oficial (que continua D-3): entre D-7 e D-4 o item é apenas ATENÇÃO.
+        const severity = classified === "NORMAL" && days >= 0 && days <= 7 ? "ATENCAO" : classified;
         if (severity === "NORMAL") return null;
         return {
           id: buildExceptionId(ctx.organizationId, "financial", type, item.id),
@@ -176,7 +179,7 @@ export function buildFinancialExceptions(
           source: "REDE",
           occurredAt: referenceDate.toISOString(),
           href: "/financeiro",
-          reason: days < 0 ? `Saldo em aberto vencido há ${Math.abs(days)} dia(s).` : `Vence em ${days} dia(s) (janela de alerta ≤ 3 dias).`,
+          reason: days < 0 ? `Saldo em aberto vencido há ${Math.abs(days)} dia(s).` : `Vence em ${days} dia(s) (janela operacional de alerta ≤ 7 dias).`,
           responsibleId: item.responsibleId,
           status: "ABERTA",
           evidence: [item.id],
@@ -345,6 +348,34 @@ export function buildProcurementExceptions(ctx: ExceptionTenantContext, critical
         evidence: [need.code],
       } satisfies ExecutiveException;
     });
+}
+
+export interface PendingMeasurementSignal {
+  id: string;
+  contractNumber: string;
+  number: number;
+  dueDate: Date;
+  netAmount: number;
+  responsibleId: string;
+  status: string;
+}
+
+export function buildPendingMeasurementExceptions(ctx: ExceptionTenantContext, measurements: PendingMeasurementSignal[], referenceDate: Date): ExecutiveException[] {
+  return measurements.map((measurement) => {
+    const days = daysUntil(measurement.dueDate, referenceDate);
+    return {
+      id: buildExceptionId(ctx.organizationId, "procurement", "measurement_pending", measurement.id),
+      organizationId: ctx.organizationId, economicGroupId: ctx.economicGroupId, companyId: ctx.companyId, projectId: ctx.projectId, projectName: ctx.projectName,
+      domain: "procurement", type: "measurement_pending",
+      title: `Medição ${measurement.number} pendente — contrato ${measurement.contractNumber}`,
+      summary: `R$ ${measurement.netAmount.toLocaleString("pt-BR")} · etapa atual registrada no módulo de Suprimentos`,
+      severity: days < 0 ? "CRITICO" : "ACAO_NECESSARIA",
+      impact: { financial: measurement.netAmount, schedule: true }, materialityValue: measurement.netAmount,
+      dueDate: measurement.dueDate.toISOString(), confidence: ALTA, source: "REDE", occurredAt: referenceDate.toISOString(), href: "/suprimentos",
+      reason: days < 0 ? `Prazo da medição vencido há ${Math.abs(days)} dia(s).` : `Medição ainda pendente com prazo em ${days} dia(s).`,
+      responsibleId: measurement.responsibleId, status: "ABERTA", evidence: [measurement.id, measurement.contractNumber],
+    } satisfies ExecutiveException;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -641,6 +672,23 @@ export function buildCapitalExceptions(
   for (const disbursement of disbursements) {
     if (disbursement.status === "DISBURSED" || disbursement.status === "CANCELLED") continue;
     const days = daysUntil(disbursement.expectedDate, referenceDate);
+    const pendingConditions = conditions.filter((condition) => condition.proposalId === disbursement.proposalId);
+    if (days >= 0 && days <= 5 && pendingConditions.length > 0) {
+      const responsibleIds = [...new Set(pendingConditions.map((condition) => condition.responsibleId).filter((id): id is string => Boolean(id)))];
+      exceptions.push({
+        id: buildExceptionId(ctx.organizationId, "capital", "disbursement_blocked", disbursement.id),
+        organizationId: ctx.organizationId, economicGroupId: ctx.economicGroupId, companyId: ctx.companyId, projectId: ctx.projectId, projectName: ctx.projectName,
+        domain: "capital", type: "disbursement_blocked",
+        title: `Desembolso #${disbursement.sequence} em risco por condição pendente`,
+        summary: `R$ ${disbursement.expectedAmount.toLocaleString("pt-BR")} previsto em ${days} dia(s) · ${pendingConditions.length} condição(ões) pendente(s).`,
+        severity: "CRITICO", impact: { financial: disbursement.expectedAmount }, materialityValue: disbursement.expectedAmount,
+        dueDate: disbursement.expectedDate.toISOString(), confidence: ALTA, source: "REDE", occurredAt: referenceDate.toISOString(), href: "/capital-funding",
+        reason: `Desembolso previsto em até 5 dias com condição precedente ainda pendente.`,
+        responsibleId: responsibleIds.length === 1 ? responsibleIds[0] : undefined,
+        status: "ABERTA", evidence: [disbursement.id, ...pendingConditions.map((condition) => condition.code)],
+      });
+      continue;
+    }
     if (days > 0) continue; // ainda não venceu — não é exceção
     exceptions.push({
       id: buildExceptionId(ctx.organizationId, "capital", "disbursement_delayed", disbursement.id),

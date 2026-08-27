@@ -11,7 +11,8 @@ import type { MembershipRole } from "@prisma/client";
 import { CalendarCheck2, CalendarClock, CheckCircle2, ClipboardCheck, ListTodo } from "lucide-react";
 import { EmptyState, SectionTitle } from "@/components/ui";
 import { ActionsTable } from "./actions-table";
-import { buildMyRoutineBuckets } from "@/domain/workspace/action-center";
+import { buildMyRoutineBuckets, filterMine } from "@/domain/workspace/action-center";
+import { buildDailyOperationalSummary, sortRoutinePriority } from "@/domain/workspace/operational-live";
 import type { ActionCenterOverview } from "@/application/actions/action-service";
 import type { ExecutiveException } from "@/domain/workspace/exceptions";
 
@@ -31,6 +32,12 @@ export function MinhaRotinaView({ overview, currentUserId, currentUserRole }: { 
   );
 
   const totalToday = buckets.today.length + buckets.overdue.length;
+  const priorityActions = useMemo(() => {
+    const mine = filterMine(overview.openActions, currentUserId);
+    const unique = new Map([...mine, ...buckets.awaitingMyApproval].map((item) => [item.id, item]));
+    return sortRoutinePriority([...unique.values()], new Date(overview.generatedAt));
+  }, [buckets.awaitingMyApproval, currentUserId, overview.generatedAt, overview.openActions]);
+  const myDailySummary = useMemo(() => buildDailyOperationalSummary(priorityActions, new Date(overview.generatedAt)), [priorityActions, overview.generatedAt]);
 
   return (
     <div className="view-stack">
@@ -45,6 +52,19 @@ export function MinhaRotinaView({ overview, currentUserId, currentUserRole }: { 
           </p>
         </div>
       </section>
+
+      <section>
+        <SectionTitle eyebrow="RESUMO DO DIA" title="Resumo operacional de hoje" description="Consolidado determinístico dos fatos aos quais seu perfil tem acesso." />
+        {myDailySummary.lines.length === 0 ? (
+          <EmptyState title="Nada relevante no resumo de hoje" description="Nenhum fato operacional cruzou as regras de atenção." />
+        ) : (
+          <div className="ds-whatchanged">
+            {myDailySummary.lines.map((line) => <div className="ds-whatchanged-item" key={line}><strong>{line}</strong></div>)}
+          </div>
+        )}
+      </section>
+
+      <Block icon={ListTodo} eyebrow="ORDEM DE RESOLUÇÃO" title="Prioridades de hoje" description="Críticas vencidas, críticas de hoje, aprovações, próximas com risco e demais — nesta ordem." actions={priorityActions} responsibleNames={overview.responsibleNames} emptyMessage="Nenhuma prioridade atribuída a você ou à sua alçada." />
 
       <Block icon={CalendarClock} eyebrow="ATRASADAS" title="Atrasadas" description="Prazo já vencido — atribuídas a você no registro de origem, nunca inferido." actions={buckets.overdue} responsibleNames={overview.responsibleNames} emptyMessage="Nenhuma ação sua está atrasada." />
       <Block icon={CalendarCheck2} eyebrow="HOJE" title="Hoje" description="Prazo vence hoje." actions={buckets.today} responsibleNames={overview.responsibleNames} emptyMessage="Nenhuma ação sua vence hoje." />

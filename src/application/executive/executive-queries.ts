@@ -82,7 +82,7 @@ function toInstallmentSignal(item: { id: string; currentAmount: unknown; dueDate
 }
 
 export async function queryFinancialSignals(organizationId: string, projectId: string, companyId: string | null, referenceDate: Date) {
-  const horizon = new Date(referenceDate.getTime() + 3 * 86_400_000);
+  const horizon = new Date(referenceDate.getTime() + 7 * 86_400_000);
   const [payables, receivables, cashRows] = await Promise.all([
     prisma.payableInstallment.findMany({
       where: { payableAccount: { organizationId, projectId }, status: { notIn: [...PAYABLE_TERMINAL_STATUSES] }, dueDate: { lte: horizon } },
@@ -192,9 +192,18 @@ export async function queryProcurementSignals(organizationId: string, projectId:
       orderBy: { requiredAt: "asc" },
       take: 50,
     }),
-    prisma.measurementCertificate.count({ where: { organizationId, projectId, status: { in: ["SUBMITTED", "IN_TECHNICAL_REVIEW", "TECHNICALLY_APPROVED", "IN_APPROVAL"] } } }),
+    prisma.measurementCertificate.findMany({
+      where: { organizationId, projectId, status: { in: ["SUBMITTED", "IN_TECHNICAL_REVIEW", "TECHNICALLY_APPROVED", "IN_APPROVAL"] } },
+      select: { id: true, number: true, dueDate: true, netAmount: true, responsibleId: true, status: true, updatedAt: true, contract: { select: { number: true } } },
+      orderBy: { dueDate: "asc" },
+      take: 50,
+    }),
   ]);
-  return { needs, pendingMeasurements, latestUpdatedAt: latestTimestamp(needs.map((item) => item.updatedAt)) };
+  return {
+    needs,
+    pendingMeasurements: pendingMeasurements.map((item) => ({ id: item.id, number: item.number, dueDate: item.dueDate, netAmount: Number(item.netAmount), responsibleId: item.responsibleId, status: item.status, contractNumber: item.contract.number })),
+    latestUpdatedAt: latestTimestamp([...needs.map((item) => item.updatedAt), ...pendingMeasurements.map((item) => item.updatedAt)]),
+  };
 }
 
 // ---------------------------------------------------------------------------

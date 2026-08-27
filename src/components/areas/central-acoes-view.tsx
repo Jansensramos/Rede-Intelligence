@@ -62,6 +62,17 @@ export function CentralDeAcoesView({ overview, currentUserId }: { overview: Acti
       )}
 
       <section>
+        <SectionTitle eyebrow="RESUMO DO DIA" title="Resumo operacional de hoje" description="Leitura determinística dos fatos oficiais; não depende de inteligência artificial." />
+        {overview.dailySummary.lines.length === 0 ? (
+          <EmptyState icon={ClipboardList} title="Operação sem pendências relevantes" description="Nenhum fato operacional cruzou as regras de atenção no momento." />
+        ) : (
+          <div className="ds-whatchanged">
+            {overview.dailySummary.lines.map((line) => <div className="ds-whatchanged-item" key={line}><strong>{line}</strong></div>)}
+          </div>
+        )}
+      </section>
+
+      <section>
         <SectionTitle
           eyebrow="AÇÕES"
           title="Resumo"

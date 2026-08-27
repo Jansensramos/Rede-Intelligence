@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { DataTable, SeverityBadge, type DataTableColumn } from "@/components/ui";
 import { EXECUTIVE_DOMAIN_LABELS } from "@/domain/workspace/executive-capabilities";
 import type { ExecutiveException } from "@/domain/workspace/exceptions";
+import type { OperationalAction } from "@/domain/workspace/operational-live";
 
 const compactCurrency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact", maximumFractionDigits: 1 });
 const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -25,6 +26,12 @@ const STATUS_LABELS: Record<ExecutiveException["status"], string> = {
   RESOLVIDA: "Resolvida",
   DISPENSADA: "Dispensada",
 };
+
+const AUTOMATION_LABELS = { RECOMENDAR: "Recomendar", PREPARAR: "Preparar" } as const;
+
+function operationalAction(row: ExecutiveException): OperationalAction | null {
+  return "nextStep" in row && "automation" in row ? (row as OperationalAction) : null;
+}
 
 export function ActionsTable({ actions, responsibleNames, emptyMessage }: { actions: ExecutiveException[]; responsibleNames: Record<string, string>; emptyMessage: string }) {
   const router = useRouter();
@@ -46,7 +53,12 @@ export function ActionsTable({ actions, responsibleNames, emptyMessage }: { acti
     },
     { key: "domain", header: "Domínio", priority: "default", align: "left", render: (row) => EXECUTIVE_DOMAIN_LABELS[row.domain] },
     { key: "project", header: "Empreendimento", priority: "default", align: "left", render: (row) => row.projectName ?? "—" },
-    { key: "responsible", header: "Responsável", priority: "default", align: "left", render: (row) => (row.responsibleId ? (responsibleNames[row.responsibleId] ?? row.responsibleId) : "Sem responsável atribuído") },
+    { key: "responsible", header: "Responsável", priority: "default", align: "left", render: (row) => (row.responsibleId ? (responsibleNames[row.responsibleId] ?? row.responsibleId) : "Sem responsável definido") },
+    { key: "nextStep", header: "Próximo passo", priority: "default", align: "left", render: (row) => operationalAction(row)?.nextStep.what ?? "Abrir o registro de origem e avaliar." },
+    { key: "automation", header: "Automação", priority: "optional", align: "left", render: (row) => {
+      const automation = operationalAction(row)?.automation;
+      return automation ? `${AUTOMATION_LABELS[automation.level]} · confirmação humana` : "Recomendação manual";
+    } },
     { key: "dueDate", header: "Prazo", priority: "default", render: (row) => formatDate(row.dueDate) },
     { key: "impact", header: "Impacto", priority: "optional", render: (row) => (row.materialityValue != null ? compactCurrency.format(row.materialityValue) : "—") },
     { key: "evidence", header: "Evidência", priority: "optional", align: "left", render: (row) => (row.evidence.length > 0 ? row.evidence.join(", ") : "—") },
