@@ -240,6 +240,26 @@ describe.skipIf(!process.env.DATABASE_URL).sequential("Gestão Executiva (9K.2) 
     expect(overview.kpis.procurement).toBeDefined();
   });
 
+  it("kpis.capital (9N.1): CAPITAL_VIEW é concedida a todo papel (inclusive VIEWER) e reaproveita getCapitalExecutiveSummary — nunca fabrica número quando não há proposta/viabilidade", async () => {
+    const ownerOverview = await getExecutiveProjectOverview(ownerAuth(), project1, referenceDate);
+    const viewerOverview = await getExecutiveProjectOverview(viewerAuth(), project1, referenceDate);
+    expect(ownerOverview.authorizedDomains).toContain("capital");
+    expect(viewerOverview.authorizedDomains).toContain("capital");
+    expect(ownerOverview.kpis.capital).toBeDefined();
+    expect(viewerOverview.kpis.capital).toBeDefined();
+    // Sem viabilidade calculada e sem propostas registradas nesta fixture: zero real, não ausência.
+    expect(ownerOverview.kpis.capital).toEqual({
+      fundingNecessario: 0,
+      fundingContratado: 0,
+      desembolsado: 0,
+      saldoALiberar: 0,
+      custoMedio: null,
+      proximaLiberacao: null,
+      covenantsEmRisco: 0,
+      condicoesPendentes: 0,
+    });
+  });
+
   it("gate 2: isolamento tenant continua funcionando junto com o gate de capabilities (VIEWER de outra organização não vê nada desta)", async () => {
     await expect(getExecutiveProjectOverview({ organizationId: foreignOrganizationId, role: "VIEWER" }, project1, referenceDate)).rejects.toThrow();
   });

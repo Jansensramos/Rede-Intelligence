@@ -66,7 +66,7 @@ export const EXECUTIVE_DOMAIN_LABELS: Record<ExecutiveDomain, string> = {
   viability: "Viabilidade",
   sales: "Comercial",
   financial: "Financeiro",
-  capital: "Capital & Funding",
+  capital: "Capital e Financiamento",
   procurement: "Suprimentos",
   operations: "Obra/Engenharia",
   legal: "Jurídico",

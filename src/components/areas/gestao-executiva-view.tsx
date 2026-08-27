@@ -231,6 +231,19 @@ export function GestaoExecutivaView({
           ) : (
             <RestrictedAreaCard label="Jurídico" />
           )}
+          {kpis.capital ? (
+            <button className="ds-area-card" type="button" onClick={() => router.push("/capital-funding")}>
+              <span className="eyebrow">CAPITAL E FINANCIAMENTO</span>
+              <strong>{compactCurrency.format(kpis.capital.fundingContratado)}</strong>
+              <small>
+                Necessário {compactCurrency.format(kpis.capital.fundingNecessario)} · Desembolsado {compactCurrency.format(kpis.capital.desembolsado)} · Saldo a liberar {compactCurrency.format(kpis.capital.saldoALiberar)}
+                {kpis.capital.proximaLiberacao ? ` · Próxima liberação ${compactCurrency.format(kpis.capital.proximaLiberacao.expectedAmount)}` : ""}
+                {(kpis.capital.covenantsEmRisco > 0 || kpis.capital.condicoesPendentes > 0) && ` · ${kpis.capital.covenantsEmRisco} cláusula(s) financeira(s) em risco · ${kpis.capital.condicoesPendentes} condição(ões) pendente(s)`}
+              </small>
+            </button>
+          ) : (
+            <RestrictedAreaCard label="Capital e Financiamento" />
+          )}
           {kpis.procurement ? (
             <button className="ds-area-card" type="button" onClick={() => router.push("/suprimentos")}>
               <span className="eyebrow">SUPRIMENTOS</span>

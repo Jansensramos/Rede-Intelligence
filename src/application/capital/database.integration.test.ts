@@ -18,7 +18,7 @@ import {
   submitFundingProposal,
   updateFundingConditionStatus,
 } from "./capital-service";
-import { getCapitalNeedForProject, getFundingProposalDetail } from "./capital-queries";
+import { getCapitalNeedForProject, getEligibleBankTransactionsForDisbursement, getFundingProposalDetail } from "./capital-queries";
 import type { RegisterFundingProposalInput } from "@/domain/capital/schemas";
 
 function baseProposalInput(projectId: string, code: string): RegisterFundingProposalInput {
@@ -208,6 +208,31 @@ describe.sequential("Fase 9N no PostgreSQL real", () => {
     expect(covenant.lastValue).toBe("0.85");
 
     await expect(evaluateFundingCovenant(viewer, { covenantId, testedAt: new Date(), observedValue: "1.0", result: "OK" })).rejects.toThrow(/capacidade/i);
+  });
+
+  it("9N.1 — getEligibleBankTransactionsForDisbursement só lista CREDIT+RECONCILED ainda sem desembolso vinculado (mesma SPE)", async () => {
+    const debitTxn = await prisma.bankTransaction.create({ data: { organizationId: owner.organizationId, bankAccountId, occurredAt: new Date(), amount: 1000, direction: "DEBIT", description: "Débito conciliado — não é elegível", status: "RECONCILED", checksum: `9n-eligible-debit-${randomUUID()}` } });
+    const unreconciledTxn = await prisma.bankTransaction.create({ data: { organizationId: owner.organizationId, bankAccountId, occurredAt: new Date(), amount: 1000, direction: "CREDIT", description: "Crédito ainda não conciliado — não é elegível", status: "RECEIVED", checksum: `9n-eligible-unreconciled-${randomUUID()}` } });
+    const eligibleTxn = await prisma.bankTransaction.create({ data: { organizationId: owner.organizationId, bankAccountId, occurredAt: new Date(), amount: 1000, direction: "CREDIT", description: "Crédito conciliado livre — elegível", status: "RECONCILED", checksum: `9n-eligible-ok-${randomUUID()}` } });
+
+    const eligible = await getEligibleBankTransactionsForDisbursement(owner, projectId);
+    const eligibleIds = eligible.map((t) => t.id);
+    expect(eligibleIds).toContain(eligibleTxn.id);
+    expect(eligibleIds).not.toContain(debitTxn.id);
+    expect(eligibleIds).not.toContain(unreconciledTxn.id);
+
+    // Depois de vinculada a um desembolso confirmado, a transação sai da lista de elegíveis (1:1 já reservado).
+    const code = `ELIGIBLE-${randomUUID().slice(0, 8)}`;
+    const created = await createFundingProposal(analyst, baseProposalInput(projectId, code));
+    await submitFundingProposal(analyst, created.id);
+    const approved = await approveFundingProposal(owner, created.id);
+    const detail = await getFundingProposalDetail(owner, approved.id);
+    await requestFundingDisbursement(analyst, detail.disbursements[0].id);
+    await approveFundingDisbursementRelease(owner, detail.disbursements[0].id);
+    await confirmFundingDisbursement(owner, { disbursementId: detail.disbursements[0].id, bankTransactionId: eligibleTxn.id });
+
+    const eligibleAfter = await getEligibleBankTransactionsForDisbursement(owner, projectId);
+    expect(eligibleAfter.map((t) => t.id)).not.toContain(eligibleTxn.id);
   });
 
   it("condição precedente: transição de status é auditável e RBAC-gated", async () => {

@@ -64,8 +64,12 @@ export interface OperationalArea {
 }
 
 /**
- * As 12 grandes áreas da 9K.1, na ordem definida pela ordem de serviço (Gestão Executiva sempre
- * primeiro; a ordem das demais 11 NÃO está congelada — poderá ser revista em sprint futura).
+ * As 13 grandes áreas (9K.1 definiu 12; a 9N.1 promoveu Capital & Funding de "ação" — onde vivia
+ * como atalho avulso no grupo AÇÕES da sidebar — a Grande Área própria, entre Financeiro e
+ * Comercial). Gestão Executiva sempre primeiro; a ordem das demais NÃO está congelada — poderá ser
+ * revista em sprint futura. `capital-funding` não tem `viewKeys`: não existe aba legada
+ * correspondente em `intelligence-workspace.tsx` (é conteúdo 100% novo da Fase 9N), então não
+ * participa do teste de cobertura das 24 chaves legadas.
  */
 export const OPERATIONAL_AREAS: OperationalArea[] = [
   {
@@ -110,6 +114,13 @@ export const OPERATIONAL_AREAS: OperationalArea[] = [
     description: "Contas a pagar, contas a receber, bancos, conciliação e fluxo de caixa.",
     path: "/financeiro",
     viewKeys: ["financial"],
+  },
+  {
+    id: "capital-funding",
+    label: "Capital e Financiamento",
+    description: "Necessidade de capital, propostas de financiamento, comparação, desembolsos, serviço da dívida, cláusulas financeiras, condições precedentes e garantias.",
+    path: "/capital-funding",
+    viewKeys: [],
   },
   {
     id: "comercial",

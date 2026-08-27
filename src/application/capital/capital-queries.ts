@@ -125,10 +125,30 @@ export async function getFundingProposalsForProject(context: Pick<{ organization
       covenants: { include: { evaluations: { orderBy: { testedAt: "desc" } } } },
       conditions: true,
       disbursements: { include: { bankTransaction: true }, orderBy: { sequence: "asc" } },
+      financialEvents: { orderBy: [{ scheduleVersion: "desc" }, { installmentNumber: "asc" }] },
     },
     orderBy: [{ code: "asc" }, { version: "desc" }],
   });
 }
+
+/**
+ * §5 — candidatos a confirmar um `FundingDisbursement`: só `BankTransaction` da MESMA SPE
+ * (`bankAccount.companyId = project.companyId`), `direction=CREDIT`, `status=RECONCILED` e ainda
+ * sem desembolso vinculado (`fundingDisbursement: null` — o `@@unique([bankTransactionId])` no
+ * schema garante 1:1). A UI usa esta lista para nunca oferecer uma transação inválida ou já usada.
+ */
+export async function getEligibleBankTransactionsForDisbursement(context: Pick<{ organizationId: string }, "organizationId">, projectId: string) {
+  const project = await projectForTenant(context.organizationId, projectId);
+  if (!project.companyId) return [];
+  return prisma.bankTransaction.findMany({
+    where: { organizationId: context.organizationId, direction: "CREDIT", status: "RECONCILED", fundingDisbursement: null, bankAccount: { companyId: project.companyId } },
+    include: { bankAccount: { select: { agency: true, accountNumber: true, institution: { select: { name: true } } } } },
+    orderBy: { occurredAt: "desc" },
+    take: 100,
+  });
+}
+
+export type EligibleBankTransaction = Awaited<ReturnType<typeof getEligibleBankTransactionsForDisbursement>>[number];
 
 export async function getFundingProposalDetail(context: Pick<{ organizationId: string }, "organizationId">, proposalId: string) {
   const proposal = await prisma.fundingProposal.findFirst({

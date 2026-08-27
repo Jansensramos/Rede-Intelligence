@@ -11,8 +11,19 @@ const ALL_LEGACY_VIEW_KEYS: LegacyViewKey[] = [
 ];
 
 describe("metadata de Grandes Áreas (9K.1, ordem de serviço §2)", () => {
-  it("tem exatamente 12 áreas operacionais", () => {
-    expect(OPERATIONAL_AREAS).toHaveLength(12);
+  it("tem exatamente 13 áreas operacionais (9N.1 promoveu Capital & Funding de atalho em AÇÕES a Grande Área)", () => {
+    expect(OPERATIONAL_AREAS).toHaveLength(13);
+  });
+
+  it("Capital & Funding é uma Grande Área própria, entre Financeiro e Comercial, sem chaves legadas", () => {
+    const ids = OPERATIONAL_AREAS.map((area) => area.id);
+    const financeiroIndex = ids.indexOf("financeiro");
+    const capitalIndex = ids.indexOf("capital-funding");
+    const comercialIndex = ids.indexOf("comercial");
+    expect(capitalIndex).toBe(financeiroIndex + 1);
+    expect(comercialIndex).toBe(capitalIndex + 1);
+    expect(findAreaById("capital-funding")?.path).toBe("/capital-funding");
+    expect(findAreaById("capital-funding")?.viewKeys).toEqual([]);
   });
 
   it("Gestão Executiva é a primeira área e a única marcada como principal", () => {

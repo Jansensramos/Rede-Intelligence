@@ -13,7 +13,7 @@
 import type { AuthContext } from "@/application/auth/session";
 import { prisma } from "@/infrastructure/database/prisma";
 import { getOperationsWorkspace } from "@/application/operations/operations-service";
-import { getCapitalNeedForProject } from "@/application/capital/capital-queries";
+import { getCapitalExecutiveSummary } from "@/application/capital/capital-queries";
 import { getLatestStudyForProject } from "@/application/studies/study-service";
 import { calculateAllScenarios } from "@/domain/financial/engine";
 import { analyzeRisk } from "@/domain/risk/rules";
@@ -110,7 +110,16 @@ export interface ExecutiveProjectKpis {
   legal?: { obligationsAtRisk: number; licensesAtRisk: number };
   accounting?: { referenceMonth: string; status: string } | null;
   integrations?: { criticalInstallations: number; attentionInstallations: number; expiringCredentials: number };
-  capital?: { fundingNecessario: number; fundingContratado: number; covenantsEmRisco: number; condicoesPendentes: number };
+  capital?: {
+    fundingNecessario: number;
+    fundingContratado: number;
+    desembolsado: number;
+    saldoALiberar: number;
+    custoMedio: number | null;
+    proximaLiberacao: { expectedDate: string; expectedAmount: number } | null;
+    covenantsEmRisco: number;
+    condicoesPendentes: number;
+  };
 }
 
 export interface ExecutiveProjectOverview {
@@ -178,7 +187,9 @@ async function loadProjectSignals(organizationId: string, project: ExecutiveProj
 /** Núcleo por-projeto (sem integrações/aprovações — organizacionais, buscadas uma única vez pelo chamador). */
 async function buildProjectExceptionsAndKpis(organizationId: string, project: ExecutiveProjectRef, referenceDate: Date, authorized: Set<ExecutiveDomain>) {
   const { legal, financial, sales, procurement, operations, accounting, study, studyUpdatedAt, capital } = await loadProjectSignals(organizationId, project, referenceDate, authorized);
-  const capitalNeed = authorized.has("capital") ? await getCapitalNeedForProject({ organizationId }, project.id) : null;
+  // Reaproveita o mesmo read model exibido em /capital-funding (`getCapitalExecutiveSummary`) — o card da
+  // Gestão Executiva nunca recalcula fundingContratado/desembolsado/saldoALiberar/custoMedio por conta própria.
+  const capitalSummary = authorized.has("capital") ? await getCapitalExecutiveSummary({ organizationId }, project.id) : null;
 
   const ctx: ExceptionTenantContext = {
     organizationId,
@@ -230,8 +241,17 @@ async function buildProjectExceptionsAndKpis(organizationId: string, project: Ex
   if (authorized.has("procurement") && procurement) kpis.procurement = { criticalPurchases: procurement.needs.length, pendingMeasurements: procurement.pendingMeasurements };
   if (authorized.has("legal") && legal) kpis.legal = { obligationsAtRisk: legal.obligations.length, licensesAtRisk: legal.licenses.length };
   if (authorized.has("accounting")) kpis.accounting = accounting ? { referenceMonth: accounting.referenceMonth.toISOString().slice(0, 7), status: accounting.status } : null;
-  if (authorized.has("capital") && capital && capitalNeed) {
-    kpis.capital = { fundingNecessario: Number(capitalNeed.fundingStillNeeded), fundingContratado: capital.fundingContratado, covenantsEmRisco: capital.covenants.length, condicoesPendentes: capital.conditions.length };
+  if (authorized.has("capital") && capitalSummary) {
+    kpis.capital = {
+      fundingNecessario: capitalSummary.fundingNecessario,
+      fundingContratado: capitalSummary.fundingContratado,
+      desembolsado: capitalSummary.desembolsado,
+      saldoALiberar: capitalSummary.saldoALiberar,
+      custoMedio: capitalSummary.custoMedio,
+      proximaLiberacao: capitalSummary.proximaLiberacao ? { expectedDate: capitalSummary.proximaLiberacao.expectedDate, expectedAmount: capitalSummary.proximaLiberacao.expectedAmount } : null,
+      covenantsEmRisco: capitalSummary.covenantsEmRisco,
+      condicoesPendentes: capitalSummary.condicoesPendentes,
+    };
   }
 
   // Gate 3 do fechamento da 9K.2 (freshness real): timestamp real quando existir na própria
@@ -293,7 +313,7 @@ export async function getExecutiveProjectOverview(authContext: Pick<AuthContext,
     accounting: { label: "Contabilidade", source: "REDE" },
     integrations: { label: "Integrações", source: "Conectores externos (ver cada item)" },
     approvals: { label: "Decisões", source: "REDE" },
-    capital: { label: "Capital & Funding", source: "REDE" },
+    capital: { label: "Capital e Financiamento", source: "REDE" },
   };
 
   // Gate 2 + gate 3: só entram no payload os domínios autorizados (§2), e cada um carrega a
