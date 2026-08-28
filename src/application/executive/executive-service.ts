@@ -11,9 +11,11 @@
  *    alfabeticamente (ordem de serviço §8).
  */
 import type { AuthContext } from "@/application/auth/session";
-import type { Prisma } from "@prisma/client";
+import type { MembershipRole, Prisma } from "@prisma/client";
+import { hasWorkspaceCapability } from "@/domain/workspace/capabilities";
 import { prisma } from "@/infrastructure/database/prisma";
 import { getOperationsWorkspace } from "@/application/operations/operations-service";
+import { getEngineeringExecutiveSignals } from "@/application/engineering/engineering-service";
 import { getCapitalExecutiveSummary } from "@/application/capital/capital-queries";
 import { getLatestStudyForProject } from "@/application/studies/study-service";
 import { calculateAllScenarios } from "@/domain/financial/engine";
@@ -24,6 +26,7 @@ import {
   buildCapitalExceptions,
   buildCommercialClosingExceptions,
   buildFinancialExceptions,
+  buildEngineeringExceptions,
   buildIntegrationExceptions,
   buildLegalExceptions,
   buildProcurementExceptions,
@@ -108,7 +111,13 @@ export interface ExecutiveViabilityKpis {
  */
 export interface ExecutiveProjectKpis {
   viability: ExecutiveViabilityKpis | null;
-  operations: { scheduleStatus: string | null; budgetStatus: string | null; criticalVarianceCategories: number };
+  operations: {
+    scheduleStatus: string | null;
+    budgetStatus: string | null;
+    criticalVarianceCategories: number;
+    /** Gate `ENGINEERING_FINANCIAL_VIEW`: ausente (não `null`) quando o papel não tem a capacidade — mesmo contrato dos demais blocos por domínio (gate 2). */
+    engineeringFinancials?: { budgeted: number; contracted: number; measured: number; realized: number; finalProjected: number | null; projectedDeviation: number | null; noEvidence: number; criticalTechnicalRisks: number; pendingReviews: number };
+  };
   commercial?: { unitsAvailable: number; unitsSold: number; unitsTotal: number; vgvVendido: number };
   financial?: { cashPosition: number | null; overduePayablesCount: number; overduePayablesAmount: number; overdueReceivablesCount: number; overdueReceivablesAmount: number };
   procurement?: { criticalPurchases: number; pendingMeasurements: number };
@@ -245,24 +254,27 @@ async function computeWhatChanged(organizationId: string, projectId: string, ref
  * não autorizado, o valor é `null` sem nenhuma chamada ao Prisma (a query nem é invocada, não é só
  * descartada depois). `operations`/`study` (Viabilidade) não têm gate nesta sprint.
  */
-async function loadProjectSignals(organizationId: string, project: ExecutiveProjectRef, referenceDate: Date, authorized: Set<ExecutiveDomain>) {
-  const [legal, financial, sales, procurement, operations, accounting, study, studyUpdatedAt, capital] = await Promise.all([
+async function loadProjectSignals(organizationId: string, project: ExecutiveProjectRef, referenceDate: Date, authorized: Set<ExecutiveDomain>, role: MembershipRole) {
+  const [legal, financial, sales, procurement, operations, engineering, accounting, study, studyUpdatedAt, capital] = await Promise.all([
     authorized.has("legal") ? queryLegalSignals(organizationId, project.id) : Promise.resolve(null),
     authorized.has("financial") ? queryFinancialSignals(organizationId, project.id, project.companyId, referenceDate) : Promise.resolve(null),
     authorized.has("sales") ? querySalesSignals(organizationId, project.id, referenceDate) : Promise.resolve(null),
     authorized.has("procurement") ? queryProcurementSignals(organizationId, project.id) : Promise.resolve(null),
     getOperationsWorkspace({ organizationId }, project.id),
+    // Gate `ENGINEERING_FINANCIAL_VIEW` (fechamento adversarial 9M): sem a capacidade, a consulta
+    // nem é disparada — mesmo padrão de gate 2 usado acima para os demais domínios.
+    hasWorkspaceCapability(role, "ENGINEERING_FINANCIAL_VIEW") ? getEngineeringExecutiveSignals(organizationId, project.id) : Promise.resolve(null),
     authorized.has("accounting") ? queryAccountingSignal(organizationId, project.companyId) : Promise.resolve(null),
     getLatestStudyForProject(organizationId, project.id),
     queryStudyUpdatedAt(organizationId, project.id),
     authorized.has("capital") ? queryCapitalSignals(organizationId, project.id) : Promise.resolve(null),
   ]);
-  return { legal, financial, sales, procurement, operations, accounting, study, studyUpdatedAt, capital };
+  return { legal, financial, sales, procurement, operations, engineering, accounting, study, studyUpdatedAt, capital };
 }
 
 /** Núcleo por-projeto (sem integrações/aprovações — organizacionais, buscadas uma única vez pelo chamador). */
-async function buildProjectExceptionsAndKpis(organizationId: string, project: ExecutiveProjectRef, referenceDate: Date, authorized: Set<ExecutiveDomain>) {
-  const { legal, financial, sales, procurement, operations, accounting, study, studyUpdatedAt, capital } = await loadProjectSignals(organizationId, project, referenceDate, authorized);
+async function buildProjectExceptionsAndKpis(organizationId: string, project: ExecutiveProjectRef, referenceDate: Date, authorized: Set<ExecutiveDomain>, role: MembershipRole) {
+  const { legal, financial, sales, procurement, operations, engineering, accounting, study, studyUpdatedAt, capital } = await loadProjectSignals(organizationId, project, referenceDate, authorized, role);
   // Reaproveita o mesmo read model exibido em /capital-funding (`getCapitalExecutiveSummary`) — o card da
   // Gestão Executiva nunca recalcula fundingContratado/desembolsado/saldoALiberar/custoMedio por conta própria.
   const capitalSummary = authorized.has("capital") ? await getCapitalExecutiveSummary({ organizationId }, project.id) : null;
@@ -276,6 +288,9 @@ async function buildProjectExceptionsAndKpis(organizationId: string, project: Ex
   };
 
   const exceptions: ExecutiveException[] = [...buildBudgetVarianceExceptions(ctx, operations.bridge, referenceDate)];
+  // `engineering` só vem preenchido quando o papel tem ENGINEERING_FINANCIAL_VIEW — sem a
+  // capacidade, nem a exceção (que carrega valores em R$/contagens) entra na lista.
+  if (engineering) exceptions.push(...buildEngineeringExceptions(ctx, engineering, referenceDate));
   if (authorized.has("legal") && legal) exceptions.push(...buildLegalExceptions(ctx, legal.obligations, legal.licenses, referenceDate));
   if (authorized.has("financial") && financial) exceptions.push(...buildFinancialExceptions(ctx, financial.payables, financial.receivables, referenceDate));
   if (authorized.has("sales") && sales) {
@@ -305,7 +320,12 @@ async function buildProjectExceptionsAndKpis(organizationId: string, project: Ex
 
   const kpis: ExecutiveProjectKpis = {
     viability,
-    operations: { scheduleStatus: operations.schedule?.status ?? null, budgetStatus: operations.budget?.status ?? null, criticalVarianceCategories: operations.bridge.filter((row) => row.level === "CRITICO" || row.level === "RELEVANTE").length },
+    operations: {
+      scheduleStatus: operations.schedule?.status ?? null,
+      budgetStatus: operations.budget?.status ?? null,
+      criticalVarianceCategories: operations.bridge.filter((row) => row.level === "CRITICO" || row.level === "RELEVANTE").length,
+      ...(engineering ? { engineeringFinancials: { budgeted: engineering.budgeted, contracted: engineering.contracted, measured: engineering.measured, realized: engineering.realized, finalProjected: engineering.finalProjected, projectedDeviation: engineering.projectedDeviation, noEvidence: engineering.noEvidence.length, criticalTechnicalRisks: engineering.criticalItems.length, pendingReviews: engineering.proposals.length } } : {}),
+    },
   };
   if (authorized.has("sales") && sales) kpis.commercial = { unitsAvailable: sales.unitsAvailable, unitsSold: sales.unitsSold, unitsTotal: sales.unitsTotal, vgvVendido: sales.vgvVendido };
   if (authorized.has("financial") && financial) {
@@ -357,7 +377,7 @@ export async function getExecutiveProjectOverview(authContext: Pick<AuthContext,
   const authorized = authorizedExecutiveDomains(authContext.role);
 
   const [{ exceptions, kpis, freshnessByDomain }, installations, whatChanged, pendingApprovals] = await Promise.all([
-    buildProjectExceptionsAndKpis(organizationId, project, referenceDate, authorized),
+    buildProjectExceptionsAndKpis(organizationId, project, referenceDate, authorized, authContext.role),
     authorized.has("integrations") ? queryIntegrationSignals(organizationId) : Promise.resolve([]),
     computeWhatChanged(organizationId, project.id, referenceDate, authorized),
     authorized.has("approvals") ? queryPendingApprovals(organizationId, [project.id]) : Promise.resolve([]),
@@ -443,7 +463,7 @@ export async function getExecutiveOpenExceptions(authContext: Pick<AuthContext, 
   const authorized = authorizedExecutiveDomains(authContext.role);
 
   const [{ exceptions }, installations, pendingApprovals] = await Promise.all([
-    buildProjectExceptionsAndKpis(organizationId, project, referenceDate, authorized),
+    buildProjectExceptionsAndKpis(organizationId, project, referenceDate, authorized, authContext.role),
     authorized.has("integrations") ? queryIntegrationSignals(organizationId) : Promise.resolve([]),
     authorized.has("approvals") ? queryPendingApprovals(organizationId, [project.id]) : Promise.resolve([]),
   ]);
@@ -521,7 +541,7 @@ export async function getExecutivePortfolioOverview(authContext: Pick<AuthContex
           economicGroupId: project.company?.economicGroupId ?? null,
           economicGroupName: context.economicGroup?.name ?? null,
         };
-        const { exceptions, kpis } = await buildProjectExceptionsAndKpis(organizationId, ref, referenceDate, authorized);
+        const { exceptions, kpis } = await buildProjectExceptionsAndKpis(organizationId, ref, referenceDate, authorized, authContext.role);
         return { ref, exceptions, kpis };
       }),
     ),

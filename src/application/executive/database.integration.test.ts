@@ -260,6 +260,22 @@ describe.skipIf(!process.env.DATABASE_URL).sequential("Gestão Executiva (9K.2) 
     });
   });
 
+  it("fechamento adversarial 9M: VIEWER não recebe valores monetários de Engenharia/Orçamento (orçado/contratado/medido/realizado/projeção/desvio/contagens) nem no payload do read model, nem nas exceções — scheduleStatus/budgetStatus continuam visíveis (comportamento pré-existente preservado)", async () => {
+    const viewerOverview = await getExecutiveProjectOverview(viewerAuth(), project1, referenceDate);
+    const ownerOverview = await getExecutiveProjectOverview(ownerAuth(), project1, referenceDate);
+
+    expect(viewerOverview.kpis.operations.engineeringFinancials).toBeUndefined();
+    expect("engineeringFinancials" in viewerOverview.kpis.operations).toBe(false);
+    expect(viewerOverview.kpis.operations.scheduleStatus).toBe(ownerOverview.kpis.operations.scheduleStatus);
+    expect(viewerOverview.kpis.operations.budgetStatus).toBe(ownerOverview.kpis.operations.budgetStatus);
+    expect(viewerOverview.kpis.operations.criticalVarianceCategories).toBe(ownerOverview.kpis.operations.criticalVarianceCategories);
+
+    const engineeringExceptionTypes = new Set(["budget_line_without_evidence", "critical_engineering_opinion", "smart_budget_review_pending", "contracted_above_budget", "measurement_above_contract"]);
+    expect(viewerOverview.exceptions.some((item) => engineeringExceptionTypes.has(item.type))).toBe(false);
+
+    expect(ownerOverview.kpis.operations.engineeringFinancials).toBeDefined();
+  });
+
   it("gate 2: isolamento tenant continua funcionando junto com o gate de capabilities (VIEWER de outra organização não vê nada desta)", async () => {
     await expect(getExecutiveProjectOverview({ organizationId: foreignOrganizationId, role: "VIEWER" }, project1, referenceDate)).rejects.toThrow();
   });

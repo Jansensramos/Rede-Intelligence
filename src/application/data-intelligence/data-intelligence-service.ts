@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { AuthContext } from "@/application/auth/session";
 import { prisma } from "@/infrastructure/database/prisma";
+import { appendSmartBudgetLineReview, approveSmartBudgetProposal, createSmartBudgetProposal, rejectSmartBudgetProposal } from "@/application/engineering/engineering-service";
 import {
   DATA_INTELLIGENCE_ENGINE_VERSION,
   assertDataIntelligenceCapability,
@@ -711,20 +712,8 @@ export async function createAutoBudgetProposal(context: DIContext, input: { proj
     suggestion.rationale = `Sem sugestão numérica: o comparativo mais recente para este item está em "${benchmarkUnit}" (${benchmark.sampleSize} observação(ões)), incompatível com a unidade "${input.unit}" desta proposta. Peça um comparativo na unidade correta antes de orçar este item.`;
   }
 
-  return prisma.autoBudgetProposal.create({
-    data: {
-      organizationId: context.organizationId, projectId: input.projectId, name: input.name, status: "DRAFT", policyId: policy.id,
-      rationale: suggestion.rationale, createdById: context.userId,
-      lines: {
-        create: [{
-          economicItemId: input.economicItemId, benchmarkRunId: benchmark?.id ?? null, description: input.name, quantity: input.quantity, unit: input.unit,
-          suggestedUnitCost: suggestion.suggestedUnitCost, suggestedTotalCost: suggestion.suggestedTotalCost, rangeLow: suggestion.rangeLow, rangeHigh: suggestion.rangeHigh,
-          confidenceLevel: suggestion.confidenceLevel, rationale: suggestion.rationale, exceptions: json(suggestion.exceptions),
-        }],
-      },
-    },
-    include: { lines: true },
-  });
+  void policy; void suggestion;
+  return createSmartBudgetProposal(context, { projectId: input.projectId, name: input.name, rationale: suggestion.rationale, lines: [{ economicItemId: input.economicItemId, quantity: input.quantity, unit: input.unit, quantityOrigin: "ESTIMATE", benchmarkRunId: benchmark?.id ?? null, evidenceRequired: true }] });
 }
 
 export async function moveAutoBudgetProposalToReview(context: DIContext, proposalId: string) {
@@ -741,19 +730,12 @@ export async function decideAutoBudgetProposal(context: DIContext, proposalId: s
   if (!proposal) throw new Error("Proposta não encontrada nesta organização.");
   if (proposal.status !== "REVIEW" && proposal.status !== "DRAFT") throw new Error(`Proposta em status ${proposal.status} não pode ser decidida.`);
 
-  // Preserva a sugestão original: reviewedUnitCost fica em campo separado, nunca sobrescreve
-  // suggestedUnitCost — a linha guarda os dois valores lado a lado (plano 9I, seção 66).
-  for (const review of input.lineReviews ?? []) {
-    await prisma.autoBudgetProposalLine.update({ where: { id: review.lineId }, data: { reviewedUnitCost: review.reviewedUnitCost ?? null, reviewNote: review.reviewNote ?? null } });
-  }
-
-  return prisma.autoBudgetProposal.update({
-    where: { id: proposalId },
-    data: decision === "APPROVED"
-      ? { status: "APPROVED", approvedById: context.userId, approvedAt: new Date() }
-      : { status: "REJECTED", rejectionReason: input.rejectionReason ?? null, reviewedById: context.userId, reviewedAt: new Date() },
-    include: { lines: true },
-  });
+  // rejectSmartBudgetProposal/approveSmartBudgetProposal exigem status REVIEW — leva o DRAFT
+  // legado para lá antes de decidir, nas duas direções (aprovação já fazia isso só para APPROVED).
+  if (proposal.status === "DRAFT") await prisma.autoBudgetProposal.update({ where: { id: proposal.id }, data: { status: "REVIEW", reviewedById: context.userId, reviewedAt: new Date() } });
+  if (decision === "REJECTED") return rejectSmartBudgetProposal(context, proposalId, input.rejectionReason ?? "Proposta rejeitada na revisão humana.");
+  for (const review of input.lineReviews ?? []) await appendSmartBudgetLineReview(context, { lineId: review.lineId, decision: review.reviewedUnitCost == null ? "ACCEPTED" : "ADJUSTED", revisedUnitCost: review.reviewedUnitCost, justification: review.reviewNote ?? "Revisão humana registrada pelo fluxo legado 9I." });
+  return approveSmartBudgetProposal(context, proposalId);
 }
 
 // ============================================================================

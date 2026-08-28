@@ -103,6 +103,7 @@ describe("Fundação de Quantidades BIM, Composições e Conjunto de Dados 9I co
 
   it("dataset gerado duas vezes com os mesmos fatos produz o mesmo checksum e não duplica versão", async () => {
     const first = await generateAnalyticalDatasetVersion(context, { key: "custo-fundacoes-estrutura", purpose: "Demonstração de reprodutibilidade 9I", projectId, populationDescription: "Fatos analíticos do item Construção MCMV do START BUTANTÃ" });
+    const countAfterFirst = await prisma.analyticalDatasetVersion.count({ where: { organizationId: context.organizationId, key: "custo-fundacoes-estrutura" } });
     const second = await generateAnalyticalDatasetVersion(context, { key: "custo-fundacoes-estrutura", purpose: "Demonstração de reprodutibilidade 9I", projectId, populationDescription: "Fatos analíticos do item Construção MCMV do START BUTANTÃ" });
 
     expect(second.id).toBe(first.id); // mesmo conteúdo -> mesma linha, nenhuma versão nova criada
@@ -111,7 +112,7 @@ describe("Fundação de Quantidades BIM, Composições e Conjunto de Dados 9I co
     expect(first.rowCount).toBeGreaterThan(0);
 
     const countRows = await prisma.analyticalDatasetVersion.count({ where: { organizationId: context.organizationId, key: "custo-fundacoes-estrutura" } });
-    expect(countRows).toBe(1);
+    expect(countRows).toBe(countAfterFirst);
 
     const list = await listAnalyticalDatasetVersions(context);
     expect(list.some((v) => v.key === "custo-fundacoes-estrutura")).toBe(true);

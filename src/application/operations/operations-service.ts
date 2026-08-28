@@ -276,7 +276,7 @@ export async function getOperationsWorkspace(context: Pick<AuthContext, "organiz
   await projectForTenant(context.organizationId, projectId);
   const [baseline, budget, schedule, policy, structure] = await Promise.all([
     prisma.operationalBaseline.findFirst({ where: { organizationId: context.organizationId, projectId }, orderBy: [{ version: "desc" }], include: { lines: true } }),
-    prisma.budget.findFirst({ where: { organizationId: context.organizationId, projectId }, orderBy: [{ version: "desc" }, { updatedAt: "desc" }], include: { lineItems: true, varianceJustifications: true } }),
+    prisma.budget.findFirst({ where: { organizationId: context.organizationId, projectId, status: { notIn: ["ARCHIVED", "SUPERSEDED", "CLOSED"] } }, orderBy: [{ version: "desc" }, { updatedAt: "desc" }], include: { lineItems: true, varianceJustifications: true } }),
     prisma.operationalSchedule.findFirst({ where: { organizationId: context.organizationId, projectId }, orderBy: [{ version: "desc" }], include: { activities: { include: { allocations: true, predecessors: true } } } }),
     prisma.materialityPolicy.findFirst({ where: { organizationId: context.organizationId, isActive: true }, orderBy: { updatedAt: "desc" } }),
     prisma.project.findFirst({

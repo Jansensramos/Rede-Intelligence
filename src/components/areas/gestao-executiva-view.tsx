@@ -76,10 +76,10 @@ function RestrictedAreaCard({ label }: { label: string }) {
 
 const ATTENTION_ORDER: CanonicalSeverity[] = ["CRITICO", "DECISAO", "ACAO_NECESSARIA", "ATENCAO"];
 
-/** Rótulos em português para enums técnicos exibidos nesta tela (critério de aceite: "interface 100% em português", inclusive rótulos técnicos). */
+const ACCOUNTING_STATUS_LABELS: Record<string, string> = { OPEN: "Aberto", UNDER_REVIEW: "Em revisão", CLOSED: "Fechado", REOPENED: "Reaberto", ADJUSTMENT: "Em ajuste" };
+/** Rótulos em português para o card "Obra/Engenharia" quando o papel não tem ENGINEERING_FINANCIAL_VIEW (fallback pré-9M, sem nenhum valor em R$). */
 const SCHEDULE_STATUS_LABELS: Record<string, string> = { DRAFT: "Rascunho", UNDER_REVIEW: "Em revisão", APPROVED: "Aprovado", SUPERSEDED: "Substituído", CLOSED: "Encerrado" };
 const BUDGET_STATUS_LABELS: Record<string, string> = { DRAFT: "Rascunho", UNDER_REVIEW: "Em revisão", APPROVED: "Aprovado", ARCHIVED: "Arquivado", OFFICIAL: "Oficial", SUPERSEDED: "Substituído", CLOSED: "Encerrado" };
-const ACCOUNTING_STATUS_LABELS: Record<string, string> = { OPEN: "Aberto", UNDER_REVIEW: "Em revisão", CLOSED: "Fechado", REOPENED: "Reaberto", ADJUSTMENT: "Em ajuste" };
 const translateStatus = (map: Record<string, string>, value: string | null) => (value === null ? null : (map[value] ?? value));
 
 function ExceptionRow({ exception, onOpen }: { exception: ExecutiveException; onOpen: () => void }) {
@@ -280,8 +280,17 @@ export function GestaoExecutivaView({
           )}
           <button className="ds-area-card" type="button" onClick={() => router.push("/engenharia-obra")}>
             <span className="eyebrow">OBRA / ENGENHARIA</span>
-            <strong>{translateStatus(SCHEDULE_STATUS_LABELS, kpis.operations.scheduleStatus) ?? "Sem cronograma"}</strong>
-            <small>Orçamento: {translateStatus(BUDGET_STATUS_LABELS, kpis.operations.budgetStatus) ?? "sem orçamento oficial"} · {kpis.operations.criticalVarianceCategories} categoria(s) com variação relevante</small>
+            {kpis.operations.engineeringFinancials ? (
+              <>
+                <strong>{compactCurrency.format(kpis.operations.engineeringFinancials.budgeted)}</strong>
+                <small>Contratado {compactCurrency.format(kpis.operations.engineeringFinancials.contracted)} · Medido {compactCurrency.format(kpis.operations.engineeringFinancials.measured)} · Realizado {compactCurrency.format(kpis.operations.engineeringFinancials.realized)} · Projeção {kpis.operations.engineeringFinancials.finalProjected == null ? "sem evidência" : compactCurrency.format(kpis.operations.engineeringFinancials.finalProjected)} · {kpis.operations.engineeringFinancials.noEvidence} sem evidência · {kpis.operations.engineeringFinancials.criticalTechnicalRisks} risco(s) crítico(s) · {kpis.operations.engineeringFinancials.pendingReviews} revisão(ões)</small>
+              </>
+            ) : (
+              <>
+                <strong>{translateStatus(SCHEDULE_STATUS_LABELS, kpis.operations.scheduleStatus) ?? "Sem cronograma"}</strong>
+                <small>Orçamento: {translateStatus(BUDGET_STATUS_LABELS, kpis.operations.budgetStatus) ?? "sem orçamento oficial"} · {kpis.operations.criticalVarianceCategories} categoria(s) com variação relevante</small>
+              </>
+            )}
           </button>
           {isAuthorized("accounting") ? (
             <button className="ds-area-card" type="button" onClick={() => router.push("/contabilidade-controladoria")}>

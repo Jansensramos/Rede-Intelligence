@@ -3,6 +3,7 @@ import { requireAuthContext } from "@/application/auth/session";
 import { ensureDesignWorkspace } from "@/application/design/design-service";
 import { getLatestProjectBudget } from "@/application/budget/budget-service";
 import { getOperationsWorkspace } from "@/application/operations/operations-service";
+import { getEngineeringWorkspace } from "@/application/engineering/engineering-service";
 import { getLatestStudyForProject } from "@/application/studies/study-service";
 import { getCurrentOperationalContext } from "@/application/workspace/current-context";
 import { EngenhariaObraWorkspace } from "@/components/areas/engenharia-obra-workspace";
@@ -19,10 +20,11 @@ export default async function EngenhariaObraPage() {
   // Operações não dependem de nada aqui além do projectId, então não há razão para esperar o
   // estudo terminar antes de disparar as três buscas. Antes, o `await` do estudo bloqueava as
   // outras duas desnecessariamente, serializando 3 round-trips independentes ao banco.
-  const [study, design, operations] = await Promise.all([
+  const [study, design, operations, engineering] = await Promise.all([
     getLatestStudyForProject(authContext.organizationId, projectId),
     ensureDesignWorkspace(authContext, projectId),
     getOperationsWorkspace(authContext, projectId),
+    getEngineeringWorkspace(authContext, projectId),
   ]);
   const baseVgv = study ? calculateAllScenarios(study.assumptions).base.metrics.vgv : undefined;
   const budget = await getLatestProjectBudget(authContext, projectId, baseVgv);
@@ -30,7 +32,7 @@ export default async function EngenhariaObraPage() {
   return (
     <Suspense fallback={<Loading label="Carregando Engenharia e Obra…" />}>
       {/* Fechamento 9K.1: `key` por projeto — ver comentário em viabilidade/page.tsx. */}
-      <EngenhariaObraWorkspace key={projectId} initialDesign={design} initialBudget={budget} operations={operations} />
+      <EngenhariaObraWorkspace key={projectId} initialDesign={design} initialBudget={budget} operations={operations} engineering={engineering} />
     </Suspense>
   );
 }

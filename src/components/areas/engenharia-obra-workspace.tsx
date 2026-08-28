@@ -7,27 +7,32 @@ import { CircleDollarSign } from "lucide-react";
 import { BudgetEditor } from "@/components/BudgetEditor";
 import { DesignIntelligenceView } from "@/components/design-intelligence-view";
 import { OperationsView } from "@/components/operations-view";
+import { EngineeringIntelligenceView } from "@/components/engineering-intelligence-view";
 import { EmptyState, SectionTitle, Tabs } from "@/components/ui";
 import type { DesignWorkspaceView } from "@/domain/design";
 import type { BudgetWorkspaceView } from "@/application/budget/budget-service";
 import type { OperationsWorkspaceView } from "@/application/operations/operations-service";
+import type { EngineeringWorkspaceView } from "@/application/engineering/engineering-service";
 
-type Funcao = "design" | "orcamento";
+type Funcao = "design" | "engenharia" | "orcamento";
 
 export function EngenhariaObraWorkspace({
   initialDesign,
   initialBudget,
   operations,
+  engineering,
 }: {
   initialDesign: DesignWorkspaceView;
   initialBudget: BudgetWorkspaceView | null;
   operations: OperationsWorkspaceView;
+  engineering: EngineeringWorkspaceView;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [design, setDesign] = useState(initialDesign);
   const [budget, setBudget] = useState(initialBudget);
-  const funcao: Funcao = searchParams.get("f") === "orcamento" ? "orcamento" : "design";
+  const requested = searchParams.get("f");
+  const funcao: Funcao = requested === "orcamento" ? "orcamento" : requested === "engenharia" ? "engenharia" : "design";
 
   function setFuncao(next: Funcao) {
     router.replace(`/engenharia-obra?f=${next}`, { scroll: false });
@@ -59,7 +64,7 @@ export function EngenhariaObraWorkspace({
   return (
     <div className="view-stack">
       <Tabs
-        items={[{ key: "design", label: "Design Intelligence" }, { key: "orcamento", label: "Orçamento e Operações" }]}
+        items={[{ key: "design", label: "Projetos e BIM" }, { key: "engenharia", label: "Engenharia e Orçamento Inteligente" }, { key: "orcamento", label: "Base e Execução" }]}
         activeKey={funcao}
         onChange={(key) => setFuncao(key as Funcao)}
       />
@@ -71,6 +76,8 @@ export function EngenhariaObraWorkspace({
           onAskAI={(prompt) => router.push(`/assistente?prompt=${encodeURIComponent(prompt)}`)}
         />
       )}
+
+      {funcao === "engenharia" && <EngineeringIntelligenceView workspace={engineering} />}
 
       {funcao === "orcamento" && (
         <div className="view-stack">

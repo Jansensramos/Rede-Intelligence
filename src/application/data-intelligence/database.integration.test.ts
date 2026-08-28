@@ -60,7 +60,7 @@ describe("Inteligência de Dados 9I contra PostgreSQL real", () => {
 
   it("aprovação de Orçamento Inteligente preserva a sugestão original ao lado da revisão humana", async () => {
     const workspace = await getDataIntelligenceWorkspace(context, projectId);
-    const proposal = workspace.autoBudgetProposals[0];
+    const proposal = workspace.autoBudgetProposals.find((candidate) => candidate.status === "APPROVED" && candidate.lines.some((line) => line.reviewedUnitCost !== null));
     expect(proposal).toBeDefined();
     expect(proposal!.status).toBe("APPROVED");
     const line = proposal!.lines[0];

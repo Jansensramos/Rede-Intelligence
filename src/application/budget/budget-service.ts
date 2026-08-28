@@ -197,7 +197,7 @@ export async function listProjectBudgets(context: Pick<AuthContext, "organizatio
 
 export async function getLatestProjectBudget(context: Pick<AuthContext, "organizationId">, projectId: string, vgv?: Prisma.Decimal.Value) {
   const budget = await prisma.budget.findFirst({
-    where: { organizationId: context.organizationId, projectId, project: { organizationId: context.organizationId } },
+    where: { organizationId: context.organizationId, projectId, status: { notIn: ["ARCHIVED", "SUPERSEDED", "CLOSED"] }, project: { organizationId: context.organizationId } },
     orderBy: [{ version: "desc" }, { updatedAt: "desc" }],
     include: budgetInclude,
   });

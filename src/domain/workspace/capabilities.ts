@@ -18,7 +18,8 @@ export type WorkspaceCapability =
   | "FINANCIAL_VIEW"
   | "LEGAL_VIEW"
   | "COMMERCIAL_VIEW"
-  | "PROCUREMENT_VIEW";
+  | "PROCUREMENT_VIEW"
+  | "ENGINEERING_FINANCIAL_VIEW";
 
 /**
  * `FINANCIAL_VIEW`/`LEGAL_VIEW`/`COMMERCIAL_VIEW`/`PROCUREMENT_VIEW` (Fase 9K.2, gate 2 do
@@ -36,13 +37,19 @@ export type WorkspaceCapability =
  * transversal (Gestão Executiva) — as telas de módulo (`/financeiro`, `/juridico`, `/comercial`,
  * `/suprimentos`) continuam sem gate de leitura própria, isso é uma dívida pré-existente fora do
  * escopo desta sprint (ver relatório de fechamento).
+ *
+ * `ENGINEERING_FINANCIAL_VIEW` (fechamento adversarial da 9M): mesmo mecanismo, para os valores em
+ * R$ que a 9M passou a expor no card "Obra/Engenharia" da Gestão Executiva (orçado, contratado,
+ * medido, realizado, projeção final, desvio, contagens de pendência). Gate SOMENTE desse bloco
+ * monetário — `scheduleStatus`/`budgetStatus`/`criticalVarianceCategories` continuam sem gate
+ * (política pré-existente do domínio "operations", preservada).
  */
 const roleCapabilities: Record<MembershipRole, ReadonlySet<WorkspaceCapability>> = {
   VIEWER: new Set(["WORKSPACE_VIEW"]),
-  REVIEWER: new Set(["WORKSPACE_VIEW", "WORKSPACE_REVIEW", "FINANCIAL_VIEW", "LEGAL_VIEW", "COMMERCIAL_VIEW", "PROCUREMENT_VIEW"]),
-  ANALYST: new Set(["WORKSPACE_VIEW", "WORKSPACE_EDIT", "FINANCIAL_VIEW", "LEGAL_VIEW", "COMMERCIAL_VIEW", "PROCUREMENT_VIEW"]),
-  ADMIN: new Set(["WORKSPACE_VIEW", "WORKSPACE_EDIT", "WORKSPACE_REVIEW", "WORKSPACE_APPROVE", "INTEGRATIONS_CONFIGURE", "FINANCIAL_VIEW", "LEGAL_VIEW", "COMMERCIAL_VIEW", "PROCUREMENT_VIEW"]),
-  OWNER: new Set(["WORKSPACE_VIEW", "WORKSPACE_EDIT", "WORKSPACE_REVIEW", "WORKSPACE_APPROVE", "INTEGRATIONS_CONFIGURE", "CONFIDENTIAL_VIEW", "FINANCIAL_VIEW", "LEGAL_VIEW", "COMMERCIAL_VIEW", "PROCUREMENT_VIEW"]),
+  REVIEWER: new Set(["WORKSPACE_VIEW", "WORKSPACE_REVIEW", "FINANCIAL_VIEW", "LEGAL_VIEW", "COMMERCIAL_VIEW", "PROCUREMENT_VIEW", "ENGINEERING_FINANCIAL_VIEW"]),
+  ANALYST: new Set(["WORKSPACE_VIEW", "WORKSPACE_EDIT", "FINANCIAL_VIEW", "LEGAL_VIEW", "COMMERCIAL_VIEW", "PROCUREMENT_VIEW", "ENGINEERING_FINANCIAL_VIEW"]),
+  ADMIN: new Set(["WORKSPACE_VIEW", "WORKSPACE_EDIT", "WORKSPACE_REVIEW", "WORKSPACE_APPROVE", "INTEGRATIONS_CONFIGURE", "FINANCIAL_VIEW", "LEGAL_VIEW", "COMMERCIAL_VIEW", "PROCUREMENT_VIEW", "ENGINEERING_FINANCIAL_VIEW"]),
+  OWNER: new Set(["WORKSPACE_VIEW", "WORKSPACE_EDIT", "WORKSPACE_REVIEW", "WORKSPACE_APPROVE", "INTEGRATIONS_CONFIGURE", "CONFIDENTIAL_VIEW", "FINANCIAL_VIEW", "LEGAL_VIEW", "COMMERCIAL_VIEW", "PROCUREMENT_VIEW", "ENGINEERING_FINANCIAL_VIEW"]),
 };
 
 export function hasWorkspaceCapability(role: MembershipRole, capability: WorkspaceCapability) {
@@ -67,6 +74,7 @@ const ALL_CAPABILITIES: WorkspaceCapability[] = [
   "LEGAL_VIEW",
   "COMMERCIAL_VIEW",
   "PROCUREMENT_VIEW",
+  "ENGINEERING_FINANCIAL_VIEW",
 ];
 
 export function computeWorkspaceCapabilities(role: MembershipRole): WorkspaceCapabilitySet {

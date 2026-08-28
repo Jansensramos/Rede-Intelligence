@@ -959,6 +959,7 @@ model Organization {
   dataQualityRuns                 DataQualityRun[]
   portfolioSnapshots              PortfolioSnapshot[]
   autoBudgetProposals             AutoBudgetProposal[]
+  engineeringTechnicalOpinions    EngineeringTechnicalOpinion[]
   analyticsRefreshRuns            AnalyticsRefreshRun[]
   analyticalDatasetVersions       AnalyticalDatasetVersion[]
   bimQuantityMappings             BimQuantityMapping[]
@@ -1028,49 +1029,58 @@ model Organization {
 }
 
 model User {
-  id                     String                       @id @default(cuid())
-  email                  String                       @unique
-  name                   String
-  passwordHash           String                       @map("password_hash")
-  isActive               Boolean                      @default(true) @map("is_active")
-  createdAt              DateTime                     @default(now()) @map("created_at")
-  updatedAt              DateTime                     @updatedAt @map("updated_at")
-  memberships            OrganizationMembership[]     @relation("MembershipUser")
-  membershipsInvited     OrganizationMembership[]     @relation("MembershipInvitedBy")
-  sessions               Session[]
-  projectsCreated        Project[]                    @relation("ProjectCreatedBy")
-  projectsUpdated        Project[]                    @relation("ProjectUpdatedBy")
-  studiesCreated         ViabilityStudy[]             @relation("StudyCreatedBy")
-  studiesUpdated         ViabilityStudy[]             @relation("StudyUpdatedBy")
-  versionsCreated        StudyVersion[]               @relation("VersionCreatedBy")
-  versionsUpdated        StudyVersion[]               @relation("VersionUpdatedBy")
-  assumptionsCreated     AssumptionSnapshot[]         @relation("AssumptionCreatedBy")
-  assumptionsUpdated     AssumptionSnapshot[]         @relation("AssumptionUpdatedBy")
-  scenariosCreated       Scenario[]                   @relation("ScenarioCreatedBy")
-  scenariosUpdated       Scenario[]                   @relation("ScenarioUpdatedBy")
-  calculationRuns        CalculationRun[]
-  findingsCreated        RiskFinding[]
-  recommendationsCreated Recommendation[]
-  sensitivityRuns        SensitivityAnalysis[]
-  redTeamRuns            RedTeamRun[]
-  scoresCreated          Score[]
-  actualEntries          ActualEntry[]
-  aiRuns                 AIAnalysisRun[]
-  policiesCreated        InvestmentPolicy[]           @relation("PolicyCreatedBy")
-  policiesUpdated        InvestmentPolicy[]           @relation("PolicyUpdatedBy")
-  assumptionEntries      AssumptionEntry[]
-  scenarioOverrides      ScenarioAssumptionOverride[]
-  auditLogs              AuditLog[]
-  landAssetsCreated      LandAsset[]                  @relation("LandAssetCreatedBy")
-  landAssetsUpdated      LandAsset[]                  @relation("LandAssetUpdatedBy")
-  landStudiesCreated     LandStudy[]                  @relation("LandStudyCreatedBy")
-  landStudiesUpdated     LandStudy[]                  @relation("LandStudyUpdatedBy")
-  landVersionsCreated    LandStudyVersion[]           @relation("LandVersionCreatedBy")
-  landDocumentsCreated   LandDocument[]
-  landAuditLogs          LandAuditLog[]
-  budgetsCreated         Budget[]                     @relation("BudgetCreatedBy")
-  budgetsUpdated         Budget[]                     @relation("BudgetUpdatedBy")
-  budgetsApproved        Budget[]                     @relation("BudgetApprovedBy")
+  id                               String                            @id @default(cuid())
+  email                            String                            @unique
+  name                             String
+  passwordHash                     String                            @map("password_hash")
+  isActive                         Boolean                           @default(true) @map("is_active")
+  createdAt                        DateTime                          @default(now()) @map("created_at")
+  updatedAt                        DateTime                          @updatedAt @map("updated_at")
+  memberships                      OrganizationMembership[]          @relation("MembershipUser")
+  membershipsInvited               OrganizationMembership[]          @relation("MembershipInvitedBy")
+  sessions                         Session[]
+  projectsCreated                  Project[]                         @relation("ProjectCreatedBy")
+  projectsUpdated                  Project[]                         @relation("ProjectUpdatedBy")
+  studiesCreated                   ViabilityStudy[]                  @relation("StudyCreatedBy")
+  studiesUpdated                   ViabilityStudy[]                  @relation("StudyUpdatedBy")
+  versionsCreated                  StudyVersion[]                    @relation("VersionCreatedBy")
+  versionsUpdated                  StudyVersion[]                    @relation("VersionUpdatedBy")
+  assumptionsCreated               AssumptionSnapshot[]              @relation("AssumptionCreatedBy")
+  assumptionsUpdated               AssumptionSnapshot[]              @relation("AssumptionUpdatedBy")
+  scenariosCreated                 Scenario[]                        @relation("ScenarioCreatedBy")
+  scenariosUpdated                 Scenario[]                        @relation("ScenarioUpdatedBy")
+  calculationRuns                  CalculationRun[]
+  findingsCreated                  RiskFinding[]
+  recommendationsCreated           Recommendation[]
+  sensitivityRuns                  SensitivityAnalysis[]
+  redTeamRuns                      RedTeamRun[]
+  scoresCreated                    Score[]
+  actualEntries                    ActualEntry[]
+  aiRuns                           AIAnalysisRun[]
+  policiesCreated                  InvestmentPolicy[]                @relation("PolicyCreatedBy")
+  policiesUpdated                  InvestmentPolicy[]                @relation("PolicyUpdatedBy")
+  assumptionEntries                AssumptionEntry[]
+  scenarioOverrides                ScenarioAssumptionOverride[]
+  auditLogs                        AuditLog[]
+  landAssetsCreated                LandAsset[]                       @relation("LandAssetCreatedBy")
+  landAssetsUpdated                LandAsset[]                       @relation("LandAssetUpdatedBy")
+  landStudiesCreated               LandStudy[]                       @relation("LandStudyCreatedBy")
+  landStudiesUpdated               LandStudy[]                       @relation("LandStudyUpdatedBy")
+  landVersionsCreated              LandStudyVersion[]                @relation("LandVersionCreatedBy")
+  landDocumentsCreated             LandDocument[]
+  landAuditLogs                    LandAuditLog[]
+  budgetsCreated                   Budget[]                          @relation("BudgetCreatedBy")
+  budgetsUpdated                   Budget[]                          @relation("BudgetUpdatedBy")
+  budgetsApproved                  Budget[]                          @relation("BudgetApprovedBy")
+  autoBudgetsCreated               AutoBudgetProposal[]              @relation("AutoBudgetCreatedBy")
+  autoBudgetsReviewed              AutoBudgetProposal[]              @relation("AutoBudgetReviewedBy")
+  autoBudgetsApproved              AutoBudgetProposal[]              @relation("AutoBudgetApprovedBy")
+  autoBudgetLineReviews            AutoBudgetLineReview[]            @relation("AutoBudgetLineReviewedBy")
+  engineeringOpinionsCreated       EngineeringTechnicalOpinion[]     @relation("EngineeringOpinionCreatedBy")
+  engineeringOpinionsSubmitted     EngineeringTechnicalOpinion[]     @relation("EngineeringOpinionSubmittedBy")
+  engineeringOpinionsValidated     EngineeringTechnicalOpinion[]     @relation("EngineeringOpinionValidatedBy")
+  engineeringOpinionAssignments    EngineeringTechnicalOpinionItem[] @relation("EngineeringOpinionResponsible")
+  engineeringOpinionItemsValidated EngineeringTechnicalOpinionItem[] @relation("EngineeringOpinionItemValidatedBy")
 
   @@map("users")
 }
@@ -1209,6 +1219,7 @@ model Project {
   forecastEvaluations          ForecastEvaluation[]
   benchmarkRuns                BenchmarkRun[]
   autoBudgetProposals          AutoBudgetProposal[]
+  engineeringTechnicalOpinions EngineeringTechnicalOpinion[]
   bimQuantityMappings          BimQuantityMapping[]
   marketAreas                  MarketArea[]
   productScenarios             ProductScenario[]
@@ -1216,50 +1227,54 @@ model Project {
   fundingFinancialEvents       FundingFinancialEvent[]
 
   @@unique([organizationId, name])
+  @@unique([organizationId, id], map: "projects_organization_id_id_key")
   @@index([organizationId, status])
   @@index([companyId])
   @@map("projects")
 }
 
 model Budget {
-  id                     String                        @id @default(cuid())
-  organizationId         String                        @map("organization_id")
-  projectId              String                        @map("project_id")
-  studyVersionId         String?                       @map("study_version_id")
-  operationalBaselineId  String?                       @map("operational_baseline_id")
-  companyId              String?                       @map("company_id")
-  previousBudgetId       String?                       @map("previous_budget_id")
-  name                   String
-  description            String?
-  status                 BudgetStatus                  @default(DRAFT)
-  kind                   BudgetKind                    @default(PRELIMINARY)
-  currency               String                        @default("BRL") @db.Char(3)
-  baseDate               DateTime                      @map("base_date") @db.Date
-  version                Int                           @default(1)
-  totalBudget            Decimal                       @default(0) @map("total_budget") @db.Decimal(20, 2)
-  createdById            String                        @map("created_by_id")
-  updatedById            String                        @map("updated_by_id")
-  approvedById           String?                       @map("approved_by_id")
-  approvedAt             DateTime?                     @map("approved_at")
-  revisionReason         String?                       @map("revision_reason")
-  checksum               String?
-  createdAt              DateTime                      @default(now()) @map("created_at")
-  updatedAt              DateTime                      @updatedAt @map("updated_at")
-  organization           Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project                Project                       @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  studyVersion           StudyVersion?                 @relation(fields: [studyVersionId], references: [id], onDelete: Restrict)
-  operationalBaseline    OperationalBaseline?          @relation(fields: [operationalBaselineId], references: [id], onDelete: Restrict)
-  company                Company?                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  previousBudget         Budget?                       @relation("BudgetVersions", fields: [previousBudgetId], references: [id], onDelete: Restrict)
-  revisions              Budget[]                      @relation("BudgetVersions")
-  createdBy              User                          @relation("BudgetCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy              User                          @relation("BudgetUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
-  approvedBy             User?                         @relation("BudgetApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
-  lineItems              BudgetLineItem[]
-  schedules              OperationalSchedule[]
-  varianceJustifications BudgetVarianceJustification[]
+  id                         String                        @id @default(cuid())
+  organizationId             String                        @map("organization_id")
+  projectId                  String                        @map("project_id")
+  studyVersionId             String?                       @map("study_version_id")
+  operationalBaselineId      String?                       @map("operational_baseline_id")
+  companyId                  String?                       @map("company_id")
+  previousBudgetId           String?                       @map("previous_budget_id")
+  name                       String
+  description                String?
+  status                     BudgetStatus                  @default(DRAFT)
+  kind                       BudgetKind                    @default(PRELIMINARY)
+  currency                   String                        @default("BRL") @db.Char(3)
+  baseDate                   DateTime                      @map("base_date") @db.Date
+  version                    Int                           @default(1)
+  totalBudget                Decimal                       @default(0) @map("total_budget") @db.Decimal(20, 2)
+  createdById                String                        @map("created_by_id")
+  updatedById                String                        @map("updated_by_id")
+  approvedById               String?                       @map("approved_by_id")
+  approvedAt                 DateTime?                     @map("approved_at")
+  revisionReason             String?                       @map("revision_reason")
+  checksum                   String?
+  createdAt                  DateTime                      @default(now()) @map("created_at")
+  updatedAt                  DateTime                      @updatedAt @map("updated_at")
+  organization               Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project                    Project                       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  studyVersion               StudyVersion?                 @relation(fields: [studyVersionId], references: [id], onDelete: Restrict)
+  operationalBaseline        OperationalBaseline?          @relation(fields: [operationalBaselineId], references: [id], onDelete: Restrict)
+  company                    Company?                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  previousBudget             Budget?                       @relation("BudgetVersions", fields: [previousBudgetId], references: [id], onDelete: Restrict)
+  revisions                  Budget[]                      @relation("BudgetVersions")
+  sourceAutoBudgetProposals  AutoBudgetProposal[]          @relation("AutoBudgetSourceBudget")
+  approvedAutoBudgetProposal AutoBudgetProposal?           @relation("AutoBudgetApprovedBudget")
+  createdBy                  User                          @relation("BudgetCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy                  User                          @relation("BudgetUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  approvedBy                 User?                         @relation("BudgetApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+  lineItems                  BudgetLineItem[]
+  schedules                  OperationalSchedule[]
+  varianceJustifications     BudgetVarianceJustification[]
 
   @@unique([projectId, name, version])
+  @@unique([organizationId, projectId, id], map: "budgets_organization_project_id_key")
   @@index([organizationId, status])
   @@index([projectId, status])
   @@index([studyVersionId])
@@ -1500,6 +1515,7 @@ model EconomicItem {
   costCompositionItems       CostCompositionItem[]
 
   @@unique([projectId, code])
+  @@unique([organizationId, projectId, id], map: "economic_items_organization_project_id_key")
   @@index([organizationId, category])
   @@map("economic_items")
 }
@@ -3811,35 +3827,36 @@ model DesignProjectPackage {
 }
 
 model DesignRevision {
-  id                 String                  @id @default(cuid())
-  packageId          String                  @map("package_id")
-  versionNumber      Int                     @map("version_number")
+  id                 String                        @id @default(cuid())
+  packageId          String                        @map("package_id")
+  versionNumber      Int                           @map("version_number")
   label              String
-  description        String                  @default("") @db.Text
-  status             DesignPackageStatus     @default(UPLOADING)
-  sourceRevisionId   String?                 @map("source_revision_id")
-  contentHash        String?                 @map("content_hash")
-  issuedAt           DateTime?               @map("issued_at") @db.Date
-  createdById        String                  @map("created_by_id")
-  createdAt          DateTime                @default(now()) @map("created_at")
-  updatedAt          DateTime                @updatedAt @map("updated_at")
-  package            DesignProjectPackage    @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  description        String                        @default("") @db.Text
+  status             DesignPackageStatus           @default(UPLOADING)
+  sourceRevisionId   String?                       @map("source_revision_id")
+  contentHash        String?                       @map("content_hash")
+  issuedAt           DateTime?                     @map("issued_at") @db.Date
+  createdById        String                        @map("created_by_id")
+  createdAt          DateTime                      @default(now()) @map("created_at")
+  updatedAt          DateTime                      @updatedAt @map("updated_at")
+  package            DesignProjectPackage          @relation(fields: [packageId], references: [id], onDelete: Cascade)
   files              DesignFile[]
   metrics            DesignMetric[]
   findings           DesignFinding[]
   opportunities      VEOpportunity[]
   alternatives       DesignAlternative[]
   reviewRounds       DesignReviewRound[]
-  changesFrom        DesignChange[]          @relation("DesignChangeFrom")
-  changesTo          DesignChange[]          @relation("DesignChangeTo")
+  changesFrom        DesignChange[]                @relation("DesignChangeFrom")
+  changesTo          DesignChange[]                @relation("DesignChangeTo")
   baselines          DesignBaseline[]
   decisions          DesignDecision[]
   detectedUnits      DetectedUnit[]
   clashes            DesignClash[]
   ruleChecks         DesignRuleCheck[]
   bimModels          BimModel[]
-  bimComparisonsFrom BimRevisionComparison[] @relation("BimComparisonFrom")
-  bimComparisonsTo   BimRevisionComparison[] @relation("BimComparisonTo")
+  bimComparisonsFrom BimRevisionComparison[]       @relation("BimComparisonFrom")
+  bimComparisonsTo   BimRevisionComparison[]       @relation("BimComparisonTo")
+  technicalOpinions  EngineeringTechnicalOpinion[]
 
   @@unique([packageId, versionNumber])
   @@index([packageId, createdAt])
@@ -4038,42 +4055,44 @@ model DesignMetric {
 }
 
 model DesignFinding {
-  id                 String                  @id @default(cuid())
-  organizationId     String                  @map("organization_id")
-  projectId          String                  @map("project_id")
-  packageId          String                  @map("package_id")
-  revisionId         String                  @map("revision_id")
-  fileId             String?                 @map("file_id")
-  sheetId            String?                 @map("sheet_id")
-  discipline         DesignDiscipline
-  category           String
-  type               DesignFindingType
-  severity           DesignFindingSeverity
-  confidence         DesignConfidence
-  title              String
-  description        String                  @db.Text
-  implication        String                  @db.Text
-  recommendation     String                  @db.Text
-  evidenceRefs       Json                    @map("evidence_refs")
-  geometryRef        Json?                   @map("geometry_ref")
-  elementRefs        Json?                   @map("element_refs")
-  relatedMetric      String?                 @map("related_metric")
-  potentialImpact    Json?                   @map("potential_impact")
-  status             DesignFindingStatus     @default(OPEN)
-  ownerId            String?                 @map("owner_id")
-  dueDate            DateTime?               @map("due_date") @db.Date
-  priority           DesignFindingSeverity   @default(MEDIUM)
-  sourceRuleKey      String?                 @map("source_rule_key")
-  promotedEntityType String?                 @map("promoted_entity_type")
-  promotedEntityId   String?                 @map("promoted_entity_id")
-  createdById        String                  @map("created_by_id")
-  createdAt          DateTime                @default(now()) @map("created_at")
-  updatedAt          DateTime                @updatedAt @map("updated_at")
-  package            DesignProjectPackage    @relation(fields: [packageId], references: [id], onDelete: Cascade)
-  revision           DesignRevision          @relation(fields: [revisionId], references: [id], onDelete: Cascade)
-  evidence           DesignFindingEvidence[]
-  responses          DesignFindingResponse[]
+  id                    String                            @id @default(cuid())
+  organizationId        String                            @map("organization_id")
+  projectId             String                            @map("project_id")
+  packageId             String                            @map("package_id")
+  revisionId            String                            @map("revision_id")
+  fileId                String?                           @map("file_id")
+  sheetId               String?                           @map("sheet_id")
+  discipline            DesignDiscipline
+  category              String
+  type                  DesignFindingType
+  severity              DesignFindingSeverity
+  confidence            DesignConfidence
+  title                 String
+  description           String                            @db.Text
+  implication           String                            @db.Text
+  recommendation        String                            @db.Text
+  evidenceRefs          Json                              @map("evidence_refs")
+  geometryRef           Json?                             @map("geometry_ref")
+  elementRefs           Json?                             @map("element_refs")
+  relatedMetric         String?                           @map("related_metric")
+  potentialImpact       Json?                             @map("potential_impact")
+  status                DesignFindingStatus               @default(OPEN)
+  ownerId               String?                           @map("owner_id")
+  dueDate               DateTime?                         @map("due_date") @db.Date
+  priority              DesignFindingSeverity             @default(MEDIUM)
+  sourceRuleKey         String?                           @map("source_rule_key")
+  promotedEntityType    String?                           @map("promoted_entity_type")
+  promotedEntityId      String?                           @map("promoted_entity_id")
+  createdById           String                            @map("created_by_id")
+  createdAt             DateTime                          @default(now()) @map("created_at")
+  updatedAt             DateTime                          @updatedAt @map("updated_at")
+  package               DesignProjectPackage              @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  revision              DesignRevision                    @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  evidence              DesignFindingEvidence[]
+  responses             DesignFindingResponse[]
+  technicalOpinionItems EngineeringTechnicalOpinionItem[]
 
+  @@unique([organizationId, projectId, id], map: "design_findings_organization_project_id_key")
   @@index([organizationId, projectId, status])
   @@index([packageId, revisionId, severity, status])
   @@index([fileId, sheetId])
@@ -9880,30 +9899,32 @@ model ConnectorDocumentReference {
 }
 
 model ExternalPriceObservation {
-  id                   String       @id @default(cuid())
-  organizationId       String       @map("organization_id")
-  itemCode             String?      @map("item_code")
-  itemDescription      String       @map("item_description")
-  specification        String?      @db.Text
+  id                   String                   @id @default(cuid())
+  organizationId       String                   @map("organization_id")
+  itemCode             String?                  @map("item_code")
+  itemDescription      String                   @map("item_description")
+  specification        String?                  @db.Text
   region               String?
-  observedAt           DateTime     @map("observed_at")
-  quantity             Decimal?     @db.Decimal(18, 4)
+  observedAt           DateTime                 @map("observed_at")
+  quantity             Decimal?                 @db.Decimal(18, 4)
   unit                 String?
-  price                Decimal      @db.Decimal(18, 4)
-  freight              Decimal?     @db.Decimal(18, 4)
-  taxes                Decimal?     @db.Decimal(18, 4)
-  currency             String       @default("BRL") @db.Char(3)
-  supplierName         String?      @map("supplier_name")
-  sourceProvider       String       @map("source_provider")
-  sourceUrl            String?      @map("source_url")
-  evidenceChecksum     String?      @map("evidence_checksum")
+  price                Decimal                  @db.Decimal(18, 4)
+  freight              Decimal?                 @db.Decimal(18, 4)
+  taxes                Decimal?                 @db.Decimal(18, 4)
+  currency             String                   @default("BRL") @db.Char(3)
+  supplierName         String?                  @map("supplier_name")
+  sourceProvider       String                   @map("source_provider")
+  sourceUrl            String?                  @map("source_url")
+  evidenceChecksum     String?                  @map("evidence_checksum")
   confidence           Float?
-  licenseNote          String?      @map("license_note") @db.Text
-  mappedEconomicItemId String?      @map("mapped_economic_item_id")
-  createdById          String       @map("created_by_id")
-  createdAt            DateTime     @default(now()) @map("created_at")
-  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  licenseNote          String?                  @map("license_note") @db.Text
+  mappedEconomicItemId String?                  @map("mapped_economic_item_id")
+  createdById          String                   @map("created_by_id")
+  createdAt            DateTime                 @default(now()) @map("created_at")
+  organization         Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  autoBudgetLines      AutoBudgetProposalLine[]
 
+  @@unique([organizationId, id], map: "external_price_observations_org_id_key")
   @@index([organizationId, itemCode, observedAt])
   @@map("external_price_observations")
 }
@@ -10099,6 +10120,56 @@ enum AutoBudgetProposalStatus {
   APPROVED
   REJECTED
   SUPERSEDED
+}
+
+enum EngineeringOpinionStatus {
+  DRAFT
+  UNDER_REVIEW
+  VALIDATED
+  REJECTED
+  SUPERSEDED
+}
+
+enum EngineeringOpinionItemStatus {
+  PENDING
+  VALIDATED
+  REJECTED
+  REVISION_REQUESTED
+}
+
+enum EngineeringOpinionTopic {
+  TOPOGRAPHY
+  SOIL_INVESTIGATION
+  SOIL
+  FOUNDATIONS
+  RETAINING_STRUCTURES
+  DRAINAGE
+  STRUCTURE
+  WATERPROOFING
+  INSTALLATIONS
+  CONSTRUCTION_LOGISTICS
+  ACCESS
+  NEIGHBORS
+  INTERFERENCES
+  SAFETY
+  CONSTRUCTION_METHOD
+  SCHEDULE_RISK
+  COST_RISK
+  OTHER
+}
+
+enum AutoBudgetLineReviewDecision {
+  ACCEPTED
+  ADJUSTED
+  REJECTED
+  REVISION_REQUESTED
+}
+
+enum CostEvidenceStatus {
+  VALIDATED_PRICE
+  COMPARABLE_HISTORICAL_PRICE
+  ESTIMATED_PRICE
+  NO_EVIDENCE
 }
 
 enum PortfolioScopeType {
@@ -10329,6 +10400,7 @@ model ComparabilityPolicy {
   autoBudgetProposals AutoBudgetProposal[]
 
   @@unique([organizationId, key, version])
+  @@unique([organizationId, id], map: "comparability_policies_org_id_key")
   @@map("comparability_policies")
 }
 
@@ -10529,10 +10601,17 @@ model AutoBudgetProposal {
   id                 String                   @id @default(cuid())
   organizationId     String                   @map("organization_id")
   projectId          String                   @map("project_id")
+  seriesKey          String                   @default(cuid()) @map("series_key")
+  version            Int                      @default(1)
   name               String
   status             AutoBudgetProposalStatus @default(DRAFT)
   policyId           String                   @map("policy_id")
-  previousProposalId String?                  @map("previous_proposal_id")
+  previousProposalId String?                  @unique(map: "auto_budget_proposals_previous_proposal_id_key") @map("previous_proposal_id")
+  technicalOpinionId String?                  @map("technical_opinion_id")
+  sourceBudgetId     String?                  @map("source_budget_id")
+  approvedBudgetId   String?                  @map("approved_budget_id")
+  baseDate           DateTime?                @map("base_date") @db.Date
+  inputChecksum      String?                  @map("input_checksum")
   rationale          String                   @db.Text
   createdById        String                   @map("created_by_id")
   reviewedById       String?                  @map("reviewed_by_id")
@@ -10543,42 +10622,214 @@ model AutoBudgetProposal {
   createdAt          DateTime                 @default(now()) @map("created_at")
   updatedAt          DateTime                 @updatedAt @map("updated_at")
 
-  organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project          Project                  @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  policy           ComparabilityPolicy      @relation(fields: [policyId], references: [id], onDelete: Restrict)
-  previousProposal AutoBudgetProposal?      @relation("AutoBudgetProposalVersions", fields: [previousProposalId], references: [id], onDelete: Restrict)
-  revisions        AutoBudgetProposal[]     @relation("AutoBudgetProposalVersions")
+  organization     Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  project          Project                      @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "auto_budget_proposals_project_tenant_fkey")
+  policy           ComparabilityPolicy          @relation(fields: [organizationId, policyId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "auto_budget_proposals_policy_tenant_fkey")
+  previousProposal AutoBudgetProposal?          @relation("AutoBudgetProposalVersions", fields: [organizationId, projectId, previousProposalId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "auto_budget_proposals_previous_tenant_fkey")
+  revisions        AutoBudgetProposal[]         @relation("AutoBudgetProposalVersions")
+  technicalOpinion EngineeringTechnicalOpinion? @relation(fields: [organizationId, projectId, technicalOpinionId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "auto_budget_proposals_technical_opinion_tenant_fkey")
+  sourceBudget     Budget?                      @relation("AutoBudgetSourceBudget", fields: [organizationId, projectId, sourceBudgetId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "auto_budget_proposals_source_budget_tenant_fkey")
+  approvedBudget   Budget?                      @relation("AutoBudgetApprovedBudget", fields: [organizationId, projectId, approvedBudgetId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "auto_budget_proposals_approved_budget_tenant_fkey")
+  createdBy        User                         @relation("AutoBudgetCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reviewedBy       User?                        @relation("AutoBudgetReviewedBy", fields: [reviewedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  approvedBy       User?                        @relation("AutoBudgetApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
   lines            AutoBudgetProposalLine[]
 
-  @@index([organizationId, projectId, status])
+  @@unique([organizationId, projectId, id], map: "auto_budget_proposals_org_project_id_key")
+  @@unique([organizationId, projectId, seriesKey, version], map: "auto_budget_proposals_series_version_key")
+  @@unique([organizationId, projectId, inputChecksum], map: "auto_budget_proposals_input_checksum_key")
+  @@unique([organizationId, projectId, approvedBudgetId], map: "auto_budget_proposals_approved_budget_key")
+  @@index([organizationId, projectId, status], map: "auto_budget_proposals_organization_id_project_id_status_idx")
+  @@index([sourceBudgetId], map: "auto_budget_proposals_source_budget_idx")
+  @@index([technicalOpinionId], map: "auto_budget_proposals_technical_opinion_idx")
   @@map("auto_budget_proposals")
 }
 
 model AutoBudgetProposalLine {
-  id                 String          @id @default(cuid())
-  proposalId         String          @map("proposal_id")
-  economicItemId     String?         @map("economic_item_id")
-  benchmarkRunId     String?         @map("benchmark_run_id")
-  description        String
-  quantity           Decimal         @db.Decimal(18, 4)
-  unit               String
-  suggestedUnitCost  Decimal         @map("suggested_unit_cost") @db.Decimal(20, 2)
-  suggestedTotalCost Decimal         @map("suggested_total_cost") @db.Decimal(20, 2)
-  rangeLow           Decimal?        @map("range_low") @db.Decimal(20, 2)
-  rangeHigh          Decimal?        @map("range_high") @db.Decimal(20, 2)
-  confidenceLevel    ConfidenceLevel @map("confidence_level")
-  rationale          String          @db.Text
-  exceptions         Json
-  reviewedUnitCost   Decimal?        @map("reviewed_unit_cost") @db.Decimal(20, 2)
-  reviewNote         String?         @map("review_note") @db.Text
-  sortOrder          Int             @default(0) @map("sort_order")
+  id                   String             @id @default(cuid())
+  organizationId       String             @map("organization_id")
+  projectId            String             @map("project_id")
+  proposalId           String             @map("proposal_id")
+  economicItemId       String?            @map("economic_item_id")
+  benchmarkRunId       String?            @map("benchmark_run_id")
+  bimQuantityMappingId String?            @map("bim_quantity_mapping_id")
+  compositionId        String?            @map("composition_id")
+  priceObservationId   String?            @map("price_observation_id")
+  description          String
+  quantity             Decimal            @db.Decimal(18, 4)
+  unit                 String
+  suggestedUnitCost    Decimal            @map("suggested_unit_cost") @db.Decimal(20, 4)
+  suggestedTotalCost   Decimal            @map("suggested_total_cost") @db.Decimal(20, 2)
+  rangeLow             Decimal?           @map("range_low") @db.Decimal(20, 2)
+  rangeHigh            Decimal?           @map("range_high") @db.Decimal(20, 2)
+  confidenceLevel      ConfidenceLevel    @map("confidence_level")
+  evidenceStatus       CostEvidenceStatus @default(NO_EVIDENCE) @map("evidence_status")
+  evidenceRequired     Boolean            @default(true) @map("evidence_required")
+  priceBaseDate        DateTime?          @map("price_base_date") @db.Date
+  sourceSnapshot       Json?              @map("source_snapshot")
+  inputChecksum        String?            @map("input_checksum")
+  rationale            String             @db.Text
+  exceptions           Json
+  reviewedUnitCost     Decimal?           @map("reviewed_unit_cost") @db.Decimal(20, 4)
+  reviewNote           String?            @map("review_note") @db.Text
+  sortOrder            Int                @default(0) @map("sort_order")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
 
-  proposal     AutoBudgetProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-  economicItem EconomicItem?      @relation(fields: [economicItemId], references: [id], onDelete: SetNull)
-  benchmarkRun BenchmarkRun?      @relation(fields: [benchmarkRunId], references: [id], onDelete: SetNull)
+  proposal           AutoBudgetProposal         @relation(fields: [organizationId, projectId, proposalId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "auto_budget_lines_proposal_tenant_fkey")
+  economicItem       EconomicItem?              @relation(fields: [organizationId, projectId, economicItemId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "auto_budget_lines_economic_item_tenant_fkey")
+  benchmarkRun       BenchmarkRun?              @relation(fields: [benchmarkRunId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "auto_budget_lines_benchmark_run_id_fkey")
+  bimQuantityMapping BimQuantityMapping?        @relation(fields: [organizationId, projectId, bimQuantityMappingId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "auto_budget_lines_bim_quantity_tenant_fkey")
+  composition        CostCompositionDefinition? @relation(fields: [organizationId, compositionId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "auto_budget_lines_composition_tenant_fkey")
+  priceObservation   ExternalPriceObservation?  @relation(fields: [organizationId, priceObservationId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "auto_budget_lines_price_observation_tenant_fkey")
+  reviews            AutoBudgetLineReview[]
 
-  @@index([proposalId])
+  @@unique([organizationId, projectId, id], map: "auto_budget_lines_org_project_id_key")
+  @@unique([proposalId, inputChecksum], map: "auto_budget_lines_proposal_checksum_key")
+  @@index([proposalId], map: "auto_budget_proposal_lines_proposal_id_idx")
+  @@index([proposalId, sortOrder], map: "auto_budget_lines_proposal_sort_idx")
+  @@index([organizationId, projectId, evidenceStatus], map: "auto_budget_lines_org_project_evidence_idx")
+  @@index([economicItemId], map: "auto_budget_lines_economic_item_idx")
+  @@index([bimQuantityMappingId], map: "auto_budget_lines_bim_quantity_idx")
+  @@index([compositionId], map: "auto_budget_lines_composition_idx")
   @@map("auto_budget_proposal_lines")
+}
+
+model EngineeringTechnicalOpinion {
+  id                String                   @id @default(cuid())
+  organizationId    String                   @map("organization_id")
+  projectId         String                   @map("project_id")
+  seriesKey         String                   @default(cuid()) @map("series_key")
+  version           Int                      @default(1)
+  previousOpinionId String?                  @unique(map: "engineering_opinions_previous_opinion_id_key") @map("previous_opinion_id")
+  designRevisionId  String?                  @map("design_revision_id")
+  code              String
+  title             String
+  summary           String?                  @db.Text
+  status            EngineeringOpinionStatus @default(DRAFT)
+  checksum          String
+  createdById       String                   @map("created_by_id")
+  submittedById     String?                  @map("submitted_by_id")
+  submittedAt       DateTime?                @map("submitted_at")
+  validatedById     String?                  @map("validated_by_id")
+  validatedAt       DateTime?                @map("validated_at")
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
+
+  organization    Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "engineering_opinions_organization_id_fkey")
+  project         Project                           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "engineering_opinions_project_tenant_fkey")
+  previousOpinion EngineeringTechnicalOpinion?      @relation("EngineeringOpinionVersions", fields: [organizationId, projectId, previousOpinionId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "engineering_opinions_previous_tenant_fkey")
+  revisions       EngineeringTechnicalOpinion[]     @relation("EngineeringOpinionVersions")
+  designRevision  DesignRevision?                   @relation(fields: [designRevisionId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "engineering_opinions_design_revision_id_fkey")
+  createdBy       User                              @relation("EngineeringOpinionCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "engineering_opinions_created_by_id_fkey")
+  submittedBy     User?                             @relation("EngineeringOpinionSubmittedBy", fields: [submittedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "engineering_opinions_submitted_by_id_fkey")
+  validatedBy     User?                             @relation("EngineeringOpinionValidatedBy", fields: [validatedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "engineering_opinions_validated_by_id_fkey")
+  items           EngineeringTechnicalOpinionItem[]
+  budgetProposals AutoBudgetProposal[]
+
+  @@unique([organizationId, projectId, id], map: "engineering_opinions_org_project_id_key")
+  @@unique([organizationId, projectId, seriesKey, version], map: "engineering_opinions_series_version_key")
+  @@unique([organizationId, projectId, checksum], map: "engineering_opinions_checksum_key")
+  @@index([organizationId, projectId, status], map: "engineering_opinions_org_project_status_idx")
+  @@index([designRevisionId], map: "engineering_opinions_design_revision_idx")
+  @@map("engineering_technical_opinions")
+}
+
+model EngineeringTechnicalOpinionItem {
+  id                     String                       @id @default(cuid())
+  organizationId         String                       @map("organization_id")
+  projectId              String                       @map("project_id")
+  opinionId              String                       @map("opinion_id")
+  sequence               Int                          @default(0)
+  topic                  EngineeringOpinionTopic
+  observedCondition      String                       @map("observed_condition") @db.Text
+  risk                   String                       @db.Text
+  severity               DesignFindingSeverity
+  impact                 Json
+  recommendation         String                       @db.Text
+  sourceType             DesignDataOrigin             @map("source_type")
+  confidence             DesignConfidence
+  sourceFindingId        String?                      @map("source_finding_id")
+  technicalResponsibleId String?                      @map("technical_responsible_id")
+  validationStatus       EngineeringOpinionItemStatus @default(PENDING) @map("validation_status")
+  validatedById          String?                      @map("validated_by_id")
+  validatedAt            DateTime?                    @map("validated_at")
+  referenceDate          DateTime                     @map("reference_date") @db.Date
+  createdAt              DateTime                     @default(now()) @map("created_at")
+
+  opinion              EngineeringTechnicalOpinion           @relation(fields: [organizationId, projectId, opinionId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "engineering_opinion_items_opinion_tenant_fkey")
+  sourceFinding        DesignFinding?                        @relation(fields: [organizationId, projectId, sourceFindingId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "engineering_opinion_items_finding_tenant_fkey")
+  technicalResponsible User?                                 @relation("EngineeringOpinionResponsible", fields: [technicalResponsibleId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "engineering_opinion_items_responsible_id_fkey")
+  validatedBy          User?                                 @relation("EngineeringOpinionItemValidatedBy", fields: [validatedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "engineering_opinion_items_validated_by_id_fkey")
+  evidence             EngineeringTechnicalOpinionEvidence[]
+
+  @@unique([organizationId, projectId, id], map: "engineering_opinion_items_org_project_id_key")
+  @@unique([opinionId, sequence], map: "engineering_opinion_items_sequence_key")
+  @@index([organizationId, projectId, severity, validationStatus], map: "engineering_opinion_items_risk_status_idx")
+  @@index([technicalResponsibleId, validationStatus], map: "engineering_opinion_items_responsible_idx")
+  @@map("engineering_technical_opinion_items")
+}
+
+model EngineeringTechnicalOpinionEvidence {
+  id         String           @id @default(cuid())
+  itemId     String           @map("item_id")
+  reference  String
+  label      String
+  value      String?
+  sourceType DesignDataOrigin @map("source_type")
+  confidence DesignConfidence
+  metadata   Json?
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  item EngineeringTechnicalOpinionItem @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "engineering_opinion_evidence_item_id_fkey")
+
+  @@unique([itemId, reference], map: "engineering_opinion_evidence_reference_key")
+  @@map("engineering_technical_opinion_evidence")
+}
+
+model AutoBudgetLineReview {
+  id                    String                       @id @default(cuid())
+  organizationId        String                       @map("organization_id")
+  projectId             String                       @map("project_id")
+  lineId                String                       @map("line_id")
+  revisionNumber        Int                          @map("revision_number")
+  decision              AutoBudgetLineReviewDecision
+  originalQuantity      Decimal                      @map("original_quantity") @db.Decimal(18, 4)
+  revisedQuantity       Decimal?                     @map("revised_quantity") @db.Decimal(18, 4)
+  originalCompositionId String?                      @map("original_composition_id")
+  revisedCompositionId  String?                      @map("revised_composition_id")
+  originalUnitCost      Decimal                      @map("original_unit_cost") @db.Decimal(20, 4)
+  revisedUnitCost       Decimal?                     @map("revised_unit_cost") @db.Decimal(20, 4)
+  justification         String                       @db.Text
+  reviewedById          String                       @map("reviewed_by_id")
+  createdAt             DateTime                     @default(now()) @map("created_at")
+
+  line                AutoBudgetProposalLine         @relation(fields: [organizationId, projectId, lineId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "auto_budget_line_reviews_line_tenant_fkey")
+  originalComposition CostCompositionDefinition?     @relation("AutoBudgetOriginalComposition", fields: [organizationId, originalCompositionId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "auto_budget_line_reviews_original_composition_fkey")
+  revisedComposition  CostCompositionDefinition?     @relation("AutoBudgetRevisedComposition", fields: [organizationId, revisedCompositionId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "auto_budget_line_reviews_revised_composition_fkey")
+  reviewedBy          User                           @relation("AutoBudgetLineReviewedBy", fields: [reviewedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  evidence            AutoBudgetLineReviewEvidence[]
+
+  @@unique([lineId, revisionNumber], map: "auto_budget_line_reviews_revision_key")
+  @@index([organizationId, projectId, decision], map: "auto_budget_line_reviews_org_project_decision_idx")
+  @@map("auto_budget_line_reviews")
+}
+
+model AutoBudgetLineReviewEvidence {
+  id         String           @id @default(cuid())
+  reviewId   String           @map("review_id")
+  reference  String
+  label      String
+  value      String?
+  sourceType DesignDataOrigin @map("source_type")
+  confidence DesignConfidence
+  metadata   Json?
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  review AutoBudgetLineReview @relation(fields: [reviewId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([reviewId, reference], map: "auto_budget_review_evidence_reference_key")
+  @@map("auto_budget_line_review_evidence")
 }
 
 model AnalyticsRefreshRun {
@@ -10697,12 +10948,14 @@ model BimQuantityMapping {
   createdAt         DateTime                 @default(now()) @map("created_at")
   updatedAt         DateTime                 @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  bimElement   BimElement   @relation(fields: [bimElementId], references: [id], onDelete: Restrict)
-  economicItem EconomicItem @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+  organization    Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project         Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  bimElement      BimElement               @relation(fields: [bimElementId], references: [id], onDelete: Restrict)
+  economicItem    EconomicItem             @relation(fields: [economicItemId], references: [id], onDelete: Restrict)
+  autoBudgetLines AutoBudgetProposalLine[]
 
   @@unique([organizationId, bimElementId, economicItemId, version])
+  @@unique([organizationId, projectId, id], map: "bim_quantity_mappings_org_project_id_key")
   @@index([organizationId, projectId, status])
   @@index([economicItemId])
   @@map("bim_quantity_mappings")
@@ -10729,11 +10982,15 @@ model CostCompositionDefinition {
   createdAt          DateTime     @default(now()) @map("created_at")
   updatedAt          DateTime     @updatedAt @map("updated_at")
 
-  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  economicItem EconomicItem?         @relation(fields: [economicItemId], references: [id], onDelete: SetNull)
-  items        CostCompositionItem[]
+  organization        Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  economicItem        EconomicItem?            @relation(fields: [economicItemId], references: [id], onDelete: SetNull)
+  items               CostCompositionItem[]
+  autoBudgetLines     AutoBudgetProposalLine[]
+  originalLineReviews AutoBudgetLineReview[]   @relation("AutoBudgetOriginalComposition")
+  revisedLineReviews  AutoBudgetLineReview[]   @relation("AutoBudgetRevisedComposition")
 
   @@unique([organizationId, key, version])
+  @@unique([organizationId, id], map: "cost_composition_definitions_org_id_key")
   @@index([organizationId, status])
   @@map("cost_composition_definitions")
 }
