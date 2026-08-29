@@ -80,6 +80,7 @@ const ACCOUNTING_STATUS_LABELS: Record<string, string> = { OPEN: "Aberto", UNDER
 /** Rótulos em português para o card "Obra/Engenharia" quando o papel não tem ENGINEERING_FINANCIAL_VIEW (fallback pré-9M, sem nenhum valor em R$). */
 const SCHEDULE_STATUS_LABELS: Record<string, string> = { DRAFT: "Rascunho", UNDER_REVIEW: "Em revisão", APPROVED: "Aprovado", SUPERSEDED: "Substituído", CLOSED: "Encerrado" };
 const BUDGET_STATUS_LABELS: Record<string, string> = { DRAFT: "Rascunho", UNDER_REVIEW: "Em revisão", APPROVED: "Aprovado", ARCHIVED: "Arquivado", OFFICIAL: "Oficial", SUPERSEDED: "Substituído", CLOSED: "Encerrado" };
+const LAUNCH_RECOMMENDATION_LABELS: Record<string, string> = { FAVORABLE_TO_LAUNCH: "Favorável para lançamento", LAUNCH_WITH_CONDITIONS: "Lançar com condições", PHASE: "Fasear", REVIEW_PRODUCT_PRICE: "Revisar produto/preço", WAIT: "Aguardar", INSUFFICIENT_EVIDENCE: "Sem evidência suficiente" };
 const translateStatus = (map: Record<string, string>, value: string | null) => (value === null ? null : (map[value] ?? value));
 
 function ExceptionRow({ exception, onOpen }: { exception: ExecutiveException; onOpen: () => void }) {
@@ -247,6 +248,15 @@ export function GestaoExecutivaView({
       <section>
         <SectionTitle eyebrow="ÁREAS" title="Desempenho por área" description="Um recorte por módulo — abrir a área para o detalhamento completo." />
         <div className="ds-area-grid">
+          {kpis.launch ? (
+            <button className="ds-area-card" type="button" onClick={() => router.push("/mercado-produto?f=lancamento")}>
+              <span className="eyebrow">INTELIGÊNCIA DE LANÇAMENTO</span>
+              <strong>{kpis.launch.recommendation ? (LAUNCH_RECOMMENDATION_LABELS[kpis.launch.recommendation] ?? kpis.launch.recommendation) : "Sem avaliação"}</strong>
+              <small>{kpis.launch.mainRisk ? `Maior risco: ${kpis.launch.mainRisk}` : "Nenhum risco principal confirmado"}{kpis.launch.changeCondition ? ` · Mudaria se: ${kpis.launch.changeCondition}` : ""} · {kpis.launch.activeTriggers} gatilho(s) ativo(s)</small>
+            </button>
+          ) : isAuthorized("market") ? (
+            <button className="ds-area-card" type="button" onClick={() => router.push("/mercado-produto?f=lancamento")}><span className="eyebrow">INTELIGÊNCIA DE LANÇAMENTO</span><strong>Sem avaliação</strong><small>Abra Mercado e Produto para gerar os cenários.</small></button>
+          ) : <RestrictedAreaCard label="Inteligência de Lançamento" />}
           {kpis.legal ? (
             <button className="ds-area-card" type="button" onClick={() => router.push("/juridico")}>
               <span className="eyebrow">JURÍDICO</span>

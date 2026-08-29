@@ -54,9 +54,9 @@ describe("canViewExecutiveDomain (9K.2, fechamento — gate 2 RBAC/capabilities)
 });
 
 describe("authorizedExecutiveDomains", () => {
-  it("VIEWER só recebe os domínios sem gate (viability, operations, accounting, integrations, capital)", () => {
+  it("VIEWER recebe os domínios de leitura, incluindo Mercado e Lançamento", () => {
     const allowed = authorizedExecutiveDomains("VIEWER");
-    expect([...allowed].sort()).toEqual(["accounting", "capital", "integrations", "operations", "viability"].sort());
+    expect([...allowed].sort()).toEqual(["accounting", "capital", "integrations", "market", "operations", "viability"].sort());
   });
 
   it("OWNER recebe todos os domínios", () => {

@@ -9,7 +9,7 @@ import { Loading } from "@/components/ui";
 export default async function MercadoProdutoPage() {
   const [authContext, context] = await Promise.all([requireAuthContext(), getCurrentOperationalContext()]);
   if (!context.project) return null;
-  const workspace = await getMarketProductWorkspace(authContext);
+  const workspace = await getMarketProductWorkspace(authContext, context.project.id);
   const view = buildMarketProductWorkspaceView(workspace);
 
   return (

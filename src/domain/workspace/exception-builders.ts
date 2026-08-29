@@ -533,6 +533,44 @@ export function buildViabilityExceptions(ctx: ExceptionTenantContext, findings: 
 }
 
 // ---------------------------------------------------------------------------
+// Inteligência de Lançamento 9O — read model da fonte oficial append-only.
+// Os mesmos IDs alimentam Gestão Executiva, Central de Ações e Operação Viva.
+// ---------------------------------------------------------------------------
+export interface LaunchExceptionSignals {
+  recommendation: string | null;
+  confidenceLevel: string | null;
+  mainRisk: string | null;
+  changeCondition: string | null;
+  calculatedAt: Date | null;
+  evaluationId: string | null;
+  pendingDecision: boolean;
+  activeTriggers: number;
+}
+
+export function buildLaunchExceptions(ctx: ExceptionTenantContext, signals: LaunchExceptionSignals, referenceDate: Date): ExecutiveException[] {
+  if (!signals.evaluationId || !signals.recommendation) return [];
+  const result: ExecutiveException[] = [];
+  const adverse = ["WAIT", "REVIEW_PRODUCT_PRICE", "PHASE", "INSUFFICIENT_EVIDENCE"].includes(signals.recommendation);
+  if (adverse) result.push({
+    id: buildExceptionId(ctx.organizationId, "market", "launch_recommendation", signals.evaluationId), organizationId: ctx.organizationId,
+    economicGroupId: ctx.economicGroupId, companyId: ctx.companyId, projectId: ctx.projectId, projectName: ctx.projectName,
+    domain: "market", type: "launch_recommendation", title: signals.recommendation === "INSUFFICIENT_EVIDENCE" ? "Momento de lançamento sem evidência suficiente" : "Momento de lançamento requer revisão",
+    summary: signals.mainRisk ?? signals.changeCondition ?? "Recomendação de lançamento desfavorável.", severity: signals.recommendation === "WAIT" || signals.recommendation === "REVIEW_PRODUCT_PRICE" ? "CRITICO" : "ACAO_NECESSARIA",
+    impact: {}, materialityValue: null, dueDate: null, confidence: signals.confidenceLevel === "HIGH" ? "ALTA" : signals.confidenceLevel === "MEDIUM" ? "MEDIA" : "BAIXA",
+    source: "REDE 9O", occurredAt: (signals.calculatedAt ?? referenceDate).toISOString(), href: "/mercado-produto?f=lancamento",
+    reason: signals.changeCondition ?? "Atualizar evidências e recalcular o cenário.", status: "ABERTA", evidence: [signals.evaluationId],
+  });
+  if (signals.pendingDecision) result.push({
+    id: buildExceptionId(ctx.organizationId, "market", "launch_decision_pending", signals.evaluationId), organizationId: ctx.organizationId,
+    economicGroupId: ctx.economicGroupId, companyId: ctx.companyId, projectId: ctx.projectId, projectName: ctx.projectName,
+    domain: "market", type: "launch_decision_pending", title: "Decisão de lançamento pendente", summary: "A recomendação do REDE ainda não possui decisão humana registrada.", severity: "DECISAO",
+    impact: {}, materialityValue: null, dueDate: null, confidence: "ALTA", source: "REDE 9O", occurredAt: (signals.calculatedAt ?? referenceDate).toISOString(),
+    href: "/mercado-produto?f=lancamento", reason: "Recomendação calculada sem decisão humana correspondente.", status: "ABERTA", evidence: [signals.evaluationId],
+  });
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Decisões/Aprovações pendentes (plano §12; reaproveita ApprovalRequest de Suprimentos/Comercial)
 // ---------------------------------------------------------------------------
 

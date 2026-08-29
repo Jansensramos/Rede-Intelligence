@@ -50,7 +50,7 @@ export interface ExecutiveExceptionImpact {
  * quanto para o gate de capacidade por domínio (`src/domain/workspace/executive-capabilities.ts`,
  * gate 2 do fechamento da 9K.2) — cada valor aqui tem uma pergunta de autorização correspondente.
  */
-export type ExecutiveDomain = "viability" | "legal" | "financial" | "sales" | "procurement" | "operations" | "accounting" | "integrations" | "approvals" | "capital";
+export type ExecutiveDomain = "viability" | "legal" | "financial" | "sales" | "procurement" | "operations" | "accounting" | "integrations" | "approvals" | "capital" | "market";
 
 export interface ExecutiveException {
   /** Determinístico — ver `buildExceptionId`. Recalcular a leitura duas vezes produz o mesmo id. */

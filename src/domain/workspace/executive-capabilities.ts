@@ -27,6 +27,7 @@ import type { MembershipRole } from "@prisma/client";
 import { hasAccountingCapability } from "@/domain/accounting/capabilities";
 import { hasIntegrationCapability } from "@/domain/integrations/capabilities";
 import { hasCapitalCapability } from "@/domain/capital/capabilities";
+import { hasMarketProductCapability } from "@/domain/market-product/capabilities";
 import { hasWorkspaceCapability } from "./capabilities";
 import type { ExecutiveDomain } from "./exceptions";
 
@@ -46,6 +47,8 @@ export function canViewExecutiveDomain(role: MembershipRole, domain: ExecutiveDo
       return hasIntegrationCapability(role, "INTEGRATION_VIEW");
     case "capital":
       return hasCapitalCapability(role, "CAPITAL_VIEW");
+    case "market":
+      return hasMarketProductCapability(role, "MARKET_VIEW");
     case "approvals":
       return hasWorkspaceCapability(role, "WORKSPACE_APPROVE");
     case "viability":
@@ -55,7 +58,7 @@ export function canViewExecutiveDomain(role: MembershipRole, domain: ExecutiveDo
 }
 
 /** Todos os domínios cobertos pela Gestão Executiva, na ordem em que aparecem na tela. */
-export const ALL_EXECUTIVE_DOMAINS: ExecutiveDomain[] = ["viability", "sales", "financial", "capital", "procurement", "operations", "legal", "accounting", "integrations", "approvals"];
+export const ALL_EXECUTIVE_DOMAINS: ExecutiveDomain[] = ["viability", "market", "sales", "financial", "capital", "procurement", "operations", "legal", "accounting", "integrations", "approvals"];
 
 /** Subconjunto de domínios que o papel pode ver — usado para decidir quais consultas disparar. */
 export function authorizedExecutiveDomains(role: MembershipRole): Set<ExecutiveDomain> {
@@ -64,6 +67,7 @@ export function authorizedExecutiveDomains(role: MembershipRole): Set<ExecutiveD
 
 export const EXECUTIVE_DOMAIN_LABELS: Record<ExecutiveDomain, string> = {
   viability: "Viabilidade",
+  market: "Mercado e Lançamento",
   sales: "Comercial",
   financial: "Financeiro",
   capital: "Capital e Financiamento",

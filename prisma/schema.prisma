@@ -1024,6 +1024,11 @@ model Organization {
   productDecisionRecords          ProductDecisionRecord[]
   fundingProposals                FundingProposal[]
   fundingFinancialEvents          FundingFinancialEvent[]
+  macroIndicatorSeries            MacroIndicatorSeries[]
+  launchScenarios                 LaunchScenario[]
+  launchTriggers                  LaunchTrigger[]
+  launchEvaluations               LaunchEvaluation[]
+  launchDecisions                 LaunchDecision[]
 
   @@map("organizations")
 }
@@ -1081,6 +1086,13 @@ model User {
   engineeringOpinionsValidated     EngineeringTechnicalOpinion[]     @relation("EngineeringOpinionValidatedBy")
   engineeringOpinionAssignments    EngineeringTechnicalOpinionItem[] @relation("EngineeringOpinionResponsible")
   engineeringOpinionItemsValidated EngineeringTechnicalOpinionItem[] @relation("EngineeringOpinionItemValidatedBy")
+  macroIndicatorSeriesCreated       MacroIndicatorSeries[]             @relation("MacroIndicatorSeriesCreatedBy")
+  macroObservationsCreated          MacroIndicatorObservation[]        @relation("MacroIndicatorObservationCreatedBy")
+  launchScenariosCreated            LaunchScenario[]                   @relation("LaunchScenarioCreatedBy")
+  launchAssumptionsCreated          LaunchScenarioAssumption[]         @relation("LaunchScenarioAssumptionCreatedBy")
+  launchEvaluationsCreated          LaunchEvaluation[]                 @relation("LaunchEvaluationCreatedBy")
+  launchTriggersCreated             LaunchTrigger[]                    @relation("LaunchTriggerCreatedBy")
+  launchDecisionsMade               LaunchDecision[]                   @relation("LaunchDecisionDecidedBy")
 
   @@map("users")
 }
@@ -1225,6 +1237,10 @@ model Project {
   productScenarios             ProductScenario[]
   fundingProposals             FundingProposal[]
   fundingFinancialEvents       FundingFinancialEvent[]
+  launchScenarios              LaunchScenario[]
+  launchTriggers               LaunchTrigger[]
+  launchEvaluations            LaunchEvaluation[]
+  launchDecisions              LaunchDecision[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, id], map: "projects_organization_id_id_key")
@@ -11357,8 +11373,10 @@ model ProductScenario {
   project      Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
   mixLines     ProductScenarioMixLine[]
   decisions    ProductDecisionRecord[]
+  launchScenarios LaunchScenario[]
 
   @@unique([organizationId, marketAreaId, name, version])
+  @@unique([organizationId, projectId, id], map: "product_scenarios_org_project_id_key")
   @@index([organizationId, status])
   @@map("product_scenarios")
 }
@@ -11844,4 +11862,287 @@ model FundingFinancialEvent {
   @@index([organizationId, projectId, status])
   @@index([proposalId, installmentNumber])
   @@map("funding_financial_events")
+}
+
+// ============================================================================
+// FASE 9O — Inteligência Macroeconômica e Momento de Lançamento
+// Schema fechado para revisão. A migration correspondente não deve ser aplicada
+// sem autorização explícita e backup persistente pré-9O.
+// ============================================================================
+
+enum MacroIndicatorFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  IRREGULAR
+}
+
+enum MacroIndicatorVisibility {
+  GLOBAL
+  ORGANIZATION
+}
+
+enum MacroRegionLevel {
+  NATIONAL
+  STATE
+  MUNICIPALITY
+  MARKET_AREA
+  CUSTOM
+}
+
+enum LaunchScenarioKind {
+  BASE
+  FAVORABLE
+  STRESSED
+  CUSTOM
+}
+
+enum LaunchScenarioStatus {
+  DRAFT
+  CALCULATED
+  UNDER_REVIEW
+  LOCKED
+  SUPERSEDED
+}
+
+enum LaunchRecommendation {
+  FAVORABLE_TO_LAUNCH
+  LAUNCH_WITH_CONDITIONS
+  PHASE
+  REVIEW_PRODUCT_PRICE
+  WAIT
+  INSUFFICIENT_EVIDENCE
+}
+
+enum LaunchTriggerOperator {
+  LT
+  LTE
+  GT
+  GTE
+  BETWEEN
+}
+
+enum LaunchTriggerStatus {
+  ACTIVE
+  PAUSED
+  SUPERSEDED
+}
+
+enum LaunchHumanDecision {
+  LAUNCH
+  LAUNCH_WITH_CONDITIONS
+  PHASE
+  REVIEW_PRODUCT_PRICE
+  WAIT
+  REJECT
+}
+
+model MacroIndicatorSeries {
+  id                    String                    @id @default(cuid())
+  organizationId        String?                   @map("organization_id")
+  code                  String
+  name                  String
+  category              String
+  canonicalUnit         String                    @map("canonical_unit")
+  frequency             MacroIndicatorFrequency
+  visibility            MacroIndicatorVisibility
+  expectedFreshnessDays Int                       @map("expected_freshness_days")
+  description           String?                   @db.Text
+  isActive              Boolean                   @default(true) @map("is_active")
+  createdById           String?                   @map("created_by_id")
+  createdAt             DateTime                  @default(now()) @map("created_at")
+
+  organization Organization?               @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "macro_indicator_series_organization_id_fkey")
+  createdBy    User?                       @relation("MacroIndicatorSeriesCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "macro_indicator_series_created_by_id_fkey")
+  observations MacroIndicatorObservation[]
+
+  @@index([organizationId, isActive], map: "macro_indicator_series_org_active_idx")
+  @@map("macro_indicator_series")
+}
+
+model MacroIndicatorObservation {
+  id                    String                  @id @default(cuid())
+  seriesId              String                  @map("series_id")
+  previousObservationId String?                 @unique(map: "macro_observations_previous_observation_id_key") @map("previous_observation_id")
+  revision              Int                     @default(1)
+  isCorrection          Boolean                 @default(false) @map("is_correction")
+  referenceDate         DateTime                @map("reference_date") @db.Date
+  collectedAt           DateTime                @map("collected_at")
+  regionLevel           MacroRegionLevel        @map("region_level")
+  regionCode            String                  @map("region_code")
+  rawValue              Decimal                 @map("raw_value") @db.Decimal(20, 8)
+  rawUnit               String                  @map("raw_unit")
+  normalizedValue       Decimal                 @map("normalized_value") @db.Decimal(20, 8)
+  canonicalUnit         String                  @map("canonical_unit")
+  normalizationKey      String                  @map("normalization_key")
+  normalizationMetadata Json                    @map("normalization_metadata")
+  sourceProvider        String                  @map("source_provider")
+  sourceUrl             String?                 @map("source_url")
+  sourceMethod          String                  @map("source_method")
+  confidenceLevel       ConfidenceLevel         @map("confidence_level")
+  confidenceScore       Float?                  @map("confidence_score")
+  provenance            Json
+  checksum              String
+  createdById           String?                 @map("created_by_id")
+  createdAt             DateTime                @default(now()) @map("created_at")
+
+  series              MacroIndicatorSeries        @relation(fields: [seriesId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "macro_observations_series_id_fkey")
+  previousObservation MacroIndicatorObservation?  @relation("MacroObservationRevisions", fields: [seriesId, previousObservationId], references: [seriesId, id], onDelete: Restrict, onUpdate: Cascade, map: "macro_observations_previous_lineage_fkey")
+  corrections         MacroIndicatorObservation[] @relation("MacroObservationRevisions")
+  createdBy           User?                       @relation("MacroIndicatorObservationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "macro_observations_created_by_id_fkey")
+
+  @@unique([seriesId, id], map: "macro_observations_series_id_id_key")
+  @@unique([seriesId, referenceDate, regionLevel, regionCode, revision], map: "macro_observations_period_revision_key")
+  @@unique([seriesId, checksum], map: "macro_observations_checksum_key")
+  @@index([seriesId, referenceDate, regionLevel, regionCode], map: "macro_observations_history_idx")
+  @@map("macro_indicator_observations")
+}
+
+model LaunchScenario {
+  id                 String               @id @default(cuid())
+  organizationId     String               @map("organization_id")
+  projectId          String               @map("project_id")
+  productScenarioId  String?              @map("product_scenario_id")
+  seriesKey          String               @default(cuid()) @map("series_key")
+  version            Int                  @default(1)
+  previousScenarioId String?              @unique(map: "launch_scenarios_previous_scenario_id_key") @map("previous_scenario_id")
+  name               String
+  kind               LaunchScenarioKind
+  status             LaunchScenarioStatus @default(DRAFT)
+  referenceDate      DateTime             @map("reference_date") @db.Date
+  rationale          String               @db.Text
+  createdById        String               @map("created_by_id")
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+  lockedAt           DateTime?            @map("locked_at")
+
+  organization     Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "launch_scenarios_organization_id_fkey")
+  project          Project                    @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "launch_scenarios_project_tenant_fkey")
+  productScenario  ProductScenario?           @relation(fields: [organizationId, projectId, productScenarioId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "launch_scenarios_product_scenario_tenant_fkey")
+  previousScenario LaunchScenario?            @relation("LaunchScenarioVersions", fields: [organizationId, projectId, previousScenarioId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "launch_scenarios_previous_tenant_fkey")
+  revisions        LaunchScenario[]           @relation("LaunchScenarioVersions")
+  createdBy        User                       @relation("LaunchScenarioCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "launch_scenarios_created_by_id_fkey")
+  assumptions      LaunchScenarioAssumption[]
+  evaluations      LaunchEvaluation[]
+
+  @@unique([organizationId, projectId, id], map: "launch_scenarios_org_project_id_key")
+  @@unique([organizationId, projectId, seriesKey, version], map: "launch_scenarios_series_version_key")
+  @@index([organizationId, projectId, status, kind], map: "launch_scenarios_org_project_status_kind_idx")
+  @@index([productScenarioId], map: "launch_scenarios_product_scenario_idx")
+  @@map("launch_scenarios")
+}
+
+model LaunchScenarioAssumption {
+  id              String          @id @default(cuid())
+  organizationId  String          @map("organization_id")
+  projectId       String          @map("project_id")
+  scenarioId      String          @map("scenario_id")
+  assumptionKey   String          @map("assumption_key")
+  originalValue   Json            @map("original_value")
+  adjustedValue   Json            @map("adjusted_value")
+  unit            String
+  sourceType      String          @map("source_type")
+  sourceRef       String?         @map("source_ref")
+  confidenceLevel ConfidenceLevel @map("confidence_level")
+  justification   String?         @db.Text
+  createdById     String          @map("created_by_id")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  scenario  LaunchScenario @relation(fields: [organizationId, projectId, scenarioId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "launch_assumptions_scenario_tenant_fkey")
+  createdBy User           @relation("LaunchScenarioAssumptionCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "launch_assumptions_created_by_id_fkey")
+
+  @@unique([scenarioId, assumptionKey], map: "launch_assumptions_scenario_key")
+  @@index([organizationId, projectId, assumptionKey], map: "launch_assumptions_org_project_key_idx")
+  @@map("launch_scenario_assumptions")
+}
+
+model LaunchEvaluation {
+  id                     String               @id @default(cuid())
+  organizationId         String               @map("organization_id")
+  projectId              String               @map("project_id")
+  scenarioId             String               @map("scenario_id")
+  recommendation         LaunchRecommendation
+  confidenceLevel        ConfidenceLevel      @map("confidence_level")
+  confidenceScore        Float?               @map("confidence_score")
+  favorableFactors       Json                 @map("favorable_factors")
+  unfavorableFactors     Json                 @map("unfavorable_factors")
+  criticalFactors        Json                 @map("critical_factors")
+  missingEvidence        Json                 @map("missing_evidence")
+  economicImpactSnapshot Json                 @map("economic_impact_snapshot")
+  indicatorSnapshot      Json                 @map("indicator_snapshot")
+  conditionsForChange    Json                 @map("conditions_for_change")
+  engineVersion          String               @map("engine_version")
+  inputChecksum          String               @map("input_checksum")
+  calculatedAt           DateTime             @default(now()) @map("calculated_at")
+  createdById            String               @map("created_by_id")
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "launch_evaluations_organization_id_fkey")
+  project      Project          @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "launch_evaluations_project_tenant_fkey")
+  scenario     LaunchScenario   @relation(fields: [organizationId, projectId, scenarioId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "launch_evaluations_scenario_tenant_fkey")
+  createdBy    User             @relation("LaunchEvaluationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "launch_evaluations_created_by_id_fkey")
+  decisions    LaunchDecision[]
+
+  @@unique([organizationId, projectId, id], map: "launch_evaluations_org_project_id_key")
+  @@unique([organizationId, projectId, scenarioId, inputChecksum], map: "launch_evaluations_scenario_checksum_key")
+  @@index([organizationId, projectId, calculatedAt], map: "launch_evaluations_org_project_calculated_idx")
+  @@map("launch_evaluations")
+}
+
+model LaunchTrigger {
+  id                    String               @id @default(cuid())
+  organizationId        String               @map("organization_id")
+  projectId             String               @map("project_id")
+  seriesKey             String               @default(cuid()) @map("series_key")
+  version               Int                  @default(1)
+  previousTriggerId     String?              @unique(map: "launch_triggers_previous_trigger_id_key") @map("previous_trigger_id")
+  code                  String
+  status                LaunchTriggerStatus  @default(ACTIVE)
+  metricKey             String               @map("metric_key")
+  operator              LaunchTriggerOperator
+  thresholdValue        Decimal              @map("threshold_value") @db.Decimal(20, 8)
+  thresholdValueEnd     Decimal?             @map("threshold_value_end") @db.Decimal(20, 8)
+  unit                  String
+  minimumConfidence     ConfidenceLevel?     @map("minimum_confidence")
+  recommendationOnMatch LaunchRecommendation? @map("recommendation_on_match")
+  rationale             String               @db.Text
+  createdById           String               @map("created_by_id")
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt @map("updated_at")
+
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "launch_triggers_organization_id_fkey")
+  project        Project          @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "launch_triggers_project_tenant_fkey")
+  previousTrigger LaunchTrigger?  @relation("LaunchTriggerVersions", fields: [organizationId, projectId, previousTriggerId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "launch_triggers_previous_tenant_fkey")
+  revisions      LaunchTrigger[]  @relation("LaunchTriggerVersions")
+  createdBy      User             @relation("LaunchTriggerCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "launch_triggers_created_by_id_fkey")
+
+  @@unique([organizationId, projectId, id], map: "launch_triggers_org_project_id_key")
+  @@unique([organizationId, projectId, seriesKey, version], map: "launch_triggers_series_version_key")
+  @@index([organizationId, projectId, status], map: "launch_triggers_org_project_status_idx")
+  @@map("launch_triggers")
+}
+
+model LaunchDecision {
+  id                     String              @id @default(cuid())
+  organizationId         String              @map("organization_id")
+  projectId              String              @map("project_id")
+  evaluationId           String              @unique(map: "launch_decisions_evaluation_id_key") @map("evaluation_id")
+  recommendationSnapshot Json                @map("recommendation_snapshot")
+  humanDecision          LaunchHumanDecision @map("human_decision")
+  rationale              String              @db.Text
+  evidenceRefs           Json                @map("evidence_refs")
+  decidedById            String              @map("decided_by_id")
+  decidedAt              DateTime            @default(now()) @map("decided_at")
+  checksum               String
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "launch_decisions_organization_id_fkey")
+  project      Project          @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "launch_decisions_project_tenant_fkey")
+  evaluation   LaunchEvaluation @relation(fields: [organizationId, projectId, evaluationId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "launch_decisions_evaluation_tenant_fkey")
+  decidedBy    User             @relation("LaunchDecisionDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "launch_decisions_decided_by_id_fkey")
+
+  @@unique([organizationId, projectId, checksum], map: "launch_decisions_org_project_checksum_key")
+  @@index([organizationId, projectId, decidedAt], map: "launch_decisions_org_project_decided_idx")
+  @@map("launch_decisions")
 }
