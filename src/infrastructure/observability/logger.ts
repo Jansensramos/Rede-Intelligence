@@ -1,6 +1,11 @@
 const REDACTED = "[REDACTED]";
-const SENSITIVE_KEY = /(password|senha|secret|token|authorization|cookie|cpf|document|credential|api[-_]?key)/i;
+const SENSITIVE_KEY = /(password|senha|secret|token|authorization|cookie|cpf|cnpj|company.*tax.*id|tax.*id|document|credential|api[-_]?key)/i;
 const SENSITIVE_VALUE = /(bearer\s+[a-z0-9._~+/=-]+|rede_session=|\b\d{3}\.\d{3}\.\d{3}-\d{2}\b)/gi;
+const CNPJ_CANDIDATE = /(?<!\d)(?:\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{14})(?!\d)/g;
+
+function sanitizeString(value: string) {
+  return value.replace(SENSITIVE_VALUE, REDACTED).replace(CNPJ_CANDIDATE, REDACTED).slice(0, 2_000);
+}
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 export interface LogContext {
@@ -16,7 +21,7 @@ export interface LogContext {
 
 export function sanitizeLogValue(value: unknown, key = ""): unknown {
   if (SENSITIVE_KEY.test(key)) return REDACTED;
-  if (typeof value === "string") return value.replace(SENSITIVE_VALUE, REDACTED).slice(0, 2_000);
+  if (typeof value === "string") return sanitizeString(value);
   if (value instanceof Error) return { name: value.name, message: sanitizeLogValue(value.message, "message") };
   if (Array.isArray(value)) return value.slice(0, 50).map((item) => sanitizeLogValue(item));
   if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).slice(0, 50).map(([childKey, child]) => [childKey, sanitizeLogValue(child, childKey)]));

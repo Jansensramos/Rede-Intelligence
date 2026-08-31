@@ -37,12 +37,19 @@ function safeSegment(value: string) {
 export class LocalEncryptedSecretVault implements SecretVaultProvider {
   readonly name = "LOCAL_ENCRYPTED_V1";
   private readonly root: string;
-  private readonly key: Buffer;
+  private readonly passphrase: string | undefined;
+  private readonly environment: string | undefined;
 
   constructor(root = process.env.INTEGRATION_SECRET_STORAGE_ROOT ?? path.join(process.cwd(), ".rede-storage", "secrets")) {
     this.root = path.resolve(root);
-    const passphrase = process.env.INTEGRATION_SECRET_KEY ?? "rede-intelligence-local-dev-only";
-    this.key = scryptSync(passphrase, "rede-secret-vault-v1", 32);
+    this.environment = process.env.NODE_ENV;
+    this.passphrase = process.env.INTEGRATION_SECRET_KEY;
+  }
+
+  private encryptionKey() {
+    if (this.environment === "production") throw new Error("LocalEncryptedSecretVault é proibido em produção; configure KMS/Secret Manager externo.");
+    if (!this.passphrase) throw new Error("INTEGRATION_SECRET_KEY é obrigatória para usar o cofre local.");
+    return scryptSync(this.passphrase, "rede-secret-vault-v1", 32);
   }
 
   private resolveKey(secretRef: string) {
@@ -57,7 +64,7 @@ export class LocalEncryptedSecretVault implements SecretVaultProvider {
     const target = this.resolveKey(secretRef);
     await mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
     const iv = randomBytes(12);
-    const cipher = createCipheriv(ALGORITHM, this.key, iv);
+    const cipher = createCipheriv(ALGORITHM, this.encryptionKey(), iv);
     const ciphertext = Buffer.concat([cipher.update(input.secret, "utf8"), cipher.final()]);
     const tag = cipher.getAuthTag();
     await writeFile(target, Buffer.concat([iv, tag, ciphertext]), { flag: "wx", mode: 0o600 });
@@ -70,7 +77,7 @@ export class LocalEncryptedSecretVault implements SecretVaultProvider {
     const iv = buffer.subarray(0, 12);
     const tag = buffer.subarray(12, 28);
     const ciphertext = buffer.subarray(28);
-    const decipher = createDecipheriv(ALGORITHM, this.key, iv);
+    const decipher = createDecipheriv(ALGORITHM, this.encryptionKey(), iv);
     decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
   }

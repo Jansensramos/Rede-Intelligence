@@ -1,6 +1,5 @@
-import { createHash, randomBytes } from "node:crypto";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { LocalStorageProvider, storageProvider, type StorageObject, type StorageProvider } from "./storage-provider";
 
 export interface StoredDesignFile {
   provider: string;
@@ -16,44 +15,34 @@ export interface FileStorageProvider {
   size(key: string): Promise<number>;
 }
 
-function safeSegment(value: string) {
-  const cleaned = value.normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g, "-").replace(/\.{2,}/g, ".").slice(0, 120);
-  if (!cleaned || cleaned === "." || cleaned === "..") throw new Error("Segmento de storage inválido.");
-  return cleaned;
-}
-
 export class LocalPrivateFileStorage implements FileStorageProvider {
-  readonly name = "LOCAL_PRIVATE_V1";
-  private readonly root: string;
+  readonly name: string;
+  private readonly provider: StorageProvider;
 
   constructor(root = process.env.DESIGN_STORAGE_ROOT ?? path.join(process.cwd(), ".rede-storage", "design")) {
-    this.root = path.resolve(root);
+    this.provider = new LocalStorageProvider(root);
+    this.name = this.provider.name;
   }
-
-  private resolveKey(key: string) {
-    const target = path.resolve(this.root, key);
-    if (target !== this.root && !target.startsWith(`${this.root}${path.sep}`)) throw new Error("Chave de storage fora do namespace permitido.");
-    return target;
-  }
-
   async put(input: { organizationId: string; packageId: string; fileName: string; bytes: Uint8Array }) {
-    const checksum = createHash("sha256").update(input.bytes).digest("hex");
-    const extension = path.extname(input.fileName).toLowerCase();
-    const nonce = randomBytes(8).toString("hex");
-    const key = path.posix.join(safeSegment(input.organizationId), safeSegment(input.packageId), `${checksum}-${nonce}${safeSegment(extension || ".bin")}`);
-    const target = this.resolveKey(key);
-    await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, input.bytes, { flag: "wx", mode: 0o600 });
-    return { provider: this.name, key, checksum, size: input.bytes.length };
+    const stored = await this.provider.put({ organizationId: input.organizationId, projectId: input.packageId, domain: "design", entityId: input.packageId, version: "current", fileName: input.fileName, bytes: input.bytes, mimeType: "application/octet-stream" });
+    return { provider: stored.provider, key: stored.key, checksum: stored.checksum, size: stored.size };
   }
-
-  async read(key: string) {
-    return new Uint8Array(await readFile(this.resolveKey(key)));
-  }
-
-  async size(key: string) {
-    return (await stat(this.resolveKey(key))).size;
-  }
+  async read(key: string) { return this.provider.get(legacyObject(this.provider, key)); }
+  async size(key: string) { return (await this.provider.metadata(legacyObject(this.provider, key))).size; }
 }
 
-export const designFileStorage = new LocalPrivateFileStorage();
+function legacyObject(provider: StorageProvider, key: string): StorageObject {
+  return { provider: provider.name, bucket: "configured", key, organizationId: "legacy", projectId: "legacy", domain: "legacy", entityId: "legacy", version: "legacy", checksum: "", size: 0, mimeType: "application/octet-stream", createdAt: new Date(0) };
+}
+
+class ConfiguredFileStorage implements FileStorageProvider {
+  constructor(private readonly domain: string) {}
+  get name() { return "CONFIGURED_PRIVATE_STORAGE"; }
+  private get provider() { return storageProvider(); }
+  async put(input: { organizationId: string; packageId: string; fileName: string; bytes: Uint8Array }) { const stored = await this.provider.put({ organizationId: input.organizationId, projectId: input.packageId, domain: this.domain, entityId: input.packageId, version: "current", fileName: input.fileName, bytes: input.bytes, mimeType: "application/octet-stream" }); return { provider: stored.provider, key: stored.key, checksum: stored.checksum, size: stored.size }; }
+  async read(key: string) { return this.provider.get(legacyObject(this.provider, key)); }
+  async size(key: string) { return (await this.provider.metadata(legacyObject(this.provider, key))).size; }
+}
+
+export function createConfiguredFileStorage(domain: string): FileStorageProvider { return new ConfiguredFileStorage(domain); }
+export const designFileStorage: FileStorageProvider = createConfiguredFileStorage("design");

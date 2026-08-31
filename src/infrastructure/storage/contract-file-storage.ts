@@ -1,5 +1,4 @@
-import path from "node:path";
-import { LocalPrivateFileStorage } from "./design-file-storage";
+import { createConfiguredFileStorage } from "./design-file-storage";
 
 /**
  * Reaproveita o `FileStorageProvider` genérico já existente (`design-file-storage.ts`) — mesma
@@ -8,6 +7,4 @@ import { LocalPrivateFileStorage } from "./design-file-storage";
  * `storageProvider`+`storageKey`+`checksum`+`fileSize` (metadado); o binário do documento nunca
  * entra no Postgres.
  */
-export const contractFileStorage = new LocalPrivateFileStorage(
-  process.env.CONTRACT_STORAGE_ROOT ?? path.join(process.cwd(), ".rede-storage", "contracts"),
-);
+export const contractFileStorage = createConfiguredFileStorage("contracts");

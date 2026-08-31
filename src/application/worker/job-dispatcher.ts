@@ -27,15 +27,17 @@ async function integrationContext(job: IntegrationJob) {
 
 export const supportedJobTypes = ["SYNC_INSTALLATION", "POLL_INSTALLATION", "DELIVER_WEBHOOKS", "PROCESS_DESIGN_FILE"] as const;
 
-export async function dispatchJob(job: IntegrationJob) {
+export async function dispatchJob(job: IntegrationJob, signal: AbortSignal) {
+  signal.throwIfAborted();
   const payload = payloadOf(job);
   if (job.jobType === "PROCESS_DESIGN_FILE") {
     await processStoredFile({ organizationId: job.organizationId, userId: requiredString(payload, "userId") }, requiredString(payload, "fileId"), requiredString(payload, "designJobId"));
+    signal.throwIfAborted();
     return;
   }
   if (job.jobType === "DELIVER_WEBHOOKS") {
     await deliverPendingOutboxEvents(job.organizationId, { send: async ({ url, body, headers }) => {
-      const response = await fetch(url, { method: "POST", body, headers, signal: AbortSignal.timeout(15_000) });
+      const response = await fetch(url, { method: "POST", body, headers, signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]) });
       return { status: response.status };
     } });
     return;
@@ -52,6 +54,7 @@ export async function dispatchJob(job: IntegrationJob) {
       capability: typeof payload.capability === "string" ? payload.capability : "DOCUMENTS",
       connector: new MockGoogleDriveConnector(files),
     });
+    signal.throwIfAborted();
     return;
   }
   throw new Error(`Tipo de job não suportado pelo worker: ${job.jobType}`);

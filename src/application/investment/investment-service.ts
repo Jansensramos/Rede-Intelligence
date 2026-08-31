@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   ArtifactGenerationStatus,
   InvestmentCaseStatus,
@@ -36,6 +36,8 @@ import {
   type UrbanTransformationView,
 } from "@/domain/investment";
 import { prisma } from "@/infrastructure/database/prisma";
+import { inspectUpload } from "@/infrastructure/storage/upload-policy";
+import { storageProvider, type StorageObject } from "@/infrastructure/storage/storage-provider";
 
 type Tx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
@@ -566,23 +568,54 @@ export async function verifyInvestmentCondition(context: Pick<AuthContext, "user
 }
 
 export async function registerProjectDocument(context: Pick<AuthContext, "userId" | "organizationId">, input: { investmentCaseId: string; checklistItemId: string | null; category: DataRoomCategory; title: string; fileName: string; mimeType: string; content: Uint8Array; confidentiality: "PUBLIC_INTERNAL" | "CONFIDENTIAL" | "STRICTLY_CONFIDENTIAL"; source?: string }) {
-  const result = await prisma.$transaction(async (tx) => {
-    const caseRow = await tx.investmentCase.findFirst({ where: { id: input.investmentCaseId, organizationId: context.organizationId } });
-    if (!caseRow) throw new Error("Investment Case não encontrado nesta organização.");
+  const caseRow = await prisma.investmentCase.findFirst({ where: { id: input.investmentCaseId, organizationId: context.organizationId } });
+  if (!caseRow) throw new Error("Investment Case não encontrado nesta organização.");
+  await inspectUpload({ bytes: input.content, fileName: input.fileName });
+  const previous = await prisma.projectDocument.findFirst({ where: { investmentCaseId: caseRow.id, category: input.category, title: input.title }, orderBy: { version: "desc" } });
+  const documentId = randomUUID();
+  const version = (previous?.version ?? 0) + 1;
+  const provider = storageProvider();
+  const stored = await provider.put({ organizationId: context.organizationId, projectId: caseRow.projectId, domain: "sala-documentos", entityId: documentId, version, fileName: input.fileName, bytes: input.content, mimeType: input.mimeType, metadata: { investmentCaseId: caseRow.id, confidentiality: input.confidentiality } });
+  try {
+    const result = await prisma.$transaction(async (tx) => {
     const previous = await tx.projectDocument.findFirst({ where: { investmentCaseId: caseRow.id, category: input.category, title: input.title }, orderBy: { version: "desc" } });
-    const contentChecksum = createHash("sha256").update(input.content).digest("hex");
-    const document = await tx.projectDocument.create({ data: { investmentCaseId: caseRow.id, previousVersionId: previous?.id ?? null, category: input.category, title: input.title, version: (previous?.version ?? 0) + 1, status: "RECEIVED", confidentiality: input.confidentiality, fileName: input.fileName, mimeType: input.mimeType, content: Buffer.from(input.content), fileSize: input.content.byteLength, checksum: contentChecksum, source: input.source, createdById: context.userId } });
+    const metadata = { storage: { provider: stored.provider, bucket: stored.bucket, key: stored.key, organizationId: stored.organizationId, projectId: stored.projectId, domain: stored.domain, entityId: stored.entityId, version: stored.version, checksum: stored.checksum, size: stored.size, mimeType: stored.mimeType, createdAt: stored.createdAt.toISOString() } };
+    const document = await tx.projectDocument.create({ data: { id: documentId, investmentCaseId: caseRow.id, previousVersionId: previous?.id ?? null, category: input.category, title: input.title, version, status: "RECEIVED", confidentiality: input.confidentiality, fileName: input.fileName, mimeType: input.mimeType, content: null, fileSize: stored.size, checksum: stored.checksum, source: input.source, metadata: json(metadata), createdById: context.userId } });
     if (previous) await tx.projectDocument.update({ where: { id: previous.id }, data: { status: "SUPERSEDED" } });
     if (input.checklistItemId) await tx.documentChecklistItem.updateMany({ where: { id: input.checklistItemId, investmentCaseId: caseRow.id }, data: { documentId: document.id, status: "RECEIVED", updatedById: context.userId } });
+    await tx.investmentAuditLog.create({ data: { investmentCaseId: caseRow.id, userId: context.userId, action: "PROJECT_DOCUMENT_STORED", entityType: "ProjectDocument", entityId: document.id, after: json({ provider: stored.provider, checksum: stored.checksum, fileSize: stored.size }) } });
     return {
       workspace: await loadWorkspace(tx, context.organizationId, caseRow.id),
-      document: { id: document.id, version: document.version, checksum: contentChecksum },
+      document: { id: document.id, version: document.version, checksum: stored.checksum },
     };
   });
-  if (input.mimeType.startsWith("text/") || /\.(txt|md|csv)$/i.test(input.fileName)) {
-    await indexTextDocument({ organizationId: context.organizationId, investmentCaseId: input.investmentCaseId, documentId: result.document.id, documentVersion: result.document.version, content: new TextDecoder("utf-8", { fatal: false }).decode(input.content), checksum: result.document.checksum });
+    if (input.mimeType.startsWith("text/") || /\.(txt|md|csv)$/i.test(input.fileName)) {
+      await indexTextDocument({ organizationId: context.organizationId, investmentCaseId: input.investmentCaseId, documentId: result.document.id, documentVersion: result.document.version, content: new TextDecoder("utf-8", { fatal: false }).decode(input.content), checksum: result.document.checksum });
+    }
+    return result.workspace;
+  } catch (error) {
+    await provider.delete(stored).catch(() => undefined);
+    throw error;
   }
-  return result.workspace;
+}
+
+function storageObjectFromMetadata(value: Prisma.JsonValue): StorageObject | null {
+  if (!value || typeof value !== "object" || Array.isArray(value) || !("storage" in value)) return null;
+  const candidate = value.storage;
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
+  const item = candidate as Record<string, unknown>;
+  const required = ["provider", "bucket", "key", "organizationId", "projectId", "domain", "entityId", "checksum", "mimeType", "createdAt"];
+  if (!required.every((key) => typeof item[key] === "string") || (typeof item.version !== "string" && typeof item.version !== "number") || typeof item.size !== "number") return null;
+  return { provider: item.provider as string, bucket: item.bucket as string, key: item.key as string, organizationId: item.organizationId as string, projectId: item.projectId as string, domain: item.domain as string, entityId: item.entityId as string, version: item.version as string | number, checksum: item.checksum as string, size: item.size as number, mimeType: item.mimeType as string, createdAt: new Date(item.createdAt as string) };
+}
+
+export async function getProjectDocumentDownload(context: Pick<AuthContext, "organizationId">, documentId: string) {
+  const document = await prisma.projectDocument.findFirst({ where: { id: documentId, investmentCase: { organizationId: context.organizationId } }, include: { investmentCase: { select: { projectId: true } } } });
+  if (!document) throw new Error("Documento não encontrado nesta organização.");
+  if (document.content) return { fileName: document.fileName, mimeType: document.mimeType, content: new Uint8Array(document.content), confidentiality: document.confidentiality };
+  const object = storageObjectFromMetadata(document.metadata);
+  if (!object || object.organizationId !== context.organizationId || object.projectId !== document.investmentCase.projectId) throw new Error("Referência de storage inválida para este tenant.");
+  return { fileName: document.fileName, mimeType: document.mimeType, content: await storageProvider().get(object), confidentiality: document.confidentiality };
 }
 
 export async function createDecisionSandbox(

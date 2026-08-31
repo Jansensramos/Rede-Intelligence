@@ -7,7 +7,7 @@ import { dispatchJob } from "./job-dispatcher";
 
 export interface WorkerDependencies {
   claim: (owner: string, leaseMs: number) => Promise<IntegrationJob | null>;
-  dispatch: (job: IntegrationJob) => Promise<void>;
+  dispatch: (job: IntegrationJob, signal: AbortSignal) => Promise<void>;
   complete: (jobId: string, owner: string) => Promise<unknown>;
   fail: (jobId: string, errorClass: RetryableErrorClass, message: string) => Promise<unknown>;
   heartbeat: (jobId: string, owner: string, leaseMs: number) => Promise<unknown>;
@@ -15,7 +15,11 @@ export interface WorkerDependencies {
 
 const defaults: WorkerDependencies = { claim: claimNextJobAcrossOrganizations, dispatch: dispatchJob, complete: completeJob, fail: failJob, heartbeat: heartbeatJob };
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const classify = (error: unknown): RetryableErrorClass => error instanceof TypeError ? "NETWORK" : "VALIDATION";
+const classify = (error: unknown): RetryableErrorClass => {
+  if (error instanceof TypeError) return "NETWORK";
+  if (error instanceof Error && (/^WORKER_JOB_TIMEOUT_/.test(error.message) || error.name === "AbortError")) return "PROVIDER";
+  return "VALIDATION";
+};
 
 export class DurableWorker {
   readonly owner = `${process.env.COMPUTERNAME ?? "worker"}:${process.pid}:${randomUUID()}`;
@@ -23,7 +27,7 @@ export class DurableWorker {
   private readonly active = new Set<Promise<void>>();
   lastHeartbeatAt: Date | null = null;
 
-  constructor(private readonly options: { concurrency: number; pollMs: number; leaseMs: number }, private readonly dependencies: WorkerDependencies = defaults) {}
+  constructor(private readonly options: { concurrency: number; pollMs: number; leaseMs: number; jobTimeoutMs?: number }, private readonly dependencies: WorkerDependencies = defaults) {}
 
   requestStop() { this.stopping = true; }
   get activeCount() { return this.active.size; }
@@ -45,17 +49,34 @@ export class DurableWorker {
   }
 
   private async execute(job: IntegrationJob) {
+    const startedAt = Date.now();
     const context = { component: "worker", jobId: job.id, organizationId: job.organizationId, correlationId: job.correlationId, event: job.jobType };
     const interval = setInterval(() => void this.dependencies.heartbeat(job.id, this.owner, this.options.leaseMs), Math.max(1_000, Math.floor(this.options.leaseMs / 3)));
     try {
       logger.info("Job iniciado.", context);
-      await this.dependencies.dispatch(job);
+      const timeoutMs = this.options.jobTimeoutMs ?? 120_000;
+      const controller = new AbortController();
+      let timedOut = false;
+      let dispatchError: unknown;
+      const timeout = setTimeout(() => { timedOut = true; controller.abort(new Error(`WORKER_JOB_TIMEOUT_${timeoutMs}`)); }, timeoutMs);
+      try {
+        // Segurança deliberada: após solicitar aborto, aguardamos a promise REAL do
+        // handler. Heartbeat e lease permanecem ativos. Handler não cooperativo que
+        // nunca termina mantém o job RUNNING (fail closed) e nunca libera retry.
+        await this.dependencies.dispatch(job, controller.signal);
+      } catch (error) {
+        dispatchError = error;
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (timedOut) throw new Error(`WORKER_JOB_TIMEOUT_${timeoutMs}`, { cause: dispatchError });
+      if (dispatchError) throw dispatchError;
       await this.dependencies.complete(job.id, this.owner);
-      logger.info("Job concluído.", context);
+      logger.info("Job concluído.", { ...context, durationMs: Date.now() - startedAt, status: "succeeded" });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha desconhecida.";
       await this.dependencies.fail(job.id, classify(error), message);
-      logger.error("Job falhou.", { ...context, errorClass: classify(error), error });
+      logger.error("Job falhou.", { ...context, durationMs: Date.now() - startedAt, status: "failed", errorClass: classify(error), error });
     } finally {
       clearInterval(interval);
     }

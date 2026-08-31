@@ -99,7 +99,7 @@ export async function deliverPendingOutboxEvents(organizationId: string, adapter
 
     let response: { status: number } | null = null;
     try {
-      response = await adapter.send({ url: subscription.endpointUrl, body, headers: { "content-type": "application/json", "x-rede-signature": signature, "x-rede-event-id": event.id } });
+      response = await adapter.send({ url: subscription.endpointUrl, body, headers: { "content-type": "application/json", "x-rede-signature": signature, "x-rede-event-id": event.id, "idempotency-key": event.id } });
     } catch (error) {
       await recordCircuitBreakerOutcome(organizationId, scopeKey, false, CIRCUIT_POLICY, now);
       const decision = await handleDeliveryFailure(event, "NETWORK", error instanceof Error ? error.message : "Falha de rede na entrega.");

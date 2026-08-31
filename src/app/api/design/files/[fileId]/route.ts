@@ -21,7 +21,7 @@ export async function GET(request: Request, route: { params: Promise<{ fileId: s
     const { file, bytes } = await getDesignFileForDownload(context.organizationId, fileId);
     const range = safeRange(request.headers.get("range"), bytes.length);
     const body = range ? bytes.slice(range.start, range.end + 1) : bytes;
-    return new Response(body, { status: range ? 206 : 200, headers: { "content-type": file.mimeType, "content-length": String(body.length), "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(file.fileName)}`, "accept-ranges": "bytes", ...(range ? { "content-range": `bytes ${range.start}-${range.end}/${bytes.length}` } : {}), "cache-control": "private, no-store", "x-content-type-options": "nosniff", "content-security-policy": "sandbox" } });
+    return new Response(Buffer.from(body), { status: range ? 206 : 200, headers: { "content-type": file.mimeType, "content-length": String(body.length), "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(file.fileName)}`, "accept-ranges": "bytes", ...(range ? { "content-range": `bytes ${range.start}-${range.end}/${bytes.length}` } : {}), "cache-control": "private, no-store", "x-content-type-options": "nosniff", "content-security-policy": "sandbox" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Arquivo indisponível." }, { status: 404 });
   }

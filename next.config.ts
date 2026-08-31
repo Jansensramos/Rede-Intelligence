@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 
 const createNextConfig = (phase: string): NextConfig => ({
+  output: "standalone",
   poweredByHeader: false,
   async headers() {
     const csp = [

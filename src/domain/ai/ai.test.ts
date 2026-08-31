@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { DeterministicAIProvider, REDE_AI_SYSTEM_PROMPT, aiQuestionSchema, contextChangeSchema, createAIProvider, planAIIntent, simulationArgumentsSchema } from "./index";
+import { DeterministicAIProvider, REDE_AI_SYSTEM_PROMPT, aiQuestionSchema, contextChangeSchema, planAIIntent, simulationArgumentsSchema } from "./index";
+import { createAIProvider } from "@/infrastructure/ai/provider-factory";
 
 describe("REDE AI domain guardrails", () => {
   afterEach(() => {

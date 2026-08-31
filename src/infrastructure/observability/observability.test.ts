@@ -15,6 +15,24 @@ describe("observabilidade segura", () => {
     expect(JSON.stringify(value)).not.toContain("abc.def");
   });
 
+  it("redige CNPJ formatado ou numérico em objetos, arrays e mensagens sem apagar números arbitrários", () => {
+    const formatted = `${["12", "345", "678"].join(".")}/${"0001"}-${"90"}`;
+    const digits = ["12345678", "000190"].join("");
+    const cpf = ["123", "456", "789", "00"].join(".").replace(".00", "-00");
+    const harmless = ["111111", "111111"].join("");
+    const value = sanitizeLogValue({
+      companyCnpj: formatted,
+      nested: { taxId: digits, message: `Fornecedor ${formatted}; CPF ${cpf}` },
+      array: [digits, { cnpj: formatted }],
+      harmless: `Pedido ${harmless}`,
+    });
+    const serialized = JSON.stringify(value);
+    expect(serialized).not.toContain(formatted);
+    expect(serialized).not.toContain(digits);
+    expect(serialized).not.toContain(cpf);
+    expect(serialized).toContain(harmless);
+  });
+
   it("emite JSON com contexto de tenant, job e correlação", () => {
     const output = vi.spyOn(console, "log").mockImplementation(() => undefined);
     logger.info("feito", { organizationId: "org-a", jobId: "job-a", correlationId: "corr-a" });

@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { inspectUpload } from "./upload-policy";
+import { createMalwareScanner, inspectUpload } from "./upload-policy";
 import { DESIGN_UPLOAD_LIMITS, validateDesignUpload } from "@/domain/design/adapters";
 
 describe("fundação segura de uploads", () => {
+  it("proíbe scanner noop ou ausente em produção", () => {
+    expect(() => createMalwareScanner("production", "noop")).toThrow(/proibido/);
+    expect(() => createMalwareScanner("production")).toThrow(/proibido/);
+  });
   it("valida extensão, MIME, assinatura, tamanho por tipo e checksum", async () => {
     const bytes = new TextEncoder().encode("%PDF-1.7\n");
     expect(validateDesignUpload({ fileName: "planta.pdf", mimeType: "application/pdf", bytes }).extension).toBe("pdf");

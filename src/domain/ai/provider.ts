@@ -79,11 +79,3 @@ export class CompatibleHTTPAIProvider implements AIProvider {
   async classify(text: string, labels: string[]): Promise<string> { return (await this.generateText({ task: "EXTRACTION", systemPrompt: `Classifique em: ${labels.join(", ")}. Responda só o rótulo.`, userPrompt: text, groundedContext: "", maxTokens: 20, temperature: 0 })).text; }
   async summarize(text: string, maxCharacters = 800): Promise<string> { return (await this.generateText({ task: "SYNTHESIS", systemPrompt: `Resuma em até ${maxCharacters} caracteres sem inventar fatos.`, userPrompt: text, groundedContext: "", maxTokens: Math.ceil(maxCharacters / 3), temperature: 0 })).text; }
 }
-
-export function createAIProvider(): AIProvider {
-  const apiKey = process.env.AI_PROVIDER_API_KEY?.trim();
-  const baseUrl = process.env.AI_PROVIDER_BASE_URL?.trim();
-  const model = process.env.AI_DEFAULT_MODEL?.trim();
-  if (apiKey && baseUrl && model) return new CompatibleHTTPAIProvider({ apiKey, baseUrl, model, name: process.env.AI_PROVIDER_NAME, inputCostPerMillion: Number(process.env.AI_INPUT_COST_PER_MILLION ?? 0), outputCostPerMillion: Number(process.env.AI_OUTPUT_COST_PER_MILLION ?? 0) });
-  return new DeterministicAIProvider();
-}
