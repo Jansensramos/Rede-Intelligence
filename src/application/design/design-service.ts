@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-import { after } from "next/server";
 import type { Prisma } from "@prisma/client";
 import type { AuthContext } from "@/application/auth/session";
 import { getLatestStudyForOrganization } from "@/application/studies/study-service";
@@ -31,6 +29,8 @@ import { calculateRedeScore } from "@/domain/score";
 import { calculateSensitivity } from "@/domain/sensitivity";
 import { prisma } from "@/infrastructure/database/prisma";
 import { designFileStorage } from "@/infrastructure/storage/design-file-storage";
+import { inspectUpload } from "@/infrastructure/storage/upload-policy";
+import { enqueueJob } from "@/application/integrations/job-runner";
 import { getLatestBimWorkspace, processIfcBimFile } from "./bim-service";
 
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -198,23 +198,25 @@ export async function uploadAndProcessDesignFile(context: AuthContext, raw: { pa
   if (!revision) throw new Error("Revisão não pertence ao Project Package informado.");
   const bytes = new Uint8Array(await raw.file.arrayBuffer());
   const validation = validateDesignUpload({ fileName: raw.file.name, mimeType: raw.file.type, bytes });
-  const checksum = createHash("sha256").update(bytes).digest("hex");
+  const inspection = await inspectUpload({ fileName: raw.file.name, bytes });
+  const checksum = inspection.checksum;
   const duplicate = await prisma.designFile.findFirst({ where: { packageId: designPackage.id, revisionId: revision.id, checksum } });
   if (duplicate) return getDesignWorkspace(context.organizationId, designPackage.id);
   const stored = await designFileStorage.put({ organizationId: context.organizationId, packageId: designPackage.id, fileName: raw.file.name, bytes });
   const documentVersion = designPackage.investmentCaseId ? await prisma.projectDocument.count({ where: { investmentCaseId: designPackage.investmentCaseId, title: raw.file.name } }) + 1 : 1;
   const document = designPackage.investmentCaseId ? await prisma.projectDocument.create({ data: { investmentCaseId: designPackage.investmentCaseId, category: disciplineDocumentCategory(input.discipline), title: raw.file.name, version: documentVersion, status: "RECEIVED", confidentiality: "STRICTLY_CONFIDENTIAL", fileName: raw.file.name, mimeType: validation.mimeType, fileSize: stored.size, checksum: stored.checksum, source: "DESIGN_INTELLIGENCE_PRIVATE_STORAGE", metadata: json({ provider: stored.provider, storageKey: stored.key, designPackageId: designPackage.id, revisionId: revision.id }), createdById: context.userId } }) : null;
-  const file = await prisma.designFile.create({ data: { packageId: designPackage.id, revisionId: revision.id, documentId: document?.id, fileName: raw.file.name, fileType: validation.extension.toUpperCase(), mimeType: validation.mimeType, discipline: input.discipline, revision: input.revision, status: "VALIDATED", checksum: stored.checksum, fileSize: stored.size, storageProvider: stored.provider, storageKey: stored.key, uploadedById: context.userId, processingStatus: "QUEUED", processingMetadata: json({ validation: { mime: validation.mimeType, extension: validation.extension, checksumAlgorithm: "SHA-256" }, untrusted: true }) }, include: { jobs: true } });
+  const file = await prisma.designFile.create({ data: { packageId: designPackage.id, revisionId: revision.id, documentId: document?.id, fileName: raw.file.name, fileType: validation.extension.toUpperCase(), mimeType: validation.mimeType, discipline: input.discipline, revision: input.revision, status: "VALIDATED", checksum: stored.checksum, fileSize: stored.size, storageProvider: stored.provider, storageKey: stored.key, uploadedById: context.userId, processingStatus: "QUEUED", processingMetadata: json({ validation: { mime: validation.mimeType, extension: validation.extension, checksumAlgorithm: "SHA-256", malwareScanner: inspection.scanner }, untrusted: true }) }, include: { jobs: true } });
   const job = await prisma.designProcessingJob.create({ data: { fileId: file.id, status: "QUEUED", progress: 0 } });
   if (file.fileType === "IFC") await prisma.bimModel.create({ data: { organizationId: context.organizationId, projectId: designPackage.projectId, packageId: designPackage.id, revisionId: revision.id, fileId: file.id, status: "UPLOADED" } });
   await prisma.designProjectPackage.update({ where: { id: designPackage.id }, data: { status: "PROCESSING", disciplineSet: json([...new Set([...array(designPackage.disciplineSet).map(String), input.discipline])]) } });
   await prisma.designAuditLog.create({ data: { organizationId: context.organizationId, packageId: designPackage.id, userId: context.userId, action: "FILE_UPLOADED", entityType: "DesignFile", entityId: file.id, after: json({ fileName: file.fileName, checksum, discipline: input.discipline, revision: input.revision, documentId: document?.id }) } });
-  if (options.deferProcessing) after(() => processStoredFile(context, file.id, job.id));
-  else await processStoredFile(context, file.id, job.id);
+  if (options.deferProcessing) {
+    await enqueueJob({ organizationId: context.organizationId, jobType: "PROCESS_DESIGN_FILE", payload: { fileId: file.id, designJobId: job.id, userId: context.userId }, correlationId: `design:${file.id}` });
+  } else await processStoredFile(context, file.id, job.id);
   return getDesignWorkspace(context.organizationId, designPackage.id);
 }
 
-async function processStoredFile(context: Pick<AuthContext, "organizationId" | "userId">, fileId: string, jobId: string) {
+export async function processStoredFile(context: Pick<AuthContext, "organizationId" | "userId">, fileId: string, jobId: string) {
   const file = await prisma.designFile.findFirst({ where: { id: fileId, package: { organizationId: context.organizationId } }, include: { package: true } });
   if (!file) throw new Error("Arquivo não encontrado nesta organização.");
   await prisma.designProcessingJob.update({ where: { id: jobId }, data: { status: "VALIDATING", progress: 10, attempts: { increment: 1 }, startedAt: new Date() } });

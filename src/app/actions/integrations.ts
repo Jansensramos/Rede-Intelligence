@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAuthContext } from "@/application/auth/session";
-import { decideIntegrationConflict, getIntegrationsWorkspace, reprocessQuarantineItem, runConnectorSync } from "@/application/integrations/integrations-service";
-import { MockGoogleDriveConnector } from "@/domain/integrations";
+import { decideIntegrationConflict, getIntegrationsWorkspace, reprocessQuarantineItem } from "@/application/integrations/integrations-service";
+import { enqueueJob } from "@/application/integrations/job-runner";
+import { prisma } from "@/infrastructure/database/prisma";
 
 type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 const message = (error: unknown) => (error instanceof Error ? error.message : "Não foi possível concluir a operação de integrações.");
@@ -39,14 +40,16 @@ export async function reprocessQuarantineItemAction(projectId: string, quarantin
   });
 }
 
-/** Demonstração de "Sincronizar agora": só o mock do Google Drive tem execução manual nesta fase. */
+/** Solicitação assíncrona: o request web apenas enfileira; o worker executa. */
 export async function syncMockDriveInstallationAction(projectId: string, installationId: string) {
   const context = await requireAuthContext();
   return run(async () => {
+    const installation = await prisma.connectorInstallation.findFirst({ where: { id: installationId, organizationId: context.organizationId, projectId } });
+    if (!installation) throw new Error("Instalação não encontrada neste empreendimento e organização.");
     const files = [
       { externalId: "drive-file-memorial", versionId: "v1", name: "Memorial descritivo — START BUTANTÃ.pdf", mimeType: "application/pdf", size: 812_400, webUrl: "https://drive.example.com/file/drive-file-memorial", checksum: `manual-sync-${Date.now()}`, modifiedAt: new Date() },
     ];
-    await runConnectorSync(context, installationId, { mode: "MANUAL", capability: "DOCUMENTS", connector: new MockGoogleDriveConnector(files) });
+    await enqueueJob({ organizationId: context.organizationId, installationId, jobType: "SYNC_INSTALLATION", payload: { capability: "DOCUMENTS", files: files.map((file) => ({ ...file, modifiedAt: file.modifiedAt.toISOString() })) } });
     return getIntegrationsWorkspace(context, projectId);
   });
 }

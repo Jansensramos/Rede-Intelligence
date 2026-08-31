@@ -4,6 +4,7 @@ import type { AuthContext } from "@/application/auth/session";
 import { assertDataIntelligenceCapability, hasDataIntelligenceCapability } from "@/domain/data-intelligence/capabilities";
 import { buildCostCycleRow, calculateSmartBudgetLine, compareValueEngineeringAlternatives, evaluateAutoBudgetApprovalGate } from "@/domain/engineering/engine";
 import { prisma } from "@/infrastructure/database/prisma";
+import { convertUnit } from "@/domain/data-intelligence";
 
 type Context = Pick<AuthContext, "organizationId" | "userId" | "role">;
 const json = (value: unknown) => value as Prisma.InputJsonValue;
@@ -218,12 +219,19 @@ export async function createSmartBudgetProposal(context: Context, input: { proje
     if (quantity == null) throw new Error(`Quantidade ausente para ${economic.code}.`);
     const benchmarkUnit = benchmark?.unit?.startsWith("R$/") ? benchmark.unit.slice(3) : benchmark?.unit;
     const sourceUnit = observation?.unit ?? benchmarkUnit ?? unit;
-    const conversion = sourceUnit === unit ? null : conversions.find((candidate) => candidate.fromUnit === sourceUnit && candidate.toUnit === unit);
-    if (sourceUnit !== unit && !conversion) throw new Error(`Não há normalização de ${sourceUnit} para ${unit}.`);
+    const persistedConversion = sourceUnit === unit ? null : conversions.find((candidate) => candidate.fromUnit === sourceUnit && candidate.toUnit === unit);
+    // Para preço unitário, o fator é o inverso da conversão da quantidade:
+    // R$/kg -> R$/t multiplica por 1000. AnalyticsUnitConversion.factor guarda a
+    // mesma semântica física de convertUnit (fromUnit -> toUnit, ex.: kg->t = 0,001),
+    // então o preço usa o inverso do fator persistido. O catálogo físico puro cobre
+    // unidades conhecidas quando ainda não existe uma conversão versionada persistida.
+    const catalogConversion = sourceUnit === unit ? null : convertUnit(1, unit, sourceUnit);
+    const conversionFactor = persistedConversion ? 1 / Number(persistedConversion.factor) : catalogConversion?.compatible ? catalogConversion.factor : null;
+    if (sourceUnit !== unit && conversionFactor == null) throw new Error(`Não há normalização de ${sourceUnit} para ${unit}.`);
     const priceValue = observation ? Number(observation.price) : benchmark?.median ? Number(benchmark.median) : null;
     const observationEvidence: "VALIDATED_PRICE" | "ESTIMATED_PRICE" = observation?.evidenceChecksum ? "VALIDATED_PRICE" : "ESTIMATED_PRICE";
     const price = priceValue == null ? null : observation ? { value: priceValue, source: observation.sourceProvider, referenceId: observation.id, observedAt: observation.observedAt.toISOString(), region: observation.region, supplier: observation.supplierName, evidenceStatus: observationEvidence } : { value: priceValue, source: "Histórico comparável REDE Data", referenceId: benchmark!.id, observedAt: benchmark!.asOfDate.toISOString(), region: null, supplier: null, evidenceStatus: "COMPARABLE_HISTORICAL_PRICE" as const };
-    const result = calculateSmartBudgetLine({ quantity, unit, quantityOrigin: mapping ? `BIM_IFC:${mapping.extractionMethod}` : request.quantityOrigin ?? "MANUAL", quantityReferenceId: mapping?.id, composition: composition ? { id: composition.id, key: composition.key, version: composition.version, checksum: composition.checksum } : null, price, confidence: mapping?.confidenceLevel ?? benchmark?.confidenceLevel ?? (observation?.confidence != null && observation.confidence >= .8 ? "HIGH" : observation?.confidence != null && observation.confidence >= .5 ? "MEDIUM" : "LOW"), baseDate: (input.baseDate ?? observation?.observedAt ?? benchmark?.asOfDate)?.toISOString() ?? null, normalization: { currency: observation?.currency ?? "BRL", sourceUnit, targetUnit: unit, factor: conversion ? Number(conversion.factor) : 1 } });
+    const result = calculateSmartBudgetLine({ quantity, unit, quantityOrigin: mapping ? `BIM_IFC:${mapping.extractionMethod}` : request.quantityOrigin ?? "MANUAL", quantityReferenceId: mapping?.id, composition: composition ? { id: composition.id, key: composition.key, version: composition.version, checksum: composition.checksum } : null, price, confidence: mapping?.confidenceLevel ?? benchmark?.confidenceLevel ?? (observation?.confidence != null && observation.confidence >= .8 ? "HIGH" : observation?.confidence != null && observation.confidence >= .5 ? "MEDIUM" : "LOW"), baseDate: (input.baseDate ?? observation?.observedAt ?? benchmark?.asOfDate)?.toISOString() ?? null, normalization: { currency: observation?.currency ?? "BRL", sourceUnit, targetUnit: unit, factor: conversionFactor ?? 1 } });
     const lineChecksum = checksum({ economicItemId: economic.id, ...result.snapshot });
     return { request, economic, mapping, composition, observation, benchmark, result, sortOrder, lineChecksum };
   });
@@ -259,8 +267,16 @@ export async function appendSmartBudgetLineReview(context: Context, input: { lin
   }
   const latest = line.reviews[0];
   const signature = JSON.stringify([input.decision, input.revisedQuantity ?? null, input.revisedCompositionId ?? null, input.revisedUnitCost ?? null, input.justification.trim()]);
-  if (latest && JSON.stringify([latest.decision, latest.revisedQuantity == null ? null : Number(latest.revisedQuantity), latest.revisedCompositionId, latest.revisedUnitCost == null ? null : Number(latest.revisedUnitCost), latest.justification]) === signature) return latest;
-  return prisma.autoBudgetLineReview.create({ data: { organizationId: context.organizationId, projectId: line.projectId, lineId: line.id, revisionNumber: (latest?.revisionNumber ?? 0) + 1, decision: input.decision, originalQuantity: latest?.revisedQuantity ?? line.quantity, revisedQuantity: input.revisedQuantity ?? null, originalCompositionId: latest?.revisedCompositionId ?? line.compositionId, revisedCompositionId: input.revisedCompositionId ?? null, originalUnitCost: latest?.revisedUnitCost ?? line.suggestedUnitCost, revisedUnitCost: input.revisedUnitCost ?? null, justification: input.justification.trim(), reviewedById: context.userId, evidence: { create: (input.evidence ?? []).map((evidence) => ({ reference: evidence.reference, label: evidence.label, value: evidence.value ?? null, sourceType: evidence.sourceType, confidence: evidence.confidence, metadata: evidence.metadata == null ? undefined : json(evidence.metadata) })) } }, include: { evidence: true } });
+  if (latest && JSON.stringify([latest.decision, latest.revisedQuantity == null ? null : Number(latest.revisedQuantity), latest.revisedCompositionId, latest.revisedUnitCost == null ? null : Number(latest.revisedUnitCost), latest.justification]) === signature) {
+    await prisma.autoBudgetProposalLine.update({ where: { id: line.id }, data: { reviewedUnitCost: latest.revisedUnitCost ?? line.suggestedUnitCost, reviewNote: latest.justification } });
+    return latest;
+  }
+  return prisma.$transaction(async (tx) => {
+    const review = await tx.autoBudgetLineReview.create({ data: { organizationId: context.organizationId, projectId: line.projectId, lineId: line.id, revisionNumber: (latest?.revisionNumber ?? 0) + 1, decision: input.decision, originalQuantity: latest?.revisedQuantity ?? line.quantity, revisedQuantity: input.revisedQuantity ?? null, originalCompositionId: latest?.revisedCompositionId ?? line.compositionId, revisedCompositionId: input.revisedCompositionId ?? null, originalUnitCost: latest?.revisedUnitCost ?? line.suggestedUnitCost, revisedUnitCost: input.revisedUnitCost ?? null, justification: input.justification.trim(), reviewedById: context.userId, evidence: { create: (input.evidence ?? []).map((evidence) => ({ reference: evidence.reference, label: evidence.label, value: evidence.value ?? null, sourceType: evidence.sourceType, confidence: evidence.confidence, metadata: evidence.metadata == null ? undefined : json(evidence.metadata) })) } }, include: { evidence: true } });
+    // Mantém os campos legados de leitura sincronizados; a trilha oficial continua append-only em reviews.
+    await tx.autoBudgetProposalLine.update({ where: { id: line.id }, data: { reviewedUnitCost: input.revisedUnitCost ?? line.suggestedUnitCost, reviewNote: input.justification.trim() } });
+    return review;
+  });
 }
 
 export async function approveSmartBudgetProposal(context: Context, proposalId: string) {

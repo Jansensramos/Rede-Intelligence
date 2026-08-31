@@ -76,7 +76,42 @@ export async function claimNextJob(organizationId: string, leaseOwner: string, l
   return rows[0] ?? null;
 }
 
-export async function completeJob(jobId: string) {
+/** Claim global para o worker dedicado. O tenant vem sempre do próprio job e é
+ * revalidado pelo dispatcher antes de qualquer acesso de negócio. */
+export async function claimNextJobAcrossOrganizations(leaseOwner: string, leaseDurationMs = 30_000): Promise<IntegrationJob | null> {
+  const nowIso = new Date().toISOString();
+  const leaseExpiresAtIso = new Date(Date.now() + leaseDurationMs).toISOString();
+  const rows = await prisma.$queryRaw<IntegrationJob[]>`
+    UPDATE integration_jobs
+    SET status = 'RUNNING', lease_owner = ${leaseOwner}, lease_expires_at = ${leaseExpiresAtIso}::timestamp,
+        started_at = COALESCE(started_at, ${nowIso}::timestamp), attempt_count = attempt_count + 1
+    WHERE id = (
+      SELECT id FROM integration_jobs
+      WHERE status NOT IN ('SUCCEEDED', 'CANCELLED', 'DEAD_LETTER')
+        AND job_type IN ('SYNC_INSTALLATION', 'POLL_INSTALLATION', 'DELIVER_WEBHOOKS', 'PROCESS_DESIGN_FILE')
+        AND ((status = 'QUEUED' AND scheduled_at <= ${nowIso}::timestamp)
+          OR (status = 'RUNNING' AND lease_expires_at IS NOT NULL AND lease_expires_at < ${nowIso}::timestamp))
+      ORDER BY CASE priority WHEN 'CRITICAL' THEN 0 WHEN 'NORMAL' THEN 1 ELSE 2 END, scheduled_at ASC
+      FOR UPDATE SKIP LOCKED LIMIT 1
+    )
+    RETURNING id, organization_id AS "organizationId", installation_id AS "installationId", job_type AS "jobType",
+      priority, status, payload, attempt_count AS "attemptCount", max_attempts AS "maxAttempts",
+      lease_owner AS "leaseOwner", lease_expires_at AS "leaseExpiresAt", scheduled_at AS "scheduledAt",
+      started_at AS "startedAt", finished_at AS "finishedAt", last_error AS "lastError",
+      correlation_id AS "correlationId", created_at AS "createdAt";
+  `;
+  return rows[0] ?? null;
+}
+
+export async function heartbeatJob(jobId: string, leaseOwner: string, leaseDurationMs = 30_000) {
+  return prisma.integrationJob.updateMany({
+    where: { id: jobId, status: "RUNNING", leaseOwner },
+    data: { leaseExpiresAt: new Date(Date.now() + leaseDurationMs) },
+  });
+}
+
+export async function completeJob(jobId: string, leaseOwner?: string) {
+  if (leaseOwner) return prisma.integrationJob.updateMany({ where: { id: jobId, status: "RUNNING", leaseOwner }, data: { status: "SUCCEEDED", finishedAt: new Date(), leaseOwner: null, leaseExpiresAt: null } });
   return prisma.integrationJob.update({ where: { id: jobId }, data: { status: "SUCCEEDED", finishedAt: new Date(), leaseOwner: null, leaseExpiresAt: null } });
 }
 

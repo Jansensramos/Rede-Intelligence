@@ -49,4 +49,45 @@ describe.skipIf(!process.env.DATABASE_URL).sequential("base operacional multiemp
     const atlas = await prisma.organization.findUniqueOrThrow({ where: { slug: "grupo-atlas" } });
     await expect(getOperationsWorkspace({ organizationId: atlas.id }, projectId)).rejects.toThrow("não encontrado nesta organização");
   });
+
+  it("prioriza o Orçamento Oficial vigente mesmo com uma proposta preliminar aprovada mais recente", async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const project = await prisma.project.create({ data: { organizationId: context.organizationId, name: `TESTE PRIORIDADE ORCAMENTO ${suffix}`, city: "São Paulo", state: "SP", createdById: context.userId, updatedById: context.userId } });
+    const official = await prisma.budget.create({ data: { organizationId: context.organizationId, projectId: project.id, name: `Orçamento Oficial ${suffix}`, status: "OFFICIAL", kind: "OFFICIAL", currency: "BRL", baseDate: new Date("2026-08-01"), version: 1, totalBudget: 1_000_000, createdById: context.userId, updatedById: context.userId } });
+    // Proposta preliminar aprovada pelo Auto Budget (kind=PRELIMINARY -> status="APPROVED" em approveBudget,
+    // nunca "OFFICIAL"), criada depois e com versão mais alta — não pode ocultar o orçamento oficial.
+    await prisma.budget.create({ data: { organizationId: context.organizationId, projectId: project.id, name: `Proposta preliminar mais recente ${suffix}`, status: "APPROVED", kind: "PRELIMINARY", currency: "BRL", baseDate: new Date("2026-08-29"), version: 99, totalBudget: 9_999_999, createdById: context.userId, updatedById: context.userId } });
+
+    const workspace = await getOperationsWorkspace(context, project.id);
+    expect(workspace.budget).toMatchObject({ id: official.id, status: "OFFICIAL", kind: "OFFICIAL", total: 1_000_000 });
+
+    await prisma.project.update({ where: { id: project.id }, data: { status: "ARCHIVED", updatedById: context.userId } });
+  });
+
+  it("sem Orçamento Oficial elegível, usa o fallback correto (melhor orçamento disponível por versão/atualização)", async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const project = await prisma.project.create({ data: { organizationId: context.organizationId, name: `TESTE FALLBACK ORCAMENTO ${suffix}`, city: "São Paulo", state: "SP", createdById: context.userId, updatedById: context.userId } });
+    const draft = await prisma.budget.create({ data: { organizationId: context.organizationId, projectId: project.id, name: `Rascunho ${suffix}`, status: "DRAFT", kind: "PRELIMINARY", currency: "BRL", baseDate: new Date("2026-08-01"), version: 1, totalBudget: 100, createdById: context.userId, updatedById: context.userId } });
+    const preliminaryApproved = await prisma.budget.create({ data: { organizationId: context.organizationId, projectId: project.id, name: `Proposta preliminar aprovada ${suffix}`, status: "APPROVED", kind: "PRELIMINARY", currency: "BRL", baseDate: new Date("2026-08-15"), version: 2, totalBudget: 500_000, createdById: context.userId, updatedById: context.userId } });
+    void draft;
+
+    const workspace = await getOperationsWorkspace(context, project.id);
+    expect(workspace.budget).toMatchObject({ id: preliminaryApproved.id, status: "APPROVED", kind: "PRELIMINARY", total: 500_000 });
+
+    await prisma.project.update({ where: { id: project.id }, data: { status: "ARCHIVED", updatedById: context.userId } });
+  });
+
+  it("um Orçamento Oficial SUPERSEDED nunca compete, mesmo com versão mais alta e kind=OFFICIAL", async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const project = await prisma.project.create({ data: { organizationId: context.organizationId, name: `TESTE OFICIAL SUPERADO ${suffix}`, city: "São Paulo", state: "SP", createdById: context.userId, updatedById: context.userId } });
+    // Simula um Orçamento Oficial já superado (kind continua OFFICIAL, mas status não é mais "OFFICIAL")
+    // com a versão mais alta do projeto — status, não kind nem versão, decide elegibilidade.
+    await prisma.budget.create({ data: { organizationId: context.organizationId, projectId: project.id, name: `Oficial superado ${suffix}`, status: "SUPERSEDED", kind: "OFFICIAL", currency: "BRL", baseDate: new Date("2026-07-01"), version: 5, totalBudget: 8_000_000, createdById: context.userId, updatedById: context.userId } });
+    const draft = await prisma.budget.create({ data: { organizationId: context.organizationId, projectId: project.id, name: `Rascunho corrente ${suffix}`, status: "DRAFT", kind: "PRELIMINARY", currency: "BRL", baseDate: new Date("2026-08-01"), version: 1, totalBudget: 300_000, createdById: context.userId, updatedById: context.userId } });
+
+    const workspace = await getOperationsWorkspace(context, project.id);
+    expect(workspace.budget).toMatchObject({ id: draft.id, status: "DRAFT", total: 300_000 });
+
+    await prisma.project.update({ where: { id: project.id }, data: { status: "ARCHIVED", updatedById: context.userId } });
+  });
 });

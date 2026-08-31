@@ -2,6 +2,12 @@ import { PDFDocument } from "pdf-lib";
 import type { DesignAdapterResult, DesignFileAdapter, DesignFileSupport } from "./types";
 
 const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
+export const DESIGN_UPLOAD_LIMITS: Record<string, number> = {
+  pdf: 50 * 1024 * 1024,
+  png: 25 * 1024 * 1024, jpg: 25 * 1024 * 1024, jpeg: 25 * 1024 * 1024, webp: 25 * 1024 * 1024,
+  ifc: MAX_UPLOAD_BYTES, dxf: 100 * 1024 * 1024, dwg: MAX_UPLOAD_BYTES, rvt: MAX_UPLOAD_BYTES,
+  geojson: 20 * 1024 * 1024, csv: 20 * 1024 * 1024, xlsx: 50 * 1024 * 1024, docx: 50 * 1024 * 1024,
+};
 
 const MIME_BY_EXTENSION: Record<string, string[]> = {
   pdf: ["application/pdf", "application/octet-stream"],
@@ -57,7 +63,8 @@ export function validateDesignUpload(input: { fileName: string; mimeType: string
   const extension = normalizedExtension(input.fileName);
   if (!Object.hasOwn(MIME_BY_EXTENSION, extension)) throw new Error(`Formato .${extension || "desconhecido"} não suportado.`);
   if (!input.bytes.length) throw new Error("O arquivo está vazio.");
-  if (input.bytes.length > (input.maximumBytes ?? MAX_UPLOAD_BYTES)) throw new Error("Arquivo excede o limite configurado de 250 MB.");
+  const maximumBytes = input.maximumBytes ?? DESIGN_UPLOAD_LIMITS[extension] ?? MAX_UPLOAD_BYTES;
+  if (input.bytes.length > maximumBytes) throw new Error(`Arquivo excede o limite de ${Math.ceil(maximumBytes / 1024 / 1024)} MB para .${extension}.`);
   const allowedMimes = MIME_BY_EXTENSION[extension];
   if (input.mimeType && !allowedMimes.includes(input.mimeType.toLowerCase())) throw new Error(`MIME ${input.mimeType} incompatível com .${extension}.`);
   if (!magicMatches(extension, input.bytes)) throw new Error(`Conteúdo incompatível com a extensão .${extension}; upload bloqueado.`);

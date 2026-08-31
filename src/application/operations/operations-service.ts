@@ -276,7 +276,15 @@ export async function getOperationsWorkspace(context: Pick<AuthContext, "organiz
   await projectForTenant(context.organizationId, projectId);
   const [baseline, budget, schedule, policy, structure] = await Promise.all([
     prisma.operationalBaseline.findFirst({ where: { organizationId: context.organizationId, projectId }, orderBy: [{ version: "desc" }], include: { lines: true } }),
-    prisma.budget.findFirst({ where: { organizationId: context.organizationId, projectId, status: { notIn: ["ARCHIVED", "SUPERSEDED", "CLOSED"] } }, orderBy: [{ version: "desc" }, { updatedAt: "desc" }], include: { lineItems: true, varianceJustifications: true } }),
+    // A visão operacional representa primeiro o orçamento oficial vigente. Uma
+    // proposta preliminar aprovada pelo Auto Budget (kind=PRELIMINARY vira status
+    // "APPROVED" em approveBudget, nunca "OFFICIAL") não pode substituí-lo só por
+    // ter sido criada mais recentemente. status="OFFICIAL" é único por projeto —
+    // approveBudget supera qualquer OFFICIAL anterior para SUPERSEDED — então a
+    // prioridade é explícita (tier 1: OFFICIAL; tier 2: melhor disponível por
+    // versão/atualização), não a ordem ordinal acidental do enum BudgetStatus.
+    prisma.budget.findFirst({ where: { organizationId: context.organizationId, projectId, status: "OFFICIAL" }, orderBy: [{ version: "desc" }, { updatedAt: "desc" }], include: { lineItems: true, varianceJustifications: true } })
+      .then((official) => official ?? prisma.budget.findFirst({ where: { organizationId: context.organizationId, projectId, status: { notIn: ["ARCHIVED", "SUPERSEDED", "CLOSED", "OFFICIAL"] } }, orderBy: [{ version: "desc" }, { updatedAt: "desc" }], include: { lineItems: true, varianceJustifications: true } })),
     prisma.operationalSchedule.findFirst({ where: { organizationId: context.organizationId, projectId }, orderBy: [{ version: "desc" }], include: { activities: { include: { allocations: true, predecessors: true } } } }),
     prisma.materialityPolicy.findFirst({ where: { organizationId: context.organizationId, isActive: true }, orderBy: { updatedAt: "desc" } }),
     prisma.project.findFirst({

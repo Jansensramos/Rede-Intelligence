@@ -59,13 +59,16 @@ describe("Inteligência de Dados 9I contra PostgreSQL real", () => {
   });
 
   it("aprovação de Orçamento Inteligente preserva a sugestão original ao lado da revisão humana", async () => {
-    const workspace = await getDataIntelligenceWorkspace(context, projectId);
-    const proposal = workspace.autoBudgetProposals.find((candidate) => candidate.status === "APPROVED" && candidate.lines.some((line) => line.reviewedUnitCost !== null));
+    const proposal = await prisma.autoBudgetProposal.findFirst({
+      where: { organizationId: context.organizationId, projectId, name: "Revisão de referência — Fundações e estrutura (demonstração)", status: "APPROVED" },
+      include: { lines: { include: { reviews: { orderBy: { revisionNumber: "desc" }, take: 1 } } } },
+    });
     expect(proposal).toBeDefined();
     expect(proposal!.status).toBe("APPROVED");
     const line = proposal!.lines[0];
-    expect(line.suggestedUnitCost).toBeGreaterThan(0);
-    expect(line.reviewedUnitCost).not.toBeNull();
+    expect(Number(line.suggestedUnitCost)).toBeGreaterThan(0);
+    expect(line.reviews[0]).toBeDefined();
+    expect(Number(line.reviews[0]!.revisedUnitCost ?? line.reviews[0]!.originalUnitCost)).toBeGreaterThan(0);
   });
 
   it("rejeita aprovação de proposta que não está em revisão", async () => {

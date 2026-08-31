@@ -84,6 +84,10 @@ describe("Engenharia, Parecer Técnico e Orçamento Inteligente 9M contra Postgr
     const review = await appendSmartBudgetLineReview(context, { lineId: proposal.lines[0]!.id, decision: "ADJUSTED", revisedUnitCost: 320, justification: "Preço ajustado com conferência humana." });
     const reviewReplay = await appendSmartBudgetLineReview(context, { lineId: proposal.lines[0]!.id, decision: "ADJUSTED", revisedUnitCost: 320, justification: "Preço ajustado com conferência humana." });
     expect(reviewReplay.id).toBe(review.id);
+    const mirroredLine = await prisma.autoBudgetProposalLine.findUniqueOrThrow({ where: { id: proposal.lines[0]!.id }, include: { reviews: true } });
+    expect(Number(mirroredLine.reviewedUnitCost)).toBe(320);
+    expect(mirroredLine.reviewNote).toBe(review.justification);
+    expect(mirroredLine.reviews).toHaveLength(1);
     const budget = await approveSmartBudgetProposal(context, proposal.id);
     const budgetReplay = await approveSmartBudgetProposal(context, proposal.id);
     expect(budgetReplay.id).toBe(budget.id);
@@ -101,6 +105,56 @@ describe("Engenharia, Parecer Técnico e Orçamento Inteligente 9M contra Postgr
     const other = await prisma.organization.findUniqueOrThrow({ where: { slug: "grupo-atlas" } });
     await expect(getEngineeringWorkspace({ organizationId: other.id, userId: context.userId, role: "VIEWER" }, projectId)).rejects.toThrow("não encontrado");
     await expect(createSmartBudgetProposal(context, { projectId, name: `Referência cruzada ${suffix}`, rationale: "Deve falhar", lines: [{ economicItemId, quantity: 1, priceObservationId: (await prisma.externalPriceObservation.findFirst({ where: { organizationId: other.id } }))?.id ?? "foreign-id" }] })).rejects.toThrow("não pertencem");
+  });
+
+  it("converte preço unitário entre kg e t (fallback de catálogo e conversão persistida)", async () => {
+    // O banco de teste é persistente entre execuções. Remove somente conversões criadas por este
+    // teste dirigido para que o primeiro caso continue exercitando de fato o catálogo puro.
+    await prisma.analyticsUnitConversion.deleteMany({ where: { organizationId: context.organizationId, source: { startsWith: "Teste dirigido 9M" } } });
+    const itemKgToT = await prisma.economicItem.create({ data: { organizationId: context.organizationId, projectId, code: `9M-KGT-${suffix}`, description: "Item medido em t, preço observado em kg", category: "Engenharia", unit: "t", createdById: context.userId } });
+    const priceKg = await prisma.externalPriceObservation.create({ data: { organizationId: context.organizationId, itemCode: itemKgToT.code, itemDescription: `Preço em kg 9M ${suffix}`, observedAt: new Date("2026-08-27"), unit: "kg", price: 10, currency: "BRL", region: "São Paulo/SP", supplierName: "Fornecedor de teste", sourceProvider: "Evidência dirigida 9M", evidenceChecksum: `evidence-kgt-${suffix}`, confidence: .95, mappedEconomicItemId: itemKgToT.id, createdById: context.userId } });
+
+    // R$ 10/kg -> R$ 10.000/t via fallback de catálogo (sem AnalyticsUnitConversion persistida).
+    const catalogProposal = await createSmartBudgetProposal(context, { projectId, name: `Conversão catálogo kg->t ${suffix}`, rationale: "Teste dirigido de conversão de unidade", lines: [{ economicItemId: itemKgToT.id, quantity: 1, priceObservationId: priceKg.id, evidenceRequired: true }] });
+    expect(Number(catalogProposal.lines[0]?.suggestedUnitCost)).toBe(10_000);
+
+    const itemTToKg = await prisma.economicItem.create({ data: { organizationId: context.organizationId, projectId, code: `9M-TKG-${suffix}`, description: "Item medido em kg, preço observado em t", category: "Engenharia", unit: "kg", createdById: context.userId } });
+    const priceT = await prisma.externalPriceObservation.create({ data: { organizationId: context.organizationId, itemCode: itemTToKg.code, itemDescription: `Preço em t 9M ${suffix}`, observedAt: new Date("2026-08-27"), unit: "t", price: 10_000, currency: "BRL", region: "São Paulo/SP", supplierName: "Fornecedor de teste", sourceProvider: "Evidência dirigida 9M", evidenceChecksum: `evidence-tkg-${suffix}`, confidence: .95, mappedEconomicItemId: itemTToKg.id, createdById: context.userId } });
+
+    // R$ 10.000/t -> R$ 10/kg, mesmo caminho de catálogo na direção oposta.
+    const reverseProposal = await createSmartBudgetProposal(context, { projectId, name: `Conversão catálogo t->kg ${suffix}`, rationale: "Teste dirigido de conversão de unidade", lines: [{ economicItemId: itemTToKg.id, quantity: 1, priceObservationId: priceT.id, evidenceRequired: true }] });
+    expect(Number(reverseProposal.lines[0]?.suggestedUnitCost)).toBe(10);
+
+    // Conversão versionada persistida (AnalyticsUnitConversion), semântica física igual a convertUnit:
+    // fromUnit=kg, toUnit=t, factor=0.001 (1kg = 0,001t) — o preço usa o inverso desse fator.
+    const latestPersistedConversion = await prisma.analyticsUnitConversion.aggregate({ where: { organizationId: context.organizationId, fromUnit: "kg", toUnit: "t" }, _max: { version: true } });
+    await prisma.analyticsUnitConversion.create({ data: { organizationId: context.organizationId, dimensionType: "MASS", fromUnit: "kg", toUnit: "t", factor: 0.001, version: (latestPersistedConversion._max.version ?? 0) + 1, source: "Teste dirigido 9M", createdById: context.userId } });
+    const persistedProposal = await createSmartBudgetProposal(context, { projectId, name: `Conversão persistida kg->t ${suffix}`, rationale: "Teste dirigido de conversão versionada", lines: [{ economicItemId: itemKgToT.id, quantity: 1, priceObservationId: priceKg.id, evidenceRequired: true }] });
+    expect(Number(persistedProposal.lines[0]?.suggestedUnitCost)).toBe(10_000);
+
+    // Unidade incompatível: sem conversão persistida nem catálogo compatível, falha fechada (sem default silencioso).
+    const itemArea = await prisma.economicItem.create({ data: { organizationId: context.organizationId, projectId, code: `9M-AREA-${suffix}`, description: "Item medido em m2", category: "Engenharia", unit: "m2", createdById: context.userId } });
+    await expect(createSmartBudgetProposal(context, { projectId, name: `Unidade incompatível ${suffix}`, rationale: "Deve falhar fechado", lines: [{ economicItemId: itemArea.id, quantity: 1, priceObservationId: priceKg.id, evidenceRequired: true }] })).rejects.toThrow("Não há normalização");
+
+    // Conversão persistida com versão mais alta sobrepõe tanto a versão anterior quanto o catálogo
+    // físico puro (0,001) — prova que o caminho persistido realmente é usado, não um fallback disfarçado.
+    await prisma.analyticsUnitConversion.create({ data: { organizationId: context.organizationId, dimensionType: "MASS", fromUnit: "kg", toUnit: "t", factor: 0.002, version: (latestPersistedConversion._max.version ?? 0) + 2, source: "Teste dirigido 9M — override comercial", createdById: context.userId } });
+    const overriddenProposal = await createSmartBudgetProposal(context, { projectId, name: `Conversão persistida sobreposta kg->t ${suffix}`, rationale: "Teste dirigido de precedência de versão", lines: [{ economicItemId: itemKgToT.id, quantity: 1, priceObservationId: priceKg.id, evidenceRequired: true }] });
+    expect(Number(overriddenProposal.lines[0]?.suggestedUnitCost)).toBe(5_000);
+  });
+
+  it("rejeita fator de conversão persistido inválido (zero ou negativo) em vez de gerar custo silencioso", async () => {
+    const itemGram = await prisma.economicItem.create({ data: { organizationId: context.organizationId, projectId, code: `9M-GRAM-${suffix}`, description: "Item medido em g, preço observado em kg", category: "Engenharia", unit: "g", createdById: context.userId } });
+    const priceKgForGram = await prisma.externalPriceObservation.create({ data: { organizationId: context.organizationId, itemCode: itemGram.code, itemDescription: `Preço em kg para item em g 9M ${suffix}`, observedAt: new Date("2026-08-27"), unit: "kg", price: 10, currency: "BRL", region: "São Paulo/SP", supplierName: "Fornecedor de teste", sourceProvider: "Evidência dirigida 9M", evidenceChecksum: `evidence-gram-${suffix}`, confidence: .95, mappedEconomicItemId: itemGram.id, createdById: context.userId } });
+    const latestZeroConversion = await prisma.analyticsUnitConversion.aggregate({ where: { organizationId: context.organizationId, fromUnit: "kg", toUnit: "g" }, _max: { version: true } });
+    await prisma.analyticsUnitConversion.create({ data: { organizationId: context.organizationId, dimensionType: "MASS", fromUnit: "kg", toUnit: "g", factor: 0, version: (latestZeroConversion._max.version ?? 0) + 1, source: "Teste dirigido 9M — fator zero inválido", createdById: context.userId } });
+    await expect(createSmartBudgetProposal(context, { projectId, name: `Fator zero ${suffix}`, rationale: "Deve falhar fechado", lines: [{ economicItemId: itemGram.id, quantity: 1, priceObservationId: priceKgForGram.id, evidenceRequired: true }] })).rejects.toThrow("Normalização inválida");
+
+    const itemKgFromGram = await prisma.economicItem.create({ data: { organizationId: context.organizationId, projectId, code: `9M-KGFG-${suffix}`, description: "Item medido em kg, preço observado em g", category: "Engenharia", unit: "kg", createdById: context.userId } });
+    const priceGram = await prisma.externalPriceObservation.create({ data: { organizationId: context.organizationId, itemCode: itemKgFromGram.code, itemDescription: `Preço em g 9M ${suffix}`, observedAt: new Date("2026-08-27"), unit: "g", price: 10, currency: "BRL", region: "São Paulo/SP", supplierName: "Fornecedor de teste", sourceProvider: "Evidência dirigida 9M", evidenceChecksum: `evidence-kgfg-${suffix}`, confidence: .95, mappedEconomicItemId: itemKgFromGram.id, createdById: context.userId } });
+    const latestNegativeConversion = await prisma.analyticsUnitConversion.aggregate({ where: { organizationId: context.organizationId, fromUnit: "g", toUnit: "kg" }, _max: { version: true } });
+    await prisma.analyticsUnitConversion.create({ data: { organizationId: context.organizationId, dimensionType: "MASS", fromUnit: "g", toUnit: "kg", factor: -0.001, version: (latestNegativeConversion._max.version ?? 0) + 1, source: "Teste dirigido 9M — fator negativo inválido", createdById: context.userId } });
+    await expect(createSmartBudgetProposal(context, { projectId, name: `Fator negativo ${suffix}`, rationale: "Deve falhar fechado", lines: [{ economicItemId: itemKgFromGram.id, quantity: 1, priceObservationId: priceGram.id, evidenceRequired: true }] })).rejects.toThrow("Normalização inválida");
   });
 
   it("read model não soma estágios e as ações executivas são determinísticas", async () => {

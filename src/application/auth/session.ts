@@ -37,6 +37,7 @@ export async function createUserSession(userId: string, organizationId: string) 
     secure: process.env.NODE_ENV === "production",
     path: "/",
     expires: expiresAt,
+    maxAge: Math.floor(SESSION_DURATION_MS / 1000),
   });
 }
 
@@ -48,7 +49,10 @@ export async function getAuthContext(): Promise<AuthContext | null> {
     where: { tokenHash: hashToken(token) },
     include: { user: true, organization: true },
   });
-  if (!session || !session.user.isActive || session.expiresAt <= new Date()) return null;
+  if (!session || !session.user.isActive || session.expiresAt <= new Date()) {
+    if (session) await prisma.session.deleteMany({ where: { id: session.id } });
+    return null;
+  }
 
   const membership = await prisma.organizationMembership.findUnique({
     where: {
@@ -59,6 +63,10 @@ export async function getAuthContext(): Promise<AuthContext | null> {
     },
   });
   if (!membership) return null;
+
+  if (Date.now() - session.lastSeenAt.getTime() > 5 * 60_000) {
+    await prisma.session.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } });
+  }
 
   return {
     sessionId: session.id,

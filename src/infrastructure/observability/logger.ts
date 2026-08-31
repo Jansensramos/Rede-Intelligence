@@ -1,0 +1,38 @@
+const REDACTED = "[REDACTED]";
+const SENSITIVE_KEY = /(password|senha|secret|token|authorization|cookie|cpf|document|credential|api[-_]?key)/i;
+const SENSITIVE_VALUE = /(bearer\s+[a-z0-9._~+/=-]+|rede_session=|\b\d{3}\.\d{3}\.\d{3}-\d{2}\b)/gi;
+
+export type LogLevel = "debug" | "info" | "warn" | "error";
+export interface LogContext {
+  correlationId?: string;
+  jobId?: string;
+  organizationId?: string;
+  component?: string;
+  event?: string;
+  durationMs?: number;
+  errorClass?: string;
+  [key: string]: unknown;
+}
+
+export function sanitizeLogValue(value: unknown, key = ""): unknown {
+  if (SENSITIVE_KEY.test(key)) return REDACTED;
+  if (typeof value === "string") return value.replace(SENSITIVE_VALUE, REDACTED).slice(0, 2_000);
+  if (value instanceof Error) return { name: value.name, message: sanitizeLogValue(value.message, "message") };
+  if (Array.isArray(value)) return value.slice(0, 50).map((item) => sanitizeLogValue(item));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).slice(0, 50).map(([childKey, child]) => [childKey, sanitizeLogValue(child, childKey)]));
+  return value;
+}
+
+export function writeLog(level: LogLevel, message: string, context: LogContext = {}) {
+  const line = JSON.stringify(sanitizeLogValue({ timestamp: new Date().toISOString(), level, message, ...context }));
+  if (level === "error") console.error(line);
+  else if (level === "warn") console.warn(line);
+  else console.log(line);
+}
+
+export const logger = {
+  debug: (message: string, context?: LogContext) => writeLog("debug", message, context),
+  info: (message: string, context?: LogContext) => writeLog("info", message, context),
+  warn: (message: string, context?: LogContext) => writeLog("warn", message, context),
+  error: (message: string, context?: LogContext) => writeLog("error", message, context),
+};
