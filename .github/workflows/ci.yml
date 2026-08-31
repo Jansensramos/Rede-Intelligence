@@ -23,6 +23,7 @@ jobs:
       TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rede_intelligence_test?schema=public
       REDE_TEST_DATABASE_GUARD: confirmed
       SESSION_SECRET: ci-only-session-secret
+      INTEGRATION_SECRET_KEY: ci-only-integration-vault-key-for-demo-data-never-production
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
