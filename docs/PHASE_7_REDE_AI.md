@@ -107,7 +107,7 @@ pnpm build
 pnpm dev
 ```
 
-A credencial demonstrativa continua sendo `admin@rede.local` / `Rede@2026`. A interface funciona sem chave de IA; nesse caso o status visual é `LIMITED`.
+O acesso demonstrativo é configurado somente no ambiente local, sem credenciais versionadas. A interface funciona sem chave de IA; nesse caso o status visual é `LIMITED`.
 
 ## Limites declarados
 

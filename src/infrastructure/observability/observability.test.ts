@@ -9,10 +9,11 @@ describe("observabilidade segura", () => {
   });
 
   it("remove segredos, CPF, cookie e token dos logs estruturados", () => {
-    const value = sanitizeLogValue({ password: "senha", nested: { cpf: "123.456.789-00" }, message: "Bearer abc.def", cookie: "rede_session=abc" });
+    const value = sanitizeLogValue({ password: "senha", nested: { cpf: "123.456.789-00" }, message: "Bearer abc.def password=conteudo-sintetico postgresql://usuario:conteudo-sintetico@db/producao", cookie: "rede_session=abc" });
     expect(JSON.stringify(value)).not.toContain("senha");
     expect(JSON.stringify(value)).not.toContain("123.456");
     expect(JSON.stringify(value)).not.toContain("abc.def");
+    expect(JSON.stringify(value)).not.toContain("conteudo-sintetico");
   });
 
   it("redige CNPJ formatado ou numérico em objetos, arrays e mensagens sem apagar números arbitrários", () => {

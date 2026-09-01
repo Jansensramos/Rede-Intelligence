@@ -15,6 +15,7 @@ Publicar a imagem em dois processos independentes: `web` atende HTTP e `worker` 
 
 - `development` e `test`: storage local privado, scanner noop explicitamente identificado, segredos por ambiente e cofre local com `INTEGRATION_SECRET_KEY` obrigatória.
 - `production`: storage `s3`, scanner externo, Secret Manager e KMS externos. A validação de boot falha sem banco, URLs, sessão, storage, scanner, segredos ou KMS.
+- O provider externo implementado usa AWS Secrets Manager e AWS KMS por SDK oficial. A identidade vem da cadeia de credenciais do runtime; não registrar chaves no repositório. Configurar região, prefixo, segredo de preflight e identificador da chave KMS conforme o contrato 9Q.
 - Injetar segredos pelo runtime da plataforma. Não montar `.env` na imagem e não imprimir valores em logs, health ou mensagens de validação.
 - Rotacionar credenciais de storage, sessão, webhook e integrações no fornecedor. Manter duas versões durante a janela quando suportado.
 

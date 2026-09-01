@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/infrastructure/database/prisma";
-import { integrationSecretVault } from "@/infrastructure/security/local-secret-vault";
+import { integrationSecretVault } from "@/infrastructure/security/secret-vault";
 import { createApiClient } from "./api-service";
 import { createConnectorInstallation, createWebhookSubscription, getIntegrationsWorkspace, storeInstallationCredential } from "./integrations-service";
 

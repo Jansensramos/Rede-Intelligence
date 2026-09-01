@@ -19,10 +19,13 @@
     "db:setup": "prisma migrate deploy && prisma db seed",
     "db:local:setup": "powershell -ExecutionPolicy Bypass -File scripts/setup-local-postgres.ps1",
     "db:local:start": "powershell -ExecutionPolicy Bypass -File scripts/start-local-postgres.ps1",
-    "db:local:stop": "powershell -ExecutionPolicy Bypass -File scripts/stop-local-postgres.ps1"
+    "db:local:stop": "powershell -ExecutionPolicy Bypass -File scripts/stop-local-postgres.ps1",
+    "preflight:production": "node --import ./scripts/patch-node-os.mjs --import tsx scripts/preflight-production.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "3.1121.0",
     "@aws-sdk/client-s3": "^3.1121.0",
+    "@aws-sdk/client-secrets-manager": "3.1121.0",
     "@aws-sdk/s3-request-presigner": "^3.1121.0",
     "@prisma/client": "^6.14.0",
     "bcryptjs": "^3.0.3",

@@ -44,7 +44,7 @@ Ferramentas de IA somente leitura consultam estágios, compras críticas, contra
 - Migration nova: `20260820233000_phase_9c_procurement_contracts_measurements`.
 - A migration é aditiva, UTF-8 sem BOM e não altera migrations aplicadas.
 - O seed preserva START BUTANTÃ e cria/atualiza de forma idempotente fornecedores qualificados, necessidade, requisição, cotação, propostas, decisão, pedido, contrato, aditivo, medição e obrigação.
-- Credencial demonstrativa: `admin@rede.local` / `Rede@2026`.
+- Acesso demonstrativo configurado exclusivamente no ambiente local, sem valores versionados.
 
 ## Execução
 

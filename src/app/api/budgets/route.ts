@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createBudget, listProjectBudgets, toBudgetWorkspaceView } from "@/application/budget/budget-service";
 import { requireAuthContext } from "@/application/auth/session";
-
-const errorMessage = (error: unknown) => error instanceof Error ? error.message : "A operação não pôde ser concluída.";
+import { reportInternalError, safeOperatorError } from "@/infrastructure/http/safe-error";
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,8 +12,8 @@ export async function GET(request: NextRequest) {
     const budgets = await listProjectBudgets(context, projectId);
     return NextResponse.json({ success: true, data: budgets });
   } catch (error: unknown) {
-    console.error("GET /api/budgets error:", error);
-    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
+    const correlationId = reportInternalError(error, { component: "budgets-api", event: "list_failed", correlationId: request.headers.get("x-correlation-id") ?? undefined });
+    return NextResponse.json({ error: safeOperatorError(correlationId) }, { status: 500, headers: { "x-correlation-id": correlationId } });
   }
 }
 
@@ -28,7 +27,7 @@ export async function POST(request: NextRequest) {
     const budget = await createBudget(context, { projectId, lineItems });
     return NextResponse.json({ success: true, data: toBudgetWorkspaceView(budget), message: `Orçamento criado com ${lineItems.length} linhas (Total: R$ ${budget.totalBudget.toFixed(2)})` }, { status: 201 });
   } catch (error: unknown) {
-    console.error("POST /api/budgets error:", error);
-    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
+    const correlationId = reportInternalError(error, { component: "budgets-api", event: "create_failed", correlationId: request.headers.get("x-correlation-id") ?? undefined });
+    return NextResponse.json({ error: safeOperatorError(correlationId) }, { status: 500, headers: { "x-correlation-id": correlationId } });
   }
 }

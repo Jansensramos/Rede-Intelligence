@@ -60,7 +60,7 @@ pnpm build
 pnpm dev -- --port 3001
 ```
 
-Credencial demonstrativa: `admin@rede.local` / `Rede@2026`.
+Acesso demonstrativo: configurado exclusivamente no ambiente local, sem valores versionados.
 
 ## Limites conscientes
 

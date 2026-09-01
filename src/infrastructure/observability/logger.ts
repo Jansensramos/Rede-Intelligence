@@ -1,6 +1,6 @@
 const REDACTED = "[REDACTED]";
 const SENSITIVE_KEY = /(password|senha|secret|token|authorization|cookie|cpf|cnpj|company.*tax.*id|tax.*id|document|credential|api[-_]?key)/i;
-const SENSITIVE_VALUE = /(bearer\s+[a-z0-9._~+/=-]+|rede_session=|\b\d{3}\.\d{3}\.\d{3}-\d{2}\b)/gi;
+const SENSITIVE_VALUE = /(bearer\s+[a-z0-9._~+/=-]+|rede_session=|(?:password|senha|secret|token|credential|api[-_]?key)\s*[:=]\s*[^\s,;]+|postgres(?:ql)?:\/\/[^@\s]+@|\b\d{3}\.\d{3}\.\d{3}-\d{2}\b)/gi;
 const CNPJ_CANDIDATE = /(?<!\d)(?:\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{14})(?!\d)/g;
 
 function sanitizeString(value: string) {

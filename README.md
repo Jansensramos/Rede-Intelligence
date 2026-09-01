@@ -16,8 +16,8 @@ pnpm dev
 
 Acesse `http://localhost:3000` e use:
 
-- e-mail: `admin@rede.local`
-- senha: `Rede@2026`
+- o acesso demonstrativo local é configurado explicitamente por `ENABLE_DEMO_LOGIN`, `DEMO_LOGIN_EMAIL` e `DEMO_LOGIN_PASSWORD`;
+- valores de credenciais não são versionados nem exibidos em build de produção.
 
 Para usar outro PostgreSQL, ajuste `DATABASE_URL` e execute somente `pnpm db:setup`. O seed é idempotente.
 

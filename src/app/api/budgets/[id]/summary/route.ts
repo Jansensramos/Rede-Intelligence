@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBudgetSummary } from "@/application/budget/budget-service";
 import { requireAuthContext } from "@/application/auth/session";
-
-const errorMessage = (error: unknown) => error instanceof Error ? error.message : "A operação não pôde ser concluída.";
+import { reportInternalError, safeOperatorError } from "@/infrastructure/http/safe-error";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,6 +12,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const summary = await getBudgetSummary(context, id, vgv);
     return NextResponse.json({ success: true, data: summary });
   } catch (error: unknown) {
-    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
+    const correlationId = reportInternalError(error, { component: "budgets-api", event: "summary_failed", correlationId: request.headers.get("x-correlation-id") ?? undefined });
+    return NextResponse.json({ error: safeOperatorError(correlationId) }, { status: 500, headers: { "x-correlation-id": correlationId } });
   }
 }

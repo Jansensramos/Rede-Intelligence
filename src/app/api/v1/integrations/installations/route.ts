@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateApiRequest, assertApiScope, buildVersionedError } from "@/application/integrations/api-service";
 import { checkAndConsumeRateLimit } from "@/application/integrations/resilience-service";
 import { prisma } from "@/infrastructure/database/prisma";
+import { reportInternalError, safeOperatorError } from "@/infrastructure/http/safe-error";
 
 /**
  * Fundação de API pública v1 — leitura de instalações de conector, somente
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
       { status: 200, headers },
     );
   } catch (error) {
-    return NextResponse.json(buildVersionedError("INTERNAL_ERROR", error instanceof Error ? error.message : "Falha inesperada.", correlationId), { status: 500, headers });
+    reportInternalError(error, { component: "api-v1-integrations", event: "installations_failed", correlationId });
+    return NextResponse.json(buildVersionedError("INTERNAL_ERROR", safeOperatorError(correlationId), correlationId), { status: 500, headers });
   }
 }

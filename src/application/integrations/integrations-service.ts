@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { AuthContext } from "@/application/auth/session";
 import { prisma } from "@/infrastructure/database/prisma";
-import { integrationSecretVault } from "@/infrastructure/security/local-secret-vault";
+import { integrationSecretVault } from "@/infrastructure/security/secret-vault";
 import {
   assertIntegrationCapability,
   assertSafeExternalUrl,

@@ -74,4 +74,4 @@ pnpm test
 pnpm build
 ```
 
-Credenciais de demonstração: `admin@rede.local` / `Rede@2026`.
+Acesso de demonstração: configurado exclusivamente no ambiente local, sem valores versionados.

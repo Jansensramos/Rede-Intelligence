@@ -4,6 +4,7 @@ import { authenticateApiRequest, assertApiScope, buildVersionedError, withApiIde
 import { checkAndConsumeRateLimit } from "@/application/integrations/resilience-service";
 import { enqueueJob } from "@/application/integrations/job-runner";
 import { prisma } from "@/infrastructure/database/prisma";
+import { reportInternalError, safeOperatorError } from "@/infrastructure/http/safe-error";
 
 /**
  * Fundação de API pública v1 — solicita sincronização assíncrona (nunca síncrona,
@@ -50,13 +51,14 @@ export async function POST(request: NextRequest) {
       const job = await enqueueJob({ organizationId: client.organizationId, installationId: installation.id, jobType: "SYNC_INSTALLATION", payload: { capability: body.capability }, correlationId: idempotencyKey });
       await prisma.auditLog.create({ data: { organizationId: client.organizationId, userId: client.createdById, action: "API_SYNC_REQUEST_ENQUEUED", entityType: "IntegrationJob", entityId: job.id, after: { installationId: installation.id, capability: body.capability, idempotencyKey } } });
       return { statusCode: 202, body: { version: "v1", correlationId, data: { jobId: job.id, status: job.status } } };
-    }).catch((error: unknown) => { idempotencyError = error instanceof Error ? error.message : "Falha de idempotência."; return null; });
+    }).catch(() => { idempotencyError = "A chave de idempotência conflita com uma solicitação anterior."; return null; });
 
     if (idempotencyError) return NextResponse.json(buildVersionedError("IDEMPOTENCY_CONFLICT", idempotencyError, correlationId), { status: 409, headers });
     if (!result) return NextResponse.json(buildVersionedError("INTERNAL_ERROR", "Falha inesperada.", correlationId), { status: 500, headers });
 
     return NextResponse.json(result.body, { status: result.statusCode, headers: { ...headers, "x-idempotency-replayed": String(result.replayed) } });
   } catch (error) {
-    return NextResponse.json(buildVersionedError("INTERNAL_ERROR", error instanceof Error ? error.message : "Falha inesperada.", correlationId), { status: 500, headers });
+    reportInternalError(error, { component: "api-v1-integrations", event: "sync_request_failed", correlationId });
+    return NextResponse.json(buildVersionedError("INTERNAL_ERROR", safeOperatorError(correlationId), correlationId), { status: 500, headers });
   }
 }

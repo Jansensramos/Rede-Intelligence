@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { hash } from "bcryptjs";
 import { AITaskType, MembershipRole } from "@prisma/client";
 import { createStudy, createStudyVersion, getLatestStudyForOrganization, getStudyForOrganization } from "../src/application/studies/study-service";
@@ -61,9 +61,16 @@ import { seedAccountingDemo } from "./seed-accounting";
 import { seedIntegrationsDemo } from "./seed-integrations";
 import { seedDataIntelligenceDemo } from "./seed-data-intelligence";
 import { seedMarketProductDemo } from "./seed-market-product";
+import { assertDemoSeedAllowed } from "../src/domain/auth/demo-access";
+
+assertDemoSeedAllowed(process.env);
 
 async function main() {
-  const passwordHash = await hash("Rede@2026", 12);
+  const configuredDemoPassword = process.env.DEMO_SEED_PASSWORD ?? process.env.DEMO_LOGIN_PASSWORD;
+  const existingDemoUser = await prisma.user.findUnique({ where: { email: "admin@rede.local" }, select: { passwordHash: true } });
+  const passwordHash = configuredDemoPassword
+    ? await hash(configuredDemoPassword, 12)
+    : existingDemoUser?.passwordHash ?? await hash(randomBytes(32).toString("base64url"), 12);
   const organization = await prisma.organization.upsert({
     where: { slug: "rede-nucleo-de-negocios" },
     update: { name: "REDE — Núcleo de Negócios" },
@@ -75,7 +82,7 @@ async function main() {
   });
   const user = await prisma.user.upsert({
     where: { email: "admin@rede.local" },
-    update: { name: "Rafael Lima", passwordHash, isActive: true },
+    update: { name: "Rafael Lima", ...(configuredDemoPassword ? { passwordHash } : {}), isActive: true },
     create: { email: "admin@rede.local", name: "Rafael Lima", passwordHash },
   });
   await prisma.organizationMembership.upsert({
@@ -572,7 +579,7 @@ async function main() {
   });
 
   await prisma.session.deleteMany({ where: { expiresAt: { lt: new Date() } } });
-  console.info(`Seed concluído: ${organization.name} · ${user.email} · viabilidade v${study.versionNumber} · START BUTANTÃ v${butantaStudy.versionNumber} · Orçamento ${butantaBudget.id} · Base Aprovada v${operationalBaseline.version} · Orçamento Oficial v${officialBudget.version} (${officialBudget.totalBudget}) · Cronograma v${operationalSchedule.version} · Financeiro: ${operationalBankAccount.id === fundingBankAccount.id ? 1 : 2} contas bancárias, Conta a Pagar ${payableAccount.id}, Conta a Receber ${receivableAccount.id}, Intercompany ${intercompanyTransaction.id} · Suprimentos: ${requisition.number}, ${quotation.number}, ${purchaseOrder.number}, ${operationalContract.number}, BM ${measurement.number} · Jurídico: ${diligence.code}, ${landContract.number}, ${legalObligation.code} · Vendas: ${salesUnitSold.code} (${deliveredUnit.status}), ${salesUnitBlocked.code} (bloqueada), ${salesUnitAvailable.code} (disponível), venda ${sale.id} (${sale.status}), comissão ${salesCommission.status}, pós-venda ${postSaleRequest.id} · Pessoas 9F: ${relationships.length} profissionais, ${projectTeam.name}, desvio ${varianceCase.code} (economia=${varianceCase.savingEligible}), ação ${correctiveAction.status}, incentivo somente simulado · Contabilidade 9G: plano ${accountingDemo.chartVersion.version}, período ${accountingDemo.october.status}, estoque ${accountingDemo.pool.totalAmount}, receita ${accountingDemo.revenueRun.recognizedRevenue}, tributo configurado ${accountingDemo.taxAssessment.assessedAmount}, consolidado ${accountingDemo.consolidation.consolidatedAmount} · Integrações 9H: ${integrationsDemo.driveInstallation.name} (sync ${integrationsDemo.driveSyncRun.status}, ${integrationsDemo.driveSyncRun.itemsApplied} aplicados), webhook deduplicado=${integrationsDemo.inboxDedupCount === 1}, fornecedor único por CNPJ=${integrationsDemo.supplierCountForTaxId === 1}, conflito ${integrationsDemo.conflict.status}, quarentena ${integrationsDemo.quarantineItem.status}, dead-letter ${integrationsDemo.deadLetter.errorClass}, preço observado R$${integrationsDemo.priceObservation.price} · Land v${landStudy.versionNumber} · Investment Case ${investmentCase.id} · Design ${designWorkspace.revision.label} (${designWorkspace.findings.length} findings derivados) · Dossiê ${demoMasterReport.reportId} (${demoMasterReport.pageCount} páginas) · REDE AI ${AI_PROMPT_VERSION} (${aiTasks.length} políticas) · Inteligência de Dados 9I: ${dataIntelligenceDemo.factsCreated + dataIntelligenceDemo.factsUpdated} fatos analíticos, ${dataIntelligenceDemo.benchmarkCount} comparativo(s), ${dataIntelligenceDemo.forecastEvaluationCount} avaliação(ões) previsto x realizado, ${dataIntelligenceDemo.qualityRunCount} verificações de qualidade, Orçamento Inteligente ${dataIntelligenceDemo.autoBudgetProposalStatus} · Inteligência de Mercado e Produto 9J: área ${marketProductDemo.marketAreaId}, ${marketProductDemo.competitorsCount} concorrentes demonstrativos, ${marketProductDemo.scenariosCount} cenários de produto, cenário Base ${marketProductDemo.baseScenarioStatus}`);
+  console.info(`Seed concluído: ${organization.name} · viabilidade v${study.versionNumber} · START BUTANTÃ v${butantaStudy.versionNumber} · Orçamento ${butantaBudget.id} · Base Aprovada v${operationalBaseline.version} · Orçamento Oficial v${officialBudget.version} (${officialBudget.totalBudget}) · Cronograma v${operationalSchedule.version} · Financeiro: ${operationalBankAccount.id === fundingBankAccount.id ? 1 : 2} contas bancárias, Conta a Pagar ${payableAccount.id}, Conta a Receber ${receivableAccount.id}, Intercompany ${intercompanyTransaction.id} · Suprimentos: ${requisition.number}, ${quotation.number}, ${purchaseOrder.number}, ${operationalContract.number}, BM ${measurement.number} · Jurídico: ${diligence.code}, ${landContract.number}, ${legalObligation.code} · Vendas: ${salesUnitSold.code} (${deliveredUnit.status}), ${salesUnitBlocked.code} (bloqueada), ${salesUnitAvailable.code} (disponível), venda ${sale.id} (${sale.status}), comissão ${salesCommission.status}, pós-venda ${postSaleRequest.id} · Pessoas 9F: ${relationships.length} profissionais, ${projectTeam.name}, desvio ${varianceCase.code} (economia=${varianceCase.savingEligible}), ação ${correctiveAction.status}, incentivo somente simulado · Contabilidade 9G: plano ${accountingDemo.chartVersion.version}, período ${accountingDemo.october.status}, estoque ${accountingDemo.pool.totalAmount}, receita ${accountingDemo.revenueRun.recognizedRevenue}, tributo configurado ${accountingDemo.taxAssessment.assessedAmount}, consolidado ${accountingDemo.consolidation.consolidatedAmount} · Integrações 9H: ${integrationsDemo.driveInstallation.name} (sync ${integrationsDemo.driveSyncRun.status}, ${integrationsDemo.driveSyncRun.itemsApplied} aplicados), webhook deduplicado=${integrationsDemo.inboxDedupCount === 1}, fornecedor único por CNPJ=${integrationsDemo.supplierCountForTaxId === 1}, conflito ${integrationsDemo.conflict.status}, quarentena ${integrationsDemo.quarantineItem.status}, dead-letter ${integrationsDemo.deadLetter.errorClass}, preço observado R$${integrationsDemo.priceObservation.price} · Land v${landStudy.versionNumber} · Investment Case ${investmentCase.id} · Design ${designWorkspace.revision.label} (${designWorkspace.findings.length} findings derivados) · Dossiê ${demoMasterReport.reportId} (${demoMasterReport.pageCount} páginas) · REDE AI ${AI_PROMPT_VERSION} (${aiTasks.length} políticas) · Inteligência de Dados 9I: ${dataIntelligenceDemo.factsCreated + dataIntelligenceDemo.factsUpdated} fatos analíticos, ${dataIntelligenceDemo.benchmarkCount} comparativo(s), ${dataIntelligenceDemo.forecastEvaluationCount} avaliação(ões) previsto x realizado, ${dataIntelligenceDemo.qualityRunCount} verificações de qualidade, Orçamento Inteligente ${dataIntelligenceDemo.autoBudgetProposalStatus} · Inteligência de Mercado e Produto 9J: área ${marketProductDemo.marketAreaId}, ${marketProductDemo.competitorsCount} concorrentes demonstrativos, ${marketProductDemo.scenariosCount} cenários de produto, cenário Base ${marketProductDemo.baseScenarioStatus}`);
 }
 
 main()

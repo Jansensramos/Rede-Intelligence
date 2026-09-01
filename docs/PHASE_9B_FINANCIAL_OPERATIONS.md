@@ -194,7 +194,7 @@ pnpm test
 
 # 6) Smoke test manual: subir a aplicação e validar autenticado
 pnpm dev
-# abrir http://localhost:3000, logar com admin@rede.local / Rede@2026
+# abrir a URL local e usar as credenciais configuradas exclusivamente no ambiente
 # navegar: Financeiro > Tesouraria & Bancos, Contas a Pagar, Contas a Receber, Conciliação, Intercompany, Projeção Atualizada
 ```
 

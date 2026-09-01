@@ -21,6 +21,10 @@ const baseSchema = z.object({
   MALWARE_SCANNER_PROVIDER: z.enum(["noop", "external"]).default("noop"),
   SECRET_PROVIDER: z.enum(["environment", "external"]).default("environment"),
   KMS_PROVIDER: z.enum(["local", "external"]).default("local"),
+  AWS_REGION: z.string().min(1).optional(),
+  SECRETS_MANAGER_PREFIX: z.string().min(1).max(200).optional(),
+  SECRETS_MANAGER_PREFLIGHT_SECRET_ID: z.string().min(1).max(512).optional(),
+  KMS_KEY_ID: z.string().min(1).max(2048).optional(),
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(4),
   WORKER_POLL_MS: z.coerce.number().int().min(100).max(60_000).default(1000),
   WORKER_LEASE_MS: z.coerce.number().int().min(5_000).max(900_000).default(30_000),
@@ -41,6 +45,9 @@ function productionIssues(config: RuntimeConfig) {
   if (config.MALWARE_SCANNER_PROVIDER === "noop") missing.push("MALWARE_SCANNER_PROVIDER");
   if (config.SECRET_PROVIDER !== "external") missing.push("SECRET_PROVIDER=external");
   if (config.KMS_PROVIDER !== "external") missing.push("KMS_PROVIDER=external");
+  for (const key of ["AWS_REGION", "SECRETS_MANAGER_PREFIX", "SECRETS_MANAGER_PREFLIGHT_SECRET_ID", "KMS_KEY_ID"] as const) {
+    if (!config[key]) missing.push(key);
+  }
   return missing;
 }
 

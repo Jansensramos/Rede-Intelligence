@@ -1,6 +1,7 @@
 import { getAuthContext } from "@/application/auth/session";
 import { askRedeAI } from "@/application/ai/ai-service";
 import { aiQuestionSchema } from "@/domain/ai";
+import { reportInternalError, safeOperatorError } from "@/infrastructure/http/safe-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,7 +29,8 @@ export async function POST(request: Request) {
         for (const chunk of chunks) send("delta", chunk);
         send("complete", result);
       } catch (error) {
-        send("error", { message: error instanceof Error ? error.message : "Não foi possível concluir esta análise." });
+        const correlationId = reportInternalError(error, { component: "rede-ai", event: "chat_failed", correlationId: request.headers.get("x-correlation-id") ?? undefined, organizationId: context.organizationId });
+        send("error", { message: safeOperatorError(correlationId, "Não foi possível concluir esta análise."), correlationId });
       } finally { try { controller.close(); } catch {} }
     },
     cancel() { /* O cancelamento interrompe a entrega; a execução já iniciada permanece auditável. */ },

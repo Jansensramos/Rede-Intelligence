@@ -51,7 +51,7 @@ const DEFAULT_BRAND: OrganizationBrandConfig = {
   fontBody: "Helvetica Neue",
   footer: "REDE Intelligence · material confidencial",
   disclaimer: "Análise preliminar sujeita às validações indicadas.",
-  contactInfo: "admin@rede.local",
+  contactInfo: "suporte@rede.local",
 };
 
 function json(value: unknown): Prisma.InputJsonValue {

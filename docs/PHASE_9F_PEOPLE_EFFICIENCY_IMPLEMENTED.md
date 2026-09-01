@@ -100,7 +100,7 @@ pnpm db:seed
 pnpm dev -- --port 3001
 ```
 
-Credencial demonstrativa principal: `admin@rede.local` / `Rede@2026`.
+Acesso demonstrativo: configurado exclusivamente no ambiente local, sem valores versionados.
 
 ## Validação exigida
 

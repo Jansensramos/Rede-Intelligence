@@ -1,7 +1,7 @@
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/infrastructure/database/prisma";
-import { integrationSecretVault } from "@/infrastructure/security/local-secret-vault";
+import { integrationSecretVault } from "@/infrastructure/security/secret-vault";
 import { assertSafeExternalUrl, decideRetry, type RetryableErrorClass } from "@/domain/integrations";
 import { checkCircuitBreakerGate, recordCircuitBreakerOutcome } from "./resilience-service";
 

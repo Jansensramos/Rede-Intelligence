@@ -30,9 +30,8 @@ function safeSegment(value: string) {
  *   gitignored) — não em um serviço gerenciado com controle de acesso próprio;
  * - não há auditoria de LEITURA do segredo (apenas de escrita, via AuditLog do
  *   chamador) nem revogação centralizada fora desta aplicação.
- * Antes de produção real, trocar por um provider que implemente o mesmo
- * `SecretVaultProvider` sobre KMS/HSM gerenciado (ex.: AWS Secrets Manager,
- * GCP Secret Manager, HashiCorp Vault) — o contrato já está pronto para isso.
+ * A composição de produção em `secret-vault.ts` seleciona AWS Secrets Manager
+ * com KMS; esta implementação permanece restrita a desenvolvimento e teste.
  */
 export class LocalEncryptedSecretVault implements SecretVaultProvider {
   readonly name = "LOCAL_ENCRYPTED_V1";
@@ -86,5 +85,3 @@ export class LocalEncryptedSecretVault implements SecretVaultProvider {
     await rm(this.resolveKey(secretRef), { force: true });
   }
 }
-
-export const integrationSecretVault = new LocalEncryptedSecretVault();

@@ -1,5 +1,6 @@
 import { getAuthContext } from "@/application/auth/session";
 import { getDesignFileForDownload } from "@/application/design/design-service";
+import { reportInternalError, safeOperatorError } from "@/infrastructure/http/safe-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +24,7 @@ export async function GET(request: Request, route: { params: Promise<{ fileId: s
     const body = range ? bytes.slice(range.start, range.end + 1) : bytes;
     return new Response(Buffer.from(body), { status: range ? 206 : 200, headers: { "content-type": file.mimeType, "content-length": String(body.length), "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(file.fileName)}`, "accept-ranges": "bytes", ...(range ? { "content-range": `bytes ${range.start}-${range.end}/${bytes.length}` } : {}), "cache-control": "private, no-store", "x-content-type-options": "nosniff", "content-security-policy": "sandbox" } });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Arquivo indisponível." }, { status: 404 });
+    const correlationId = reportInternalError(error, { component: "design-files", event: "download_failed", correlationId: request.headers.get("x-correlation-id") ?? undefined, organizationId: context.organizationId });
+    return Response.json({ error: safeOperatorError(correlationId, "Arquivo indisponível.") }, { status: 404, headers: { "x-correlation-id": correlationId } });
   }
 }
