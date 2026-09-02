@@ -1,6 +1,7 @@
 "use server";
 
-import { requireAuthContext } from "@/application/auth/session";
+import { requireDomainActionContext } from "./authorization";
+const requireAuthContext = () => requireDomainActionContext("VIABILITY_READ");
 import type { LandActionResult } from "@/application/land/contracts";
 import { saveUrbanScenarioSnapshot } from "@/application/land/land-service";
 import { urbanScenarioUpdateSchema, type UrbanScenarioUpdateInput } from "@/domain/land";

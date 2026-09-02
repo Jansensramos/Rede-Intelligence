@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAuthContext } from "@/application/auth/session";
+import { requireDomainActionContext } from "./authorization";
+const requireAuthContext = () => requireDomainActionContext("OPERATIONS_READ");
 import {
   approveOperationalBaseline,
   approveSchedule,

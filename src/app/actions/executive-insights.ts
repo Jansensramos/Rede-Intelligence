@@ -6,7 +6,8 @@
  * muda no domínio, então não há nada para revalidar. Mesmo padrão de tratamento de erro de
  * `src/app/actions/financial.ts`, sem o efeito colateral de revalidação que não se aplica aqui.
  */
-import { requireAuthContext } from "@/application/auth/session";
+import { requireDomainActionContext } from "./authorization";
+const requireAuthContext = () => requireDomainActionContext("EXECUTIVE_READ");
 import { simulateDiscountForUnit, simulateHiringForProject } from "@/application/executive-insights/executive-insights-service";
 
 type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };

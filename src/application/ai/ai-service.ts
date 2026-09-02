@@ -12,6 +12,7 @@ import { composeGroundedAnswer } from "./composer";
 import { aiToolRegistry } from "./tool-registry";
 
 const roleCanMutate = (role: MembershipRole) => role === "OWNER" || role === "ADMIN";
+const AI_RESOURCE_NOT_FOUND = "Recurso da REDE AI não encontrado.";
 const json = (value: unknown): Prisma.InputJsonValue => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 const safeError = (error: unknown) => error instanceof Error && /não encontrado|não possui|não pode|não está disponível|limite|permissão/i.test(error.message) ? error.message : "Não foi possível concluir esta análise.";
 const truncate = (value: string, length: number) => value.length <= length ? value : `${value.slice(0, length - 1).trim()}…`;
@@ -63,7 +64,7 @@ export async function getAIBootstrap(context: AuthContext, projectId: string, cu
 export async function updateAIConversationResponseMode(context: Pick<AuthContext, "organizationId" | "userId">, conversationId: string, mode: "EXECUTIVE" | "DETAILED" | "TECHNICAL") {
   const parsedMode = responseModeSchema.parse(mode);
   const result = await prisma.aIConversation.updateMany({ where: { id: conversationId, organizationId: context.organizationId, createdById: context.userId }, data: { responseMode: parsedMode } });
-  if (!result.count) throw new Error("Conversa não encontrada nesta organização.");
+  if (!result.count) throw new Error(AI_RESOURCE_NOT_FOUND);
 }
 
 async function enforceUsageLimits(context: AuthContext) {
@@ -157,8 +158,8 @@ function numericGroundingSafe(generated: string, grounded: string) {
 
 export async function confirmAIAction(context: AuthContext, input: { actionId: string; decision: "CONFIRM" | "CANCEL" }) {
   const parsed = confirmationSchema.parse(input);
-  const action = await prisma.aIPendingAction.findFirst({ where: { id: parsed.actionId, organizationId: context.organizationId }, include: { conversation: true } });
-  if (!action) throw new Error("Ação não encontrada nesta organização.");
+  const action = await prisma.aIPendingAction.findFirst({ where: { id: parsed.actionId, organizationId: context.organizationId, userId: context.userId, conversation: { createdById: context.userId } }, include: { conversation: true } });
+  if (!action) throw new Error(AI_RESOURCE_NOT_FOUND);
   if (action.status === "COMPLETED") return action;
   if (action.status !== "PENDING_CONFIRMATION" || action.expiresAt <= new Date()) throw new Error("Esta ação não está mais disponível para confirmação.");
   if (parsed.decision === "CANCEL") return prisma.aIPendingAction.update({ where: { id: action.id }, data: { status: "CANCELLED" } });
@@ -189,7 +190,7 @@ export async function confirmAIAction(context: AuthContext, input: { actionId: s
       const sandbox = sandboxWorkspace.sandboxes[0];
       result = await promoteDecisionSandbox(context, relevant.workspace.id, sandbox.id); entityType = "StudyVersion"; entityId = (result as { bundle: { studyVersionId: string } }).bundle.studyVersionId;
     } else if (["PROMOTE_TO_ACTION", "PROMOTE_TO_RISK", "PROMOTE_TO_CONDITION", "PROMOTE_TO_COMMITTEE_QUESTION"].includes(action.actionType)) {
-      const message = await prisma.aIMessage.findFirstOrThrow({ where: { id: action.sourceMessageId!, conversation: { organizationId: context.organizationId } } });
+      const message = await prisma.aIMessage.findFirstOrThrow({ where: { id: action.sourceMessageId!, conversation: { organizationId: context.organizationId, createdById: context.userId } } });
       const investmentCaseId = action.conversation.investmentCaseId!;
       if (action.actionType === "PROMOTE_TO_ACTION") { const row = await prisma.investmentIssue.create({ data: { investmentCaseId, title: truncate(message.content, 140), status: "ACTIVE", priority: "HIGH", ownerId: context.userId, nextAction: message.content, source: `ai-message:${message.id}`, createdById: context.userId, updatedById: context.userId } }); result = row; entityType = "InvestmentIssue"; entityId = row.id; }
       if (action.actionType === "PROMOTE_TO_RISK") { const row = await prisma.urbanRiskItem.create({ data: { investmentCaseId, title: truncate(message.content, 140), severity: "HIGH", status: "ACTIVE", source: "REDE_AI", ownerId: context.userId, mitigation: "Revisar e atribuir plano de mitigação.", evidenceRef: `ai-message:${message.id}`, createdById: context.userId } }); result = row; entityType = "UrbanRiskItem"; entityId = row.id; }
@@ -208,29 +209,29 @@ export async function confirmAIAction(context: AuthContext, input: { actionId: s
 const compactMutationResult = (value: unknown) => { const serialized = JSON.stringify(value); return serialized.length < 8000 ? value : { completed: true, summary: truncate(serialized, 4000) }; };
 
 export async function requestMessagePromotion(context: AuthContext, messageId: string, type: "ACTION" | "RISK" | "CONDITION" | "COMMITTEE_QUESTION") {
-  const message = await prisma.aIMessage.findFirst({ where: { id: messageId, role: "ASSISTANT", conversation: { organizationId: context.organizationId } }, include: { conversation: true } });
-  if (!message) throw new Error("Mensagem não encontrada nesta organização.");
+  const message = await prisma.aIMessage.findFirst({ where: { id: messageId, role: "ASSISTANT", conversation: { organizationId: context.organizationId, createdById: context.userId } }, include: { conversation: true } });
+  if (!message) throw new Error(AI_RESOURCE_NOT_FOUND);
   const actionType = `PROMOTE_TO_${type}`;
   return pendingAction(context, message.conversationId, message.id, actionType, { messageId }, { title: `Promover resposta para ${type}`, content: truncate(message.content, 600), requiresConfirmation: true });
 }
 
 export async function saveAIInsight(context: AuthContext, input: { messageId: string; title: string }) {
   const parsed = insightSchema.parse(input);
-  const message = await prisma.aIMessage.findFirst({ where: { id: parsed.messageId, role: "ASSISTANT", conversation: { organizationId: context.organizationId } }, include: { conversation: true, evidence: true } });
-  if (!message) throw new Error("Mensagem não encontrada nesta organização.");
+  const message = await prisma.aIMessage.findFirst({ where: { id: parsed.messageId, role: "ASSISTANT", conversation: { organizationId: context.organizationId, createdById: context.userId } }, include: { conversation: true, evidence: true } });
+  if (!message) throw new Error(AI_RESOURCE_NOT_FOUND);
   return prisma.aIInsight.create({ data: { organizationId: context.organizationId, conversationId: message.conversationId, sourceMessageId: message.id, projectId: message.conversation.projectId, studyVersionId: message.conversation.studyVersionId, title: parsed.title, content: message.content, evidence: json(message.evidence.map((item) => item.evidenceRef)), createdById: context.userId } });
 }
 
 export async function saveAIFeedback(context: AuthContext, input: { messageId: string; rating: "POSITIVE" | "NEGATIVE"; reason?: string; comment?: string }) {
   const parsed = feedbackSchema.parse(input);
-  const message = await prisma.aIMessage.findFirst({ where: { id: parsed.messageId, conversation: { organizationId: context.organizationId } } });
-  if (!message) throw new Error("Mensagem não encontrada nesta organização.");
+  const message = await prisma.aIMessage.findFirst({ where: { id: parsed.messageId, conversation: { organizationId: context.organizationId, createdById: context.userId } } });
+  if (!message) throw new Error(AI_RESOURCE_NOT_FOUND);
   return prisma.aIFeedback.upsert({ where: { messageId_userId: { messageId: message.id, userId: context.userId } }, update: { rating: parsed.rating, reason: parsed.reason, comment: parsed.comment }, create: { organizationId: context.organizationId, messageId: message.id, userId: context.userId, rating: parsed.rating, reason: parsed.reason, comment: parsed.comment } });
 }
 
 export async function exportAIConversationPdf(context: AuthContext, conversationId: string) {
-  const conversation = await prisma.aIConversation.findFirst({ where: { id: conversationId, organizationId: context.organizationId }, include: { messages: { orderBy: { createdAt: "asc" }, include: { evidence: true } } } });
-  if (!conversation?.investmentCaseId) throw new Error("Conversa não encontrada nesta organização.");
+  const conversation = await prisma.aIConversation.findFirst({ where: { id: conversationId, organizationId: context.organizationId, createdById: context.userId }, include: { messages: { orderBy: { createdAt: "asc" }, include: { evidence: true } } } });
+  if (!conversation?.investmentCaseId) throw new Error(AI_RESOURCE_NOT_FOUND);
   // Fase 9K.0 (fechamento, gate 3): antes buscava "o Investment Case mais recente da organização"
   // e conferia se batia com o da conversa — se a conversa não fosse do case mais recente (ex.: a
   // organização tem mais de um empreendimento com Investment Case), a exportação falhava mesmo com

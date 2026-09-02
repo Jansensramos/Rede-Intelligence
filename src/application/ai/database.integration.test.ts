@@ -5,12 +5,14 @@ import { createStudy } from "@/application/studies/study-service";
 import { createInvestmentCase, registerProjectDocument } from "@/application/investment/investment-service";
 import { DEMO_PROJECT } from "@/domain/financial/demo";
 import { prisma } from "@/infrastructure/database/prisma";
-import { askRedeAI, confirmAIAction, createAIConversation, exportAIConversationPdf, getAIBootstrap } from "./ai-service";
+import { askRedeAI, confirmAIAction, createAIConversation, exportAIConversationPdf, getAIBootstrap, requestMessagePromotion, saveAIFeedback, saveAIInsight, updateAIConversationResponseMode } from "./ai-service";
+import { buildAIContext } from "./context-builder";
 import { aiToolRegistry } from "./tool-registry";
 
 const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 let context: AuthContext;
 let foreignContext: AuthContext;
+let sameOrganizationContext: AuthContext;
 let conversationId: string;
 let studyVersionId: string;
 let investmentCaseId: string;
@@ -27,6 +29,9 @@ describe.sequential("REDE AI database boundaries and deterministic E2E", () => {
   beforeAll(async () => {
     context = await identity("AI Owner", "OWNER");
     foreignContext = await identity("AI Foreign", "OWNER");
+    const sameOrganizationUser = await prisma.user.create({ data: { name: "AI Same Tenant", email: `ai-same-tenant-${suffix}@test.local`, passwordHash: "integration-test" } });
+    await prisma.organizationMembership.create({ data: { organizationId: context.organizationId, userId: sameOrganizationUser.id, role: "OWNER" } });
+    sameOrganizationContext = { ...context, sessionId: `test-${sameOrganizationUser.id}`, userId: sameOrganizationUser.id, userName: sameOrganizationUser.name, userEmail: sameOrganizationUser.email };
     const study = await createStudy(context, { ...DEMO_PROJECT, projectName: `AI Case ${suffix}` });
     studyVersionId = study.studyVersionId;
     projectId = study.projectId;
@@ -41,7 +46,11 @@ describe.sequential("REDE AI database boundaries and deterministic E2E", () => {
     expect(tools.length).toBeGreaterThanOrEqual(37);
     expect(tools.find((item) => item.name === "getEngineResults")?.mode).toBe("READ_ONLY");
     expect(tools.find((item) => item.name === "runEngineSimulation")?.mode).toBe("SIMULATION");
-    expect(tools.find((item) => item.name === "changeContext")?.minimumRole).toBe("VIEWER");
+    expect(tools.find((item) => item.name === "changeContext")?.minimumRole).toBe("REVIEWER");
+    expect(tools.find((item) => item.name === "getCashPosition")?.requiredCapability).toBe("FINANCIAL_READ");
+    expect(tools.find((item) => item.name === "getLegalReadiness")?.requiredCapability).toBe("LEGAL_READ");
+    expect(tools.find((item) => item.name === "getDesignReview")?.requiredCapability).toBe("ENGINEERING_READ");
+    expect(tools.find((item) => item.name === "getSalesInventory")?.requiredCapability).toBe("COMMERCIAL_READ");
   });
 
   it("answers the executive demo flow with persisted Engine evidence and provenance", async () => {
@@ -78,10 +87,32 @@ describe.sequential("REDE AI database boundaries and deterministic E2E", () => {
   }, 30_000);
 
   it("blocks cross-organization conversation access and excludes foreign bootstrap data", async () => {
-    await expect(askRedeAI(foreignContext, { conversationId, question: "Explique o projeto.", currentModule: "ai" })).rejects.toThrow(/Conversa não encontrada/i);
+    await expect(askRedeAI(foreignContext, { conversationId, question: "Explique o projeto.", currentModule: "ai" })).rejects.toThrow("Recurso da REDE AI não encontrado.");
     // mesmo projectId real, organização diferente: getInvestmentCaseForProject deve isolar por
     // tenant e não "vazar" o Investment Case de `context` para `foreignContext`.
     await expect(getAIBootstrap(foreignContext, projectId)).rejects.toThrow(/Investment Case não encontrado/i);
+  });
+
+  it("torna inexistência, outro tenant e outro proprietário indistinguíveis em toda a fronteira pessoal", async () => {
+    const message = await prisma.aIMessage.findFirstOrThrow({ where: { conversationId, role: "ASSISTANT" } });
+    const missingId = "conversation-inexistente";
+    const attempts = [
+      () => exportAIConversationPdf(sameOrganizationContext, conversationId),
+      () => exportAIConversationPdf(foreignContext, conversationId),
+      () => exportAIConversationPdf(context, missingId),
+      () => updateAIConversationResponseMode(sameOrganizationContext, conversationId, "DETAILED"),
+      () => saveAIFeedback(sameOrganizationContext, { messageId: message.id, rating: "POSITIVE" }),
+      () => saveAIInsight(sameOrganizationContext, { messageId: message.id, title: "Não autorizado" }),
+      () => requestMessagePromotion(sameOrganizationContext, message.id, "ACTION"),
+    ];
+    for (const attempt of attempts) await expect(attempt()).rejects.toThrow("Recurso da REDE AI não encontrado.");
+  });
+
+  it("bloqueia chamada direta de ferramentas e exige a capability do domínio", async () => {
+    const relevant = await buildAIContext(context, conversationId, "consulta direta", "ai");
+    for (const name of ["getCashPosition", "getLegalReadiness", "getDesignReview", "getSalesInventory"]) {
+      await expect(aiToolRegistry.execute({ ...relevant, role: "VIEWER" }, name, {})).rejects.toThrow("Seu perfil não possui acesso a estes dados.");
+    }
   });
 
   it("exports the grounded conversation as a real PDF", async () => {

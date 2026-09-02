@@ -10,6 +10,16 @@ describe("contrato de ambiente", () => {
   it("aceita configuração mínima de teste", () => {
     expect(parseRuntimeConfig({ NODE_ENV: "test", DATABASE_URL: "postgresql://localhost/rede_intelligence_test" }).STORAGE_PROVIDER).toBe("local");
   });
+  it("rejeita política de proxy inválida citando somente o nome da configuração", () => {
+    const environment = {
+      NODE_ENV: "test",
+      DATABASE_URL: "postgresql://localhost/rede_intelligence_test",
+      TRUSTED_PROXY_HOPS: "segredo-invalido",
+    };
+    expect(() => parseRuntimeConfig(environment)).toThrow(/TRUSTED_PROXY_HOPS/);
+    try { parseRuntimeConfig(environment); }
+    catch (error) { expect(String(error)).not.toContain("segredo-invalido"); }
+  });
   it("exige os nomes de configuração dos providers externos em produção sem revelar valores", () => {
     const environment = {
       NODE_ENV: "production",

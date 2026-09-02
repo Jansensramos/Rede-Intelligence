@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAuthContext } from "@/application/auth/session";
+import { requireDomainActionContext } from "./authorization";
+const requireAuthContext = () => requireDomainActionContext("INTEGRATIONS_READ");
 import { decideIntegrationConflict, getIntegrationsWorkspace, reprocessQuarantineItem } from "@/application/integrations/integrations-service";
 import { enqueueJob } from "@/application/integrations/job-runner";
 import { prisma } from "@/infrastructure/database/prisma";

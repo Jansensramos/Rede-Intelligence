@@ -1,6 +1,7 @@
 "use server";
 
-import { requireAuthContext } from "@/application/auth/session";
+import { requireDomainActionContext } from "./authorization";
+const requireAuthContext = () => requireDomainActionContext("VIABILITY_READ");
 import type { StudyActionResult } from "@/application/studies/contracts";
 import { createStudy, createStudyVersion } from "@/application/studies/study-service";
 import { projectAssumptionsSchema } from "@/domain/financial/schema";

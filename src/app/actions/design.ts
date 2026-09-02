@@ -1,6 +1,7 @@
 "use server";
 
-import { requireAuthContext } from "@/application/auth/session";
+import { requireDomainActionContext } from "./authorization";
+const requireAuthContext = () => requireDomainActionContext("ENGINEERING_READ");
 import {
   calibrateDesignSheet,
   createAndCalculateAlternative,

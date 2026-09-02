@@ -10,6 +10,7 @@
 
 import { cookies } from "next/headers";
 import { requireAuthContext } from "@/application/auth/session";
+import { createUserSession } from "@/application/auth/session";
 import { ACTIVE_PROJECT_COOKIE } from "@/application/workspace/current-context";
 import { prisma } from "@/infrastructure/database/prisma";
 
@@ -41,4 +42,17 @@ export async function clearActiveProjectAction() {
   const cookieStore = await cookies();
   cookieStore.delete(ACTIVE_PROJECT_COOKIE);
   return { ok: true as const };
+}
+
+export async function switchOrganizationAction(organizationId: string) {
+  const context = await requireAuthContext();
+  if (!organizationId || organizationId.length > 128) return { ok: false as const, error: "Organização inválida." };
+  try {
+    await createUserSession(context.userId, organizationId, context.sessionId);
+    const cookieStore = await cookies();
+    cookieStore.delete(ACTIVE_PROJECT_COOKIE);
+    return { ok: true as const };
+  } catch {
+    return { ok: false as const, error: "Não foi possível trocar de organização." };
+  }
 }

@@ -29,8 +29,8 @@ export async function buildAIContext(
   question: string,
   currentModule: string,
 ): Promise<RelevantContextPackage> {
-  const conversation = await prisma.aIConversation.findFirst({ where: { id: conversationId, organizationId: context.organizationId } });
-  if (!conversation) throw new Error("Conversa não encontrada nesta organização.");
+  const conversation = await prisma.aIConversation.findFirst({ where: { id: conversationId, organizationId: context.organizationId, createdById: context.userId } });
+  if (!conversation) throw new Error("Recurso da REDE AI não encontrado.");
   const latest = conversation.investmentCaseId
     ? await getInvestmentCaseForOrganization(context.organizationId, conversation.investmentCaseId)
     : await getLatestInvestmentCaseForOrganization(context.organizationId);
@@ -65,7 +65,7 @@ export async function buildAIContext(
   };
 }
 
-export async function persistContextSelection(organizationId: string, conversationId: string, selection: AIContextSelection) {
-  const result = await prisma.aIConversation.updateMany({ where: { id: conversationId, organizationId }, data: { studyVersionId: selection.studyVersionId, investmentCaseId: selection.investmentCaseId, activeScenario: selection.financialScenario, activeUrbanScenario: selection.urbanScenarioId, contextSnapshot: JSON.parse(JSON.stringify(selection)) as Prisma.InputJsonValue } });
-  if (!result.count) throw new Error("Conversa não encontrada nesta organização.");
+export async function persistContextSelection(organizationId: string, userId: string, conversationId: string, selection: AIContextSelection) {
+  const result = await prisma.aIConversation.updateMany({ where: { id: conversationId, organizationId, createdById: userId }, data: { studyVersionId: selection.studyVersionId, investmentCaseId: selection.investmentCaseId, activeScenario: selection.financialScenario, activeUrbanScenario: selection.urbanScenarioId, contextSnapshot: JSON.parse(JSON.stringify(selection)) as Prisma.InputJsonValue } });
+  if (!result.count) throw new Error("Recurso da REDE AI não encontrado.");
 }

@@ -14,7 +14,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
-import { setActiveProjectAction } from "@/app/actions/workspace-context";
+import { setActiveProjectAction, switchOrganizationAction } from "@/app/actions/workspace-context";
 import type { ContextOptionGroup } from "@/application/workspace/context-options";
 
 const companyTypeLabel: Record<string, string> = {
@@ -28,11 +28,15 @@ const companyTypeLabel: Record<string, string> = {
 
 export function ContextSwitcher({
   organizationName,
+  currentOrganizationId,
+  organizations,
   groups,
   currentProjectId,
   onClose,
 }: {
   organizationName: string;
+  currentOrganizationId: string;
+  organizations: Array<{ id: string; name: string }>;
   groups: ContextOptionGroup[];
   currentProjectId: string | null;
   onClose: () => void;
@@ -49,6 +53,7 @@ export function ContextSwitcher({
   }, [groups, currentProjectId]);
 
   const [groupKey, setGroupKey] = useState(initial.groupKey);
+  const [organizationId, setOrganizationId] = useState(currentOrganizationId);
   const [companyId, setCompanyId] = useState(initial.companyId);
   const [projectId, setProjectId] = useState(initial.projectId);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +79,16 @@ export function ContextSwitcher({
   }
 
   async function applySelection() {
+    if (organizationId !== currentOrganizationId) {
+      setSaving(true);
+      setError(null);
+      const response = await switchOrganizationAction(organizationId);
+      if (!response.ok) { setError(response.error); setSaving(false); return; }
+      onClose();
+      router.push("/");
+      router.refresh();
+      return;
+    }
     if (!projectId) {
       setError("Selecione um empreendimento.");
       return;
@@ -102,9 +117,17 @@ export function ContextSwitcher({
         </header>
 
         <div className="ctx-switcher-fields">
+          {organizations.length > 1 && (
+            <label className="ctx-switcher-field">
+              <span>Organização</span>
+              <select value={organizationId} onChange={(event) => setOrganizationId(event.target.value)}>
+                {organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}
+              </select>
+            </label>
+          )}
           <label className="ctx-switcher-field">
             <span>Grupo econômico</span>
-            <select value={groupKey} onChange={(event) => handleGroupChange(event.target.value)} disabled={groups.length === 0}>
+            <select value={groupKey} onChange={(event) => handleGroupChange(event.target.value)} disabled={groups.length === 0 || organizationId !== currentOrganizationId}>
               {groups.length === 0 && <option value="">Nenhum grupo disponível</option>}
               {groups.map((group) => <option key={group.id ?? "sem-grupo"} value={group.id ?? ""}>{group.name}</option>)}
             </select>
@@ -112,7 +135,7 @@ export function ContextSwitcher({
 
           <label className="ctx-switcher-field">
             <span>Empresa / SPE</span>
-            <select value={companyId} onChange={(event) => handleCompanyChange(event.target.value)} disabled={companies.length === 0}>
+            <select value={companyId} onChange={(event) => handleCompanyChange(event.target.value)} disabled={companies.length === 0 || organizationId !== currentOrganizationId}>
               {companies.length === 0 && <option value="">Nenhuma empresa disponível</option>}
               {companies.map((company) => <option key={company.id} value={company.id}>{company.name} · {companyTypeLabel[company.type] ?? company.type}</option>)}
             </select>
@@ -120,7 +143,7 @@ export function ContextSwitcher({
 
           <label className="ctx-switcher-field">
             <span>Empreendimento</span>
-            <select value={projectId} onChange={(event) => setProjectId(event.target.value)} disabled={projects.length === 0}>
+            <select value={projectId} onChange={(event) => setProjectId(event.target.value)} disabled={projects.length === 0 || organizationId !== currentOrganizationId}>
               {projects.length === 0 && <option value="">Nenhum empreendimento disponível</option>}
               {projects.map((project) => <option key={project.id} value={project.id}>{project.name} · {project.city}/{project.state}</option>)}
             </select>
@@ -131,8 +154,8 @@ export function ContextSwitcher({
 
         <div className="ctx-switcher-actions">
           <button className="button button-secondary" onClick={onClose} type="button">Cancelar</button>
-          <button className="button button-primary" onClick={() => void applySelection()} disabled={saving || !projectId} type="button">
-            {saving ? "Aplicando…" : "Aplicar seleção"}
+          <button className="button button-primary" onClick={() => void applySelection()} disabled={saving || (organizationId === currentOrganizationId && !projectId)} type="button">
+            {saving ? "Aplicando…" : organizationId !== currentOrganizationId ? "Trocar organização" : "Aplicar seleção"}
           </button>
         </div>
       </section>

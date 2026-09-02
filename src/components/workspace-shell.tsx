@@ -46,6 +46,7 @@ import { logoutAction } from "@/app/actions/auth";
 import { ECOSYSTEM_ENTRIES, HELP_ENTRY, OPERATIONAL_AREAS, type OperationalArea } from "@/domain/workspace/areas";
 import type { OperationalContext } from "@/application/workspace/operational-context";
 import type { ContextOptionGroup } from "@/application/workspace/context-options";
+import { canAccessWorkspacePath } from "@/domain/auth/read-capabilities";
 
 const AREA_ICONS: Record<string, typeof LayoutDashboard> = {
   "gestao-executiva": LayoutDashboard,
@@ -79,10 +80,12 @@ function isAreaActive(pathname: string, area: OperationalArea) {
 export function WorkspaceShell({
   context,
   contextGroups,
+  organizations,
   children,
 }: {
   context: OperationalContext;
   contextGroups: ContextOptionGroup[];
+  organizations: Array<{ id: string; name: string }>;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -90,7 +93,8 @@ export function WorkspaceShell({
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   const primaryArea = OPERATIONAL_AREAS.find((area) => area.primary)!;
-  const secondaryAreas = OPERATIONAL_AREAS.filter((area) => !area.primary);
+  const secondaryAreas = OPERATIONAL_AREAS.filter((area) => !area.primary && canAccessWorkspacePath(context.user.role, area.path));
+  const canViewPrimary = canAccessWorkspacePath(context.user.role, primaryArea.path);
 
   const projectLabel = context.project ? `${context.project.city} · ${context.project.state}` : "Nenhum empreendimento selecionado";
   const breadcrumb = context.company?.name ?? context.economicGroup?.name ?? context.organization.name;
@@ -111,7 +115,7 @@ export function WorkspaceShell({
         </button>
 
         <nav className="main-nav" aria-label="Navegação principal">
-          <Link
+          {canViewPrimary && <Link
             key={primaryArea.id}
             href={primaryArea.path}
             className={`is-primary ${isAreaActive(pathname, primaryArea) ? "is-active" : ""}`}
@@ -119,17 +123,17 @@ export function WorkspaceShell({
           >
             <LayoutDashboard size={17} />
             <span>{primaryArea.label}</span>
-          </Link>
+          </Link>}
 
           <div className="ds-nav-group-label">AÇÕES</div>
-          <Link href="/acoes" className={pathname === "/acoes" || pathname.startsWith("/acoes/") ? "is-active" : ""} onClick={() => setSidebarOpen(false)}>
+          {canAccessWorkspacePath(context.user.role, "/acoes") && <Link href="/acoes" className={pathname === "/acoes" || pathname.startsWith("/acoes/") ? "is-active" : ""} onClick={() => setSidebarOpen(false)}>
             <ClipboardList size={17} />
             <span>Central de Ações</span>
-          </Link>
-          <Link href="/rotina" className={pathname === "/rotina" || pathname.startsWith("/rotina/") ? "is-active" : ""} onClick={() => setSidebarOpen(false)}>
+          </Link>}
+          {canAccessWorkspacePath(context.user.role, "/rotina") && <Link href="/rotina" className={pathname === "/rotina" || pathname.startsWith("/rotina/") ? "is-active" : ""} onClick={() => setSidebarOpen(false)}>
             <CalendarCheck2 size={17} />
             <span>Minha Rotina</span>
-          </Link>
+          </Link>}
 
           <div className="ds-nav-group-label">GRANDES ÁREAS</div>
           {secondaryAreas.map((area) => {
@@ -143,7 +147,7 @@ export function WorkspaceShell({
           })}
 
           <div className="ds-nav-group-label">ECOSSISTEMA REDE</div>
-          {ECOSYSTEM_ENTRIES.map((entry) => {
+          {ECOSYSTEM_ENTRIES.filter((entry) => canAccessWorkspacePath(context.user.role, entry.path)).map((entry) => {
             const Icon = ECOSYSTEM_ICONS[entry.id] ?? Boxes;
             return (
               <Link key={entry.id} href={entry.path} className={pathname === entry.path ? "is-active" : ""} onClick={() => setSidebarOpen(false)}>
@@ -154,16 +158,16 @@ export function WorkspaceShell({
           })}
         </nav>
 
-        <Link href="/assistente" className="sidebar-module sidebar-ai-live" onClick={() => setSidebarOpen(false)}>
+        {canAccessWorkspacePath(context.user.role, "/assistente") && <Link href="/assistente" className="sidebar-module sidebar-ai-live" onClick={() => setSidebarOpen(false)}>
           <span>COPILOTO ATIVO</span>
           <Sparkles size={18} />
           <div><strong>Pergunte ao REDE</strong><small>Contexto estruturado</small></div>
           <span className="soon">AI</span>
-        </Link>
+        </Link>}
 
         <div className="sidebar-footer">
           <button type="button"><Building2 size={17} /><span>{context.organization.name}</span></button>
-          <Link href={HELP_ENTRY.path} className="help-trigger" aria-label="Central de Ajuda" title="Central de Ajuda"><HelpCircle size={18} /></Link>
+          {canAccessWorkspacePath(context.user.role, HELP_ENTRY.path) && <Link href={HELP_ENTRY.path} className="help-trigger" aria-label="Central de Ajuda" title="Central de Ajuda"><HelpCircle size={18} /></Link>}
           <form action={logoutAction} className="logout-form">
             <button className="avatar-button" title="Sair" aria-label={`Sair da conta de ${context.user.name}`}>{initials(context.user.name)}</button>
           </form>
@@ -191,6 +195,8 @@ export function WorkspaceShell({
       {switcherOpen && (
         <ContextSwitcher
           organizationName={context.organization.name}
+          currentOrganizationId={context.organization.id}
+          organizations={organizations}
           groups={contextGroups}
           currentProjectId={context.project?.id ?? null}
           onClose={() => setSwitcherOpen(false)}

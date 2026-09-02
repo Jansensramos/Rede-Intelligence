@@ -8,7 +8,7 @@ describe("SecretProvider", () => {
     await expect(provider.get("MISSING_SECRET")).rejects.not.toThrow(/valor-ultrassecreto/);
   });
   it("proíbe environment provider em produção", () => {
-    expect(() => createSecretProvider({ NODE_ENV: "production", DATABASE_URL: "db", SESSION_COOKIE_NAME: "rede", STORAGE_PROVIDER: "s3", STORAGE_FORCE_PATH_STYLE: "false", STORAGE_SIGNED_URL_TTL_SECONDS: 300, MALWARE_SCANNER_PROVIDER: "external", SECRET_PROVIDER: "environment", KMS_PROVIDER: "external", WORKER_CONCURRENCY: 1, WORKER_POLL_MS: 100, WORKER_LEASE_MS: 5000, WORKER_JOB_TIMEOUT_MS: 1000 })).toThrow(/proibido/);
+    expect(() => createSecretProvider({ NODE_ENV: "production", DATABASE_URL: "db", SESSION_COOKIE_NAME: "rede", TRUSTED_PROXY_HOPS: 0, STORAGE_PROVIDER: "s3", STORAGE_FORCE_PATH_STYLE: "false", STORAGE_SIGNED_URL_TTL_SECONDS: 300, MALWARE_SCANNER_PROVIDER: "external", SECRET_PROVIDER: "environment", KMS_PROVIDER: "external", WORKER_CONCURRENCY: 1, WORKER_POLL_MS: 100, WORKER_LEASE_MS: 5000, WORKER_JOB_TIMEOUT_MS: 1000 })).toThrow(/proibido/);
   });
   it("resolve por adapter determinístico sem acesso de rede", async () => {
     const adapter = { read: vi.fn(async () => "conteudo-sintetico"), healthCheck: vi.fn(async () => undefined) };

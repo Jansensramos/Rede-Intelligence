@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAuthContext } from "@/application/auth/session";
+import { requireDomainActionContext } from "./authorization";
+const requireAuthContext = () => requireDomainActionContext("MARKET_PRODUCT_READ");
 import { buildMarketProductWorkspaceView, getMarketProductWorkspace, type MarketProductWorkspaceView } from "@/application/market-product";
 import { createCustomLaunchScenario, createLaunchTrigger, decideLaunch, generateLaunchScenarios, registerMacroObservation } from "@/application/launch-intelligence";
 import type { CreateCustomLaunchScenarioInput, CreateLaunchTriggerInput, DecideLaunchInput, GenerateLaunchScenariosInput, RegisterMacroObservationInput } from "@/domain/launch-intelligence";

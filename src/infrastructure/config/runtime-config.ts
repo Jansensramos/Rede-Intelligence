@@ -9,6 +9,7 @@ const baseSchema = z.object({
   WEBHOOK_BASE_URL: z.string().url().optional(),
   SESSION_COOKIE_NAME: z.string().min(1).default("rede_session"),
   SESSION_SECRET: z.string().min(32).optional(),
+  TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
   STORAGE_PROVIDER: z.enum(["local", "s3"]).default("local"),
   STORAGE_LOCAL_ROOT: z.string().min(1).optional(),
   STORAGE_BUCKET: z.string().min(1).optional(),

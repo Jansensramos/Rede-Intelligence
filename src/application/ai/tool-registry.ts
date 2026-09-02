@@ -25,9 +25,30 @@ import { getAccountingWorkspace } from "@/application/accounting/accounting-serv
 import { getIntegrationsWorkspace } from "@/application/integrations/integrations-service";
 import { getDataIntelligenceWorkspace } from "@/application/data-intelligence/data-intelligence-service";
 import { getMarketProductWorkspace } from "@/application/market-product";
+import { assertProtectedReadCapability, type ProtectedReadCapability } from "@/domain/auth/read-capabilities";
 
 const roleRank: Record<MembershipRole, number> = { VIEWER: 0, REVIEWER: 1, ANALYST: 2, ADMIN: 3, OWNER: 4 };
 const jsonClone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+const capabilityGroups: Array<[ProtectedReadCapability, readonly string[]]> = [
+  ["VIABILITY_READ", ["getProject", "getStudy", "getStudyVersion", "getAssumptions", "getUrbanScenario", "getLandAsset", "getMasterplan", "getPhases", "getUrbanGap", "getUrbanUplift", "runReverseZoningSolver", "compareUrbanScenarios"]],
+  ["FINANCIAL_READ", ["getEngineResults", "getCashFlow", "getCashPosition", "getPayablesDue", "getReceivablesDue", "getUpdatedCashProjection", "getReconciliationStatus", "explainMarginBridge", "getSensitivity", "getStressTests", "getBreakEven", "runEngineSimulation", "runSensitivitySimulation"]],
+  ["OPERATIONS_READ", ["getOperationalBaseline", "getOfficialBudget", "compareBaselineToBudget", "getOperationalSchedule", "getProjectedDisbursement"]],
+  ["PROCUREMENT_READ", ["getProcurementStages", "getCriticalPurchases", "getContractsAndAmendments", "getValidatedSaving", "getPendingMeasurements"]],
+  ["LEGAL_READ", ["getLegalReadiness", "getLegalDeadlines", "getPropertyDueDiligence"]],
+  ["COMMERCIAL_READ", ["getSalesInventory", "getUnitTypologyPerformance", "getPricePerSquareMeter", "getDiscountGranted", "getExpiringProposals", "getDelinquentCustomers", "getReceivableCurve", "getRescindedUnits", "getPendingCommissions", "getUnitsAwaitingDelivery"]],
+  ["PEOPLE_READ", ["getOrganizationalStructure", "getTeamCapacity", "getEfficiencyVariances", "getRootCauseInvestigations", "getCorrectiveActions"]],
+  ["ACCOUNTING_READ", ["getAccountingResult", "getTrialBalance", "getGeneralLedgerDrilldown", "getRealEstateInventoryPosition", "getUnitAccountingCost", "compareFinancialToAccounting", "getAccountingCloseStatus", "getUnclassifiedAccountingEvents", "getIntercompanyEliminations", "compareManagerialAndStatutoryResult", "getTaxesDue"]],
+  ["ENGINEERING_READ", ["getDesignReview", "getDesignMetrics", "getDesignFindings", "getDesignOpportunities", "compareDesignRevisions", "getCriticalPath", "getReadiness", "calculateCostOfDelay"]],
+  ["CAPITAL_READ", ["calculateLandValueCeiling"]],
+  ["ACTIONS_READ", ["getActionCenter"]],
+  ["EXECUTIVE_READ", ["getScore", "getScoreExplanation", "getRedTeam", "getFindings", "getDocuments", "getDocumentStatus", "getCommitteeDecision", "getConditions", "getBlockers", "getRiskRegister", "getIssues", "compareVersions", "compareScenarios", "createDecisionSimulation", "searchInternalEvidence", "generateStudioDraft", "preflightMasterReport", "getStudioArtifacts", "prepareCommitteeBrief", "changeContext"]],
+  ["INTEGRATIONS_READ", ["getIntegrationHealth", "getStaleDataSources", "getFailedSyncRuns", "getIntegrationBacklog", "getMappingConflicts", "getQuarantinedItems", "compareExternalAndRedeData", "getNewExternalDocuments", "getCredentialExpiryStatus", "getConnectorFreshness"]],
+  ["DATA_INTELLIGENCE_READ", ["getCostBenchmark", "getForecastAccuracy", "getPortfolioScorecard", "getDataQualityFindings", "getAutoBudgetSuggestion", "getMetricCatalog"]],
+  ["MARKET_PRODUCT_READ", ["getMarketOverview", "getCompetitorBenchmark", "getMarketDemandAndAffordability", "getProductScenarios", "getProductRecommendationRationale", "getProductDecisionMemory"]],
+];
+
+const toolCapabilities = new Map(capabilityGroups.flatMap(([capability, names]) => names.map((name) => [name, capability] as const)));
 
 function evidence(input: Omit<AIResponseEvidenceInput, "statementId" | "confidence"> & { statementId?: string; confidence?: AIResponseEvidenceInput["confidence"] }): AIResponseEvidenceInput {
   return { statementId: input.statementId ?? input.evidenceRef.replace(/[^A-Za-z0-9]+/g, "-").slice(0, 80), confidence: input.confidence ?? "HIGH", ...input };
@@ -90,28 +111,43 @@ async function changeContext(context: RelevantContextPackage, args: Record<strin
     selection.urbanScenarioId = urban.id;
     selection.urbanScenarioType = urban.type;
   }
-  await persistContextSelection(context.organizationId, context.conversationId, selection);
+  await persistContextSelection(context.organizationId, context.userId, context.conversationId, selection);
   return { name: "changeContext", mode: "READ_ONLY", status: "COMPLETED", data: selection };
 }
 
 export class AIToolRegistry {
   private readonly tools = new Map<string, AIToolDefinition>();
-  constructor() { for (const tool of createTools()) this.tools.set(tool.name, tool); }
-  list() { return [...this.tools.values()].map(({ name, description, mode, minimumRole }) => ({ name, description, mode, minimumRole })); }
+  constructor() {
+    for (const tool of createTools()) {
+      if (!toolCapabilities.has(tool.name)) throw new Error(`Ferramenta sem capability de domínio: ${tool.name}`);
+      this.tools.set(tool.name, tool);
+    }
+  }
+  list() { return [...this.tools.values()].map(({ name, description, mode, minimumRole }) => ({ name, description, mode, minimumRole, requiredCapability: toolCapabilities.get(name)! })); }
   get(name: string) { return this.tools.get(name); }
   async execute(context: RelevantContextPackage, name: string, rawArguments: Record<string, unknown>): Promise<AIToolCallResult> {
     const tool = this.tools.get(name);
     if (!tool) throw new Error(`Ferramenta não autorizada: ${name}`);
+    assertProtectedReadCapability(context.role, "AI_READ");
+    assertProtectedReadCapability(context.role, toolCapabilities.get(name)!);
     if (roleRank[context.role] < roleRank[tool.minimumRole]) throw new Error("Seu perfil não possui permissão para esta ferramenta.");
     if (tool.mode === "SIMULATION" && !context.permissions.canSimulate) throw new Error("Seu perfil não pode executar simulações.");
     if (tool.mode === "MUTATION" && !context.permissions.canMutate) throw new Error("Seu perfil não pode executar esta ação.");
+    const consistentProject = context.selection.projectId === context.workspace.bundle.projectId
+      && context.selection.investmentCaseId === context.workspace.id;
+    if (!consistentProject) throw new Error("Contexto de ferramenta inválido.");
+    const boundary = await prisma.aIConversation.findFirst({
+      where: { id: context.conversationId, organizationId: context.organizationId, createdById: context.userId, projectId: context.selection.projectId, investmentCaseId: context.selection.investmentCaseId },
+      select: { id: true },
+    });
+    if (!boundary) throw new Error("Recurso da REDE AI não encontrado.");
     const arguments_ = tool.validate(rawArguments);
     return tool.execute(context, arguments_);
   }
 }
 
 function createTools(): AIToolDefinition[] {
-  const read = "VIEWER" as MembershipRole;
+  const read = "REVIEWER" as MembershipRole;
   const simulate = "ANALYST" as MembershipRole;
   return [
     makeTool({ name: "getProject", description: "Consulta o empreendimento ativo.", mode: "READ_ONLY", minimumRole: read, async execute(c) { return { name: "getProject", mode: "READ_ONLY", status: "COMPLETED", data: { ...c.workspace.bundle.project, assumptions: { units: c.workspace.bundle.assumptions.units, landAreaM2: c.workspace.bundle.assumptions.landAreaM2, privateAreaPerUnitM2: c.workspace.bundle.assumptions.privateAreaPerUnitM2 } }, evidence: [evidence({ sourceType: "USER_INPUT", entityType: "Project", entityId: c.workspace.bundle.projectId, version: `v${c.workspace.bundle.studyVersionNumber}`, evidenceRef: `project:${c.workspace.bundle.projectId}`, label: `Projeto · Snapshot v${c.workspace.bundle.studyVersionNumber}` })] }; } }),

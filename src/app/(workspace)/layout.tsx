@@ -4,6 +4,10 @@ import { getContextSelectorOptions } from "@/application/workspace/context-optio
 import { ClearContextButton } from "@/components/clear-context-button";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { EmptyState } from "@/components/ui";
+import { requireAuthContext, listActiveUserOrganizations } from "@/application/auth/session";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { canAccessWorkspacePath, INTERNAL_REQUEST_PATH_HEADER } from "@/domain/auth/read-capabilities";
 
 /**
  * Layout do shell operacional (Fase 9K.1). Resolve o contexto operacional canônico e o alimenta
@@ -13,8 +17,14 @@ import { EmptyState } from "@/components/ui";
  * opções do Seletor de Contexto (§7).
  */
 export default async function WorkspaceLayout({ children }: { children: React.ReactNode }) {
+  const authContext = await requireAuthContext();
+  const pathname = (await headers()).get(INTERNAL_REQUEST_PATH_HEADER) ?? "";
+  if (!canAccessWorkspacePath(authContext.role, pathname)) redirect("/acesso-negado");
   const context = await getCurrentOperationalContext();
-  const contextGroups = await getContextSelectorOptions(context.organization.id);
+  const [contextGroups, memberships] = await Promise.all([
+    getContextSelectorOptions(context.organization.id),
+    listActiveUserOrganizations(authContext.userId),
+  ]);
 
   if (!context.project) {
     return (
@@ -33,7 +43,11 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
   }
 
   return (
-    <WorkspaceShell context={context} contextGroups={contextGroups}>
+    <WorkspaceShell
+      context={context}
+      contextGroups={contextGroups}
+      organizations={memberships.map((membership) => ({ id: membership.organizationId, name: membership.organization.name }))}
+    >
       {children}
     </WorkspaceShell>
   );

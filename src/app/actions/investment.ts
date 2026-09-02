@@ -1,6 +1,7 @@
 "use server";
 
-import { requireAuthContext } from "@/application/auth/session";
+import { requireDomainActionContext } from "./authorization";
+const requireAuthContext = () => requireDomainActionContext("EXECUTIVE_READ");
 import {
   addInvestmentCondition,
   createDecisionSandbox,

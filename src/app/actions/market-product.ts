@@ -1,6 +1,7 @@
 "use server";
 
-import { requireAuthContext } from "@/application/auth/session";
+import { requireDomainActionContext } from "./authorization";
+const requireAuthContext = () => requireDomainActionContext("MARKET_PRODUCT_READ");
 import {
   buildMarketProductWorkspaceView,
   decideProductScenario,

@@ -9,6 +9,7 @@ import { getDataIntelligenceWorkspace } from "@/application/data-intelligence/da
 import { buildMarketProductWorkspaceView, getMarketProductWorkspace } from "@/application/market-product";
 import { resolveOperationalContext } from "@/application/workspace/operational-context";
 import { IntelligenceWorkspace } from "@/components/intelligence-workspace";
+import { assertLegacyWorkspaceRead } from "@/domain/auth/read-capabilities";
 
 /**
  * Navegação legada (Fase 9K.1, ordem de serviço §13 "Não apagar workspaces atuais" e teste
@@ -20,6 +21,7 @@ import { IntelligenceWorkspace } from "@/components/intelligence-workspace";
  */
 export default async function LegacyHome() {
   const context = await requireAuthContext();
+  assertLegacyWorkspaceRead(context.role);
 
   const operationalContext = await resolveOperationalContext(context);
   const project = operationalContext.project;

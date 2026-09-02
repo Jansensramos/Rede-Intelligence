@@ -27,6 +27,7 @@ import { getFinancialWorkspace } from "@/application/financial-ops/financial-ser
 import { getProcurementWorkspace } from "@/application/procurement/procurement-service";
 import { getLegalWorkspace } from "@/application/legal/legal-service";
 import { getSalesWorkspace } from "@/application/sales/sales-service";
+import { assertProtectedReadCapability } from "@/domain/auth/read-capabilities";
 
 export type WorkspaceLoaderResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -38,11 +39,13 @@ function toResult<T>(promise: Promise<T>, fallbackError: string): Promise<Worksp
 
 export async function loadDesignWorkspaceAction(projectId: string) {
   const context = await requireAuthContext();
+  assertProtectedReadCapability(context.role, "ENGINEERING_READ");
   return toResult(ensureDesignWorkspace(context, projectId), "Não foi possível carregar Design Intelligence.");
 }
 
 export async function loadBudgetAreaAction(projectId: string, baseVgv?: Prisma.Decimal.Value) {
   const context = await requireAuthContext();
+  assertProtectedReadCapability(context.role, "ENGINEERING_READ");
   return toResult(
     Promise.all([getLatestProjectBudget(context, projectId, baseVgv), getOperationsWorkspace(context, projectId)]).then(
       ([budget, operations]) => ({ budget, operations }),
@@ -53,21 +56,25 @@ export async function loadBudgetAreaAction(projectId: string, baseVgv?: Prisma.D
 
 export async function loadFinancialWorkspaceAction(projectId: string) {
   const context = await requireAuthContext();
+  assertProtectedReadCapability(context.role, "FINANCIAL_READ");
   return toResult(getFinancialWorkspace(context, projectId), "Não foi possível carregar o Financeiro.");
 }
 
 export async function loadProcurementWorkspaceAction(projectId: string) {
   const context = await requireAuthContext();
+  assertProtectedReadCapability(context.role, "PROCUREMENT_READ");
   return toResult(getProcurementWorkspace(context, projectId), "Não foi possível carregar Suprimentos.");
 }
 
 export async function loadLegalWorkspaceAction(projectId: string) {
   const context = await requireAuthContext();
+  assertProtectedReadCapability(context.role, "LEGAL_READ");
   return toResult(getLegalWorkspace(context, projectId), "Não foi possível carregar o Jurídico.");
 }
 
 export async function loadSalesWorkspaceAction(projectId: string) {
   const context = await requireAuthContext();
+  assertProtectedReadCapability(context.role, "COMMERCIAL_READ");
   return toResult(getSalesWorkspace(context, projectId), "Não foi possível carregar Vendas e Recebíveis.");
 }
 

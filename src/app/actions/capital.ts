@@ -4,7 +4,7 @@
  * (mesmo padrão de `app/actions/financial.ts`): RBAC e regras de negócio ficam 100% no serviço, aqui só se
  * resolve o `AuthContext` e se propaga o resultado/erro para a UI. Nenhuma regra nova nasce aqui. */
 import { revalidatePath } from "next/cache";
-import { requireAuthContext } from "@/application/auth/session";
+import { requireDomainActionContext } from "./authorization";
 import {
   approveFundingDisbursementRelease,
   approveFundingProposal,
@@ -20,6 +20,8 @@ import {
   submitFundingProposal,
   updateFundingConditionStatus,
 } from "@/application/capital/capital-service";
+
+const requireAuthContext = () => requireDomainActionContext("CAPITAL_READ");
 
 type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : "A operação de Capital & Funding não pôde ser concluída.");
@@ -37,7 +39,7 @@ async function run<T>(operation: () => Promise<T>): Promise<ActionResult<T>> {
 }
 
 export async function createFundingProposalAction(input: Parameters<typeof createFundingProposal>[1]) {
-  const context = await requireAuthContext();
+  const context = await requireDomainActionContext("CAPITAL_READ");
   return run(() => createFundingProposal(context, input));
 }
 
