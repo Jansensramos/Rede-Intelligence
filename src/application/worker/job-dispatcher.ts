@@ -4,6 +4,7 @@ import { runConnectorSync } from "@/application/integrations/integrations-servic
 import { deliverPendingOutboxEvents } from "@/application/integrations/webhook-delivery";
 import { MockGoogleDriveConnector, type MockDriveFile } from "@/domain/integrations";
 import { prisma } from "@/infrastructure/database/prisma";
+import { processClicksignWebhookJob } from "@/application/sales/clicksign-service";
 
 type Payload = Record<string, unknown>;
 const payloadOf = (job: IntegrationJob) => (job.payload && typeof job.payload === "object" && !Array.isArray(job.payload) ? job.payload as Payload : {});
@@ -25,11 +26,16 @@ async function integrationContext(job: IntegrationJob) {
   return { installation, context: { organizationId: job.organizationId, userId: installation.createdById, role: membership.role as MembershipRole } };
 }
 
-export const supportedJobTypes = ["SYNC_INSTALLATION", "POLL_INSTALLATION", "DELIVER_WEBHOOKS", "PROCESS_DESIGN_FILE"] as const;
+export const supportedJobTypes = ["SYNC_INSTALLATION", "POLL_INSTALLATION", "DELIVER_WEBHOOKS", "PROCESS_DESIGN_FILE", "PROCESS_SIGNATURE_WEBHOOK"] as const;
 
 export async function dispatchJob(job: IntegrationJob, signal: AbortSignal) {
   signal.throwIfAborted();
   const payload = payloadOf(job);
+  if (job.jobType === "PROCESS_SIGNATURE_WEBHOOK") {
+    await processClicksignWebhookJob(job);
+    signal.throwIfAborted();
+    return;
+  }
   if (job.jobType === "PROCESS_DESIGN_FILE") {
     await processStoredFile({ organizationId: job.organizationId, userId: requiredString(payload, "userId") }, requiredString(payload, "fileId"), requiredString(payload, "designJobId"));
     signal.throwIfAborted();

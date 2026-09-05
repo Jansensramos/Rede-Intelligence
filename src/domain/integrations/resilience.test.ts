@@ -8,6 +8,7 @@ import {
   emptyRateLimitState,
   evaluateRateLimit,
   isRetryableErrorClass,
+  MAX_PROVIDER_RETRY_AFTER_MS,
   recordCircuitBreakerFailure,
   recordCircuitBreakerSuccess,
 } from ".";
@@ -75,6 +76,36 @@ describe("rate limit local por janela fixa", () => {
     const state = applyProviderRetryAfter(emptyRateLimitState(), 5000, now);
     const decision = evaluateRateLimit(state, policy, now + 100);
     expect(decision.allowed).toBe(false);
+  });
+
+  it.each([
+    ["abaixo do teto", 5000, 5000],
+    ["exatamente no teto", MAX_PROVIDER_RETRY_AFTER_MS, MAX_PROVIDER_RETRY_AFTER_MS],
+    ["acima do teto", MAX_PROVIDER_RETRY_AFTER_MS + 1, MAX_PROVIDER_RETRY_AFTER_MS],
+    ["negativo", -1000, 0],
+    ["NaN", Number.NaN, 0],
+    ["Infinity", Number.POSITIVE_INFINITY, 0],
+    ["Number.MAX_VALUE", Number.MAX_VALUE, MAX_PROVIDER_RETRY_AFTER_MS],
+  ])("normaliza Retry-After %s", (_label, retryAfterMs, expectedDelayMs) => {
+    const now = 4_000_000;
+    expect(applyProviderRetryAfter(emptyRateLimitState(), retryAfterMs, now).blockedUntilMs).toBe(now + expectedDelayMs);
+  });
+
+  it("trata string incorreta e relógio inválido sem produzir timestamp inseguro", () => {
+    const malformed = applyProviderRetryAfter(emptyRateLimitState(), "3000" as unknown as number, Number.NaN);
+    expect(malformed.blockedUntilMs).toBe(0);
+    const nearSafeLimit = applyProviderRetryAfter(emptyRateLimitState(), Number.MAX_VALUE, Number.MAX_SAFE_INTEGER - 1);
+    expect(nearSafeLimit.blockedUntilMs).toBe(MAX_PROVIDER_RETRY_AFTER_MS);
+    expect(Number.isSafeInteger(nearSafeLimit.blockedUntilMs)).toBe(true);
+  });
+
+  it("mantém bloqueios isolados e libera a instalação ao fim do teto", () => {
+    const now = 5_000_000;
+    const installationA = applyProviderRetryAfter(emptyRateLimitState(), Number.MAX_VALUE, now);
+    const installationB = emptyRateLimitState();
+    expect(evaluateRateLimit(installationA, policy, now + 1).allowed).toBe(false);
+    expect(evaluateRateLimit(installationB, policy, now + 1).allowed).toBe(true);
+    expect(evaluateRateLimit(installationA, policy, now + MAX_PROVIDER_RETRY_AFTER_MS).allowed).toBe(true);
   });
 });
 

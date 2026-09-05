@@ -39,6 +39,20 @@ export async function seedIntegrationsDemo(prisma: PrismaClient, input: SeedInte
     sandboxAvailable: true,
   });
 
+  await registerConnectorDefinition({
+    code: "CLICKSIGN_API_V3",
+    name: "Clicksign — API 3.0 Envelope",
+    provider: "CLICKSIGN",
+    category: "OTHER",
+    authMethod: "API_KEY",
+    capabilities: [{ code: "SIGNATURE_ENVELOPES", direction: "BIDIRECTIONAL", description: "Executa envelopes e recebe evidências de assinatura; REDE permanece fonte oficial." }],
+    sourceOfTruthDefault: { DOCUMENT: "REDE", SIGNATORIES: "REDE", EXECUTION_EVIDENCE: "CLICKSIGN" },
+    adapterVersion: "1.0.0",
+    contractVersion: "3.0",
+    sandboxAvailable: true,
+    documentationUrl: "https://developers.clicksign.com/v3.0/",
+  });
+
   const erpDefinition = await registerConnectorDefinition({
     code: "ERP_SUPPLIERS_MOCK",
     name: "ERP — Cadastro de fornecedores (mock)",

@@ -6,6 +6,7 @@ const requireAuthContext = () => requireDomainActionContext("INTEGRATIONS_READ")
 import { decideIntegrationConflict, getIntegrationsWorkspace, reprocessQuarantineItem } from "@/application/integrations/integrations-service";
 import { enqueueJob } from "@/application/integrations/job-runner";
 import { prisma } from "@/infrastructure/database/prisma";
+import { configureClicksignInstallation } from "@/application/sales/clicksign-service";
 
 type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 const message = (error: unknown) => (error instanceof Error ? error.message : "Não foi possível concluir a operação de integrações.");
@@ -53,4 +54,9 @@ export async function syncMockDriveInstallationAction(projectId: string, install
     await enqueueJob({ organizationId: context.organizationId, installationId, jobType: "SYNC_INSTALLATION", payload: { capability: "DOCUMENTS", files: files.map((file) => ({ ...file, modifiedAt: file.modifiedAt.toISOString() })) } });
     return getIntegrationsWorkspace(context, projectId);
   });
+}
+
+export async function configureClicksignInstallationAction(installationId: string, input: { mode: "DISABLED" | "MOCK" | "REAL"; signatureEnvelopeEnabled: boolean; environment: "SANDBOX" | "PRODUCTION"; baseUrl: string; timeoutMs?: number }) {
+  const context = await requireAuthContext();
+  return run(() => configureClicksignInstallation(context, installationId, input));
 }

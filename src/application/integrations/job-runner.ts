@@ -88,7 +88,7 @@ export async function claimNextJobAcrossOrganizations(leaseOwner: string, leaseD
     WHERE id = (
       SELECT id FROM integration_jobs
       WHERE status NOT IN ('SUCCEEDED', 'CANCELLED', 'DEAD_LETTER')
-        AND job_type IN ('SYNC_INSTALLATION', 'POLL_INSTALLATION', 'DELIVER_WEBHOOKS', 'PROCESS_DESIGN_FILE')
+        AND job_type IN ('SYNC_INSTALLATION', 'POLL_INSTALLATION', 'DELIVER_WEBHOOKS', 'PROCESS_DESIGN_FILE', 'PROCESS_SIGNATURE_WEBHOOK')
         AND ((status = 'QUEUED' AND scheduled_at <= ${nowIso}::timestamp)
           OR (status = 'RUNNING' AND lease_expires_at IS NOT NULL AND lease_expires_at < ${nowIso}::timestamp))
       ORDER BY CASE priority WHEN 'CRITICAL' THEN 0 WHEN 'NORMAL' THEN 1 ELSE 2 END, scheduled_at ASC
@@ -118,9 +118,9 @@ export async function completeJob(jobId: string, leaseOwner?: string) {
 export type JobFailureOutcome = { action: "RETRY"; nextAttempt: number; scheduledAt: Date } | { action: "DEAD_LETTER" };
 
 /** Falha um job: retryable vira novo QUEUED com backoff; permanente ou esgotado vira DEAD_LETTER + IntegrationDeadLetter. */
-export async function failJob(jobId: string, errorClass: RetryableErrorClass, message: string): Promise<JobFailureOutcome> {
+export async function failJob(jobId: string, errorClass: RetryableErrorClass, message: string, retryAfterMs?: number | null): Promise<JobFailureOutcome> {
   const job = await prisma.integrationJob.findUniqueOrThrow({ where: { id: jobId } });
-  const decision = decideRetry({ errorClass, attemptCount: job.attemptCount, policy: { baseDelayMs: 1000, maxDelayMs: 5 * 60_000, maxAttempts: job.maxAttempts, jitterRatio: 0.2 } });
+  const decision = decideRetry({ errorClass, attemptCount: job.attemptCount, retryAfterMs, policy: { baseDelayMs: 1000, maxDelayMs: 5 * 60_000, maxAttempts: job.maxAttempts, jitterRatio: 0.2 } });
   if (decision.action === "RETRY") {
     const scheduledAt = new Date(Date.now() + decision.delayMs);
     await prisma.integrationJob.update({ where: { id: jobId }, data: { status: "QUEUED", scheduledAt, lastError: message, leaseOwner: null, leaseExpiresAt: null } });

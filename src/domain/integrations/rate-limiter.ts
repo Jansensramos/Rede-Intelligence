@@ -1,3 +1,5 @@
+import { DEFAULT_BACKOFF_POLICY } from "./retry-policy";
+
 /**
  * Rate limit provider-neutral (plano 9H §12/§17): janela fixa + `blockedUntil`
  * explícito. Estado é explícito e serializável (persistido em
@@ -14,6 +16,10 @@ export interface RateLimitPolicy {
   limit: number;
   windowMs: number;
 }
+
+/** Mesmo teto da política central de retry; impede bloqueio arbitrário vindo do provider. */
+export const MAX_PROVIDER_RETRY_AFTER_MS = DEFAULT_BACKOFF_POLICY.maxDelayMs;
+const MAX_PERSISTABLE_TIMESTAMP_MS = 8_640_000_000_000_000;
 
 export const emptyRateLimitState = (): RateLimitState => ({ windowStartMs: 0, requestCount: 0, blockedUntilMs: null });
 
@@ -41,5 +47,11 @@ export function evaluateRateLimit(state: RateLimitState, policy: RateLimitPolicy
 
 /** Aplica um `Retry-After` explícito reportado pelo provider (HTTP 429), sobrepondo o cálculo local. */
 export function applyProviderRetryAfter(state: RateLimitState, retryAfterMs: number, nowMs: number): RateLimitState {
-  return { ...state, blockedUntilMs: nowMs + Math.max(0, retryAfterMs) };
+  const safeNowMs = Number.isFinite(nowMs) && nowMs >= 0 && nowMs <= MAX_PERSISTABLE_TIMESTAMP_MS
+    ? Math.trunc(nowMs)
+    : 0;
+  const safeDelayMs = Number.isFinite(retryAfterMs)
+    ? Math.min(MAX_PROVIDER_RETRY_AFTER_MS, Math.max(0, Math.trunc(retryAfterMs)))
+    : 0;
+  return { ...state, blockedUntilMs: Math.min(MAX_PERSISTABLE_TIMESTAMP_MS, safeNowMs + safeDelayMs) };
 }

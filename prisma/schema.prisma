@@ -7508,6 +7508,7 @@ model SignatureRequest {
   finalDocument ContractDocument? @relation("SignatureFinalDocument", fields: [finalDocumentId], references: [id], onDelete: Restrict)
   parties       SignatureParty[]
   events        SignatureEvent[]
+  reconciliationEvidence SignatureReconciliationEvidence[]
 
   @@unique([organizationId, provider, externalId])
   @@index([organizationId, status])
@@ -7545,6 +7546,8 @@ model SignatureParty {
 
   request  SignatureRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   customer Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  reconciliationEvidence SignatureReconciliationEvidence?
 
   @@unique([requestId, order])
   @@index([requestId, status])
@@ -7584,9 +7587,41 @@ model SignatureEvent {
 
   request          SignatureRequest       @relation(fields: [requestId], references: [id], onDelete: Cascade)
   sourceInboxEvent IntegrationInboxEvent? @relation(fields: [sourceInboxEventId], references: [id], onDelete: SetNull)
+  reconciliationEvidence SignatureReconciliationEvidence?
 
   @@index([requestId, recordedAt])
   @@map("signature_events")
+}
+
+/// Append-only proof of authenticated provider reconciliation, independent of PDF completion.
+/// Local FKs are relational context; provider identifiers are SHA-256 digests, never raw payloads.
+model SignatureReconciliationEvidence {
+  id                 String @id @default(cuid())
+  organizationId     String @map("organization_id")
+  installationId     String @map("installation_id")
+  requestId          String @map("request_id")
+  partyId            String @unique @map("party_id")
+  signatureEventId   String @unique @map("signature_event_id")
+  sourceInboxEventId String? @map("source_inbox_event_id")
+  source             String @default("PROVIDER_RECONCILIATION")
+  kind               String @default("SIGN_EVENT")
+  provider           SignatureProviderCode
+  evidenceRef        String @map("evidence_ref")
+  documentRef        String @map("document_ref")
+  envelopeRef        String @map("envelope_ref")
+  signerRef          String @map("signer_ref")
+  documentChecksum   String @map("document_checksum")
+  recordedAt         DateTime @default(now()) @map("recorded_at")
+
+  request SignatureRequest @relation(fields: [requestId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  party SignatureParty @relation(fields: [partyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  signatureEvent SignatureEvent @relation(fields: [signatureEventId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  sourceInboxEvent IntegrationInboxEvent? @relation(fields: [sourceInboxEventId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  installation ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([organizationId, requestId])
+  @@index([sourceInboxEventId])
+  @@map("signature_reconciliation_evidence")
 }
 
 /**
@@ -9508,6 +9543,7 @@ model ConnectorInstallation {
   syncRuns              IntegrationSyncRun[]
   cursors               IntegrationCursor[]
   inboxEvents           IntegrationInboxEvent[]
+  signatureReconciliationEvidence SignatureReconciliationEvidence[]
   conflicts             IntegrationConflict[]
   quarantineItems       IntegrationQuarantineItem[]
   healthSnapshots       IntegrationHealthSnapshot[]
@@ -9740,6 +9776,7 @@ model IntegrationInboxEvent {
    * 9K.4: projeção de domínio opcional quando este evento cru é um webhook de assinatura — ver `SignatureEvent`.
    */
   signatureEvent  SignatureEvent?
+  reconciliationEvidence SignatureReconciliationEvidence[]
 
   @@unique([installationId, provider, eventId])
   @@index([organizationId, status])

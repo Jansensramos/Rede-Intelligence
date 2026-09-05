@@ -41,4 +41,12 @@ describe("observabilidade segura", () => {
     expect(parsed).toMatchObject({ organizationId: "org-a", jobId: "job-a", correlationId: "corr-a" });
     output.mockRestore();
   });
+
+  it("redige e-mail e query string de URL temporária", () => {
+    const value = sanitizeLogValue({ message: "falha para pessoa@example.test em https://app.clicksign.com/file.pdf?token=abc&expires=123", signerEmail: "pessoa@example.test" });
+    const serialized = JSON.stringify(value);
+    expect(serialized).not.toContain("pessoa@example.test");
+    expect(serialized).not.toContain("token=abc");
+    expect(serialized).toContain("[REDACTED]");
+  });
 });

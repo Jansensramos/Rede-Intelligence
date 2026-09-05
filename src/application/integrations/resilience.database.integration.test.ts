@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/infrastructure/database/prisma";
 import { applyProviderRateLimitSignal, checkAndConsumeRateLimit, checkCircuitBreakerGate, recordCircuitBreakerOutcome } from "./resilience-service";
+import { MAX_PROVIDER_RETRY_AFTER_MS } from "@/domain/integrations";
 
 describe("Rate limit e circuit breaker persistidos (PostgreSQL real)", () => {
   let organizationId: string;
@@ -31,6 +32,18 @@ describe("Rate limit e circuit breaker persistidos (PostgreSQL real)", () => {
     await applyProviderRateLimitSignal(organizationId, scopeKey, 5000, new Date(now));
     const decision = await checkAndConsumeRateLimit(organizationId, scopeKey, { limit: 100, windowMs: 60_000 }, new Date(now + 100));
     expect(decision.allowed).toBe(false);
+  });
+
+  it("persiste o Retry-After limitado e mantém o bloqueio isolado por instalação", async () => {
+    const installationA = `clicksign:installation:${randomUUID()}`;
+    const installationB = `clicksign:installation:${randomUUID()}`;
+    const now = Date.now();
+    await applyProviderRateLimitSignal(organizationId, installationA, Number.MAX_VALUE, new Date(now));
+    const row = await prisma.integrationRateLimitState.findUniqueOrThrow({ where: { organizationId_scopeKey: { organizationId, scopeKey: installationA } } });
+    expect(row.blockedUntil?.getTime()).toBe(now + MAX_PROVIDER_RETRY_AFTER_MS);
+    expect((await checkAndConsumeRateLimit(organizationId, installationA, { limit: 100, windowMs: 60_000 }, new Date(now + 1))).allowed).toBe(false);
+    expect((await checkAndConsumeRateLimit(organizationId, installationB, { limit: 100, windowMs: 60_000 }, new Date(now + 1))).allowed).toBe(true);
+    expect((await checkAndConsumeRateLimit(organizationId, installationA, { limit: 100, windowMs: 60_000 }, new Date(now + MAX_PROVIDER_RETRY_AFTER_MS))).allowed).toBe(true);
   });
 
   it("circuit breaker abre após falhas consecutivas, bloqueia, e recupera via HALF_OPEN → CLOSED", async () => {

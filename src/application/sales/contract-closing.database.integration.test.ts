@@ -1,13 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { AuthContext } from "@/application/auth/session";
 import { prisma } from "@/infrastructure/database/prisma";
 import { createCustomer } from "@/application/financial-ops/financial-service";
 import { activateSalesPriceTable, approveSale, createSale, createSalesPriceTable, createSalesUnit } from "@/application/sales/sales-service";
 import { addContractAttachment, approveContractTemplateVersion, createContractTemplate, createContractTemplateVersion, generateContractDocument, readContractDocumentBytes, updateContractTemplateVersionDraft } from "@/application/sales/contract-service";
-import { cancelSignatureRequest, prepareSignatureRequest, processSignatureWebhookEvent, recordPartySigned, sendSignatureRequest } from "@/application/sales/signature-service";
+import { cancelSignatureRequest, completeRealSignatureRequest, prepareSignatureRequest, processSignatureWebhookEvent, recordPartySigned, sendSignatureRequest } from "@/application/sales/signature-service";
 import { requestCreditConsultation } from "@/application/sales/credit-service";
 import { maskTaxId } from "@/domain/sales/contract-closing";
+import { SignatureReconciliationError, type SignatureProvider } from "@/domain/sales/signature-provider";
+import { ClicksignProviderError } from "@/infrastructure/adapters/signature/clicksign-signature-provider";
+import * as clicksignService from "@/application/sales/clicksign-service";
+import { contractFileStorage } from "@/infrastructure/storage/contract-file-storage";
 
 const token = randomUUID().slice(0, 8);
 const createdUnitIds: string[] = [];
@@ -36,6 +40,8 @@ describe.skipIf(!process.env.DATABASE_URL).sequential("Fase 9K.4 — Fechamento 
   let companyId: string;
   let customerId: string;
 
+  afterEach(() => vi.restoreAllMocks());
+
   beforeAll(async () => {
     const organization = await prisma.organization.findUniqueOrThrow({ where: { slug: "rede-nucleo-de-negocios" } });
     const user = await prisma.user.findUniqueOrThrow({ where: { email: "admin@rede.local" } });
@@ -46,7 +52,7 @@ describe.skipIf(!process.env.DATABASE_URL).sequential("Fase 9K.4 — Fechamento 
     const customer = await createCustomer(context, { name: `Cliente 9K4 ${token}`, taxId: `52998224725${token.slice(0, 3)}` });
     customerId = customer.id;
 
-    const definition = await prisma.connectorDefinition.create({ data: { code: `signature-mock-test-${token}`, name: "Assinatura (teste)", provider: "MOCK", category: "OTHER", authMethod: "NONE", capabilities: {}, adapterVersion: "1", contractVersion: "1" } });
+    const definition = await prisma.connectorDefinition.create({ data: { code: `signature-mock-test-${token}`, name: "Assinatura (teste)", provider: "CLICKSIGN", category: "OTHER", authMethod: "NONE", capabilities: {}, adapterVersion: "1", contractVersion: "1" } });
     connectorDefinitionId = definition.id;
     const installation = await prisma.connectorInstallation.create({ data: { organizationId: context.organizationId, connectorDefinitionId: definition.id, projectId, name: "Assinatura (teste)", direction: "INBOUND", status: "ACTIVE", createdById: context.userId } });
     connectorInstallationId = installation.id;
@@ -56,6 +62,13 @@ describe.skipIf(!process.env.DATABASE_URL).sequential("Fase 9K.4 — Fechamento 
     try {
       const requests = await prisma.signatureRequest.findMany({ where: { contract: { saleId: { in: createdSaleIds } } } });
       const requestIds = requests.map((r) => r.id);
+      // Append-only evidence and its FK context must survive fixture cleanup too.
+      // Retain this suite's connected fixtures in the isolated test database.
+      if (await prisma.signatureReconciliationEvidence.count({ where: { requestId: { in: requestIds } } })) {
+        await prisma.connectorInstallation.update({ where: { id: connectorInstallationId }, data: { status: "PAUSED" } });
+        return;
+      }
+      await prisma.externalEntityReference.deleteMany({ where: { entityType: "SignatureRequest", entityId: { in: requestIds } } });
       await prisma.signatureEvent.deleteMany({ where: { requestId: { in: requestIds } } });
       await prisma.signatureParty.deleteMany({ where: { requestId: { in: requestIds } } });
       await prisma.signatureRequest.deleteMany({ where: { id: { in: requestIds } } });
@@ -176,6 +189,234 @@ describe.skipIf(!process.env.DATABASE_URL).sequential("Fase 9K.4 — Fechamento 
     expect(receivablesAfter).toBe(receivablesBefore);
   });
 
+  async function makeClicksignRequest(code: string, partyCount = 1) {
+    const { contract } = await makeApprovedSale(context, projectId, companyId, customerId, `REC-${code}-${token}`, "310000");
+    const template = await createContractTemplate(context, { projectId, name: `Modelo Reconciliação ${code} ${token}` });
+    createdTemplateIds.push(template.id);
+    const version = await createContractTemplateVersion(context, { templateId: template.id, content: "Contrato de reconciliação {{contractNumber}}" });
+    await approveContractTemplateVersion(context, version.id);
+    const document = await generateContractDocument(context, { contractId: contract.id, templateVersionId: version.id });
+    const request = await prepareSignatureRequest(context, {
+      contractId: contract.id, documentId: document.id, provider: "CLICKSIGN",
+      parties: Array.from({ length: partyCount }, (_, index) => ({ displayName: `Parte ${index + 1}`, role: index === 0 ? "BUYER" : "SELLER" })),
+    });
+    const externalId = `env-reconciliation-${code}-${token}`;
+    await prisma.signatureRequest.update({ where: { id: request.id }, data: { status: "AGUARDANDO_ASSINATURAS", externalId, sentAt: new Date() } });
+    for (const party of request.parties) await prisma.signatureParty.update({ where: { id: party.id }, data: { externalPartyId: `signer-${code}-${party.order}` } });
+    await prisma.externalEntityReference.create({ data: {
+      organizationId: context.organizationId, installationId: connectorInstallationId, entityType: "SignatureRequest", entityId: request.id,
+      externalType: "CLICKSIGN_ENVELOPE", externalId, externalVersion: request.documentChecksum,
+    } });
+    return prisma.signatureRequest.findUniqueOrThrow({ where: { id: request.id }, include: { parties: true } });
+  }
+
+  function reconciledProvider(request: Awaited<ReturnType<typeof makeClicksignRequest>>, options: { finalFailure?: boolean; partial?: boolean } = {}) {
+    const expected = request.parties.map((party) => party.externalPartyId!);
+    const provider: SignatureProvider = {
+      code: "CLICKSIGN",
+      send: vi.fn(async () => { throw new Error("send não permitido na reconciliação"); }),
+      reconcileSignatures: vi.fn(async () => {
+        if (options.partial) throw new SignatureReconciliationError("PROVIDER", "corr-pending", "SIGNATURE_EVIDENCE_PENDING", 2_000);
+        return { documentStatus: "CLOSED" as const, documentRef: "d".repeat(64), signedParties: expected.map((externalPartyId, index) => ({ externalPartyId, evidenceRef: `${index + 1}`.padStart(64, "a") })) };
+      }),
+      status: vi.fn(async () => "CLOSED" as const),
+      finalEvidence: vi.fn(async () => {
+        if (options.finalFailure) throw new ClicksignProviderError("VALIDATION", "corr-pdf", null, "PDF_INVALID");
+        return { document: { fileName: "documento-assinado.pdf", mimeType: "application/pdf", bytes: new TextEncoder().encode("%PDF-1.7\nfinal") } };
+      }),
+    };
+    vi.spyOn(clicksignService, "clicksignProviderForOrganization").mockResolvedValue({ provider, installationId: connectorInstallationId });
+    return provider;
+  }
+
+  it("reconciliação provider-neutral promove PENDING → SIGNED e conclui com SIGNED_FINAL", async () => {
+    const request = await makeClicksignRequest("complete");
+    reconciledProvider(request);
+    const completed = await completeRealSignatureRequest(context, request.id, connectorInstallationId, null);
+    expect(completed.status).toBe("ASSINADO");
+    expect(completed.parties[0]?.status).toBe("SIGNED");
+    const finalDocument = await prisma.contractDocument.findUniqueOrThrow({ where: { id: completed.finalDocumentId! } });
+    expect(finalDocument.kind).toBe("SIGNED_FINAL");
+    const signedEvent = await prisma.signatureEvent.findFirstOrThrow({ where: { requestId: request.id, eventType: "PARTY_SIGNED" } });
+    expect(signedEvent.sourceInboxEventId).toBeNull();
+    expect(completed.parties[0].evidence).toMatchObject({ source: "PROVIDER_RECONCILIATION", kind: "SIGN_EVENT", sourceInboxEventId: null, evidenceRef: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(await prisma.signatureReconciliationEvidence.findUniqueOrThrow({ where: { partyId: completed.parties[0].id } })).toMatchObject({ sourceInboxEventId: null, source: "PROVIDER_RECONCILIATION", documentRef: "d".repeat(64) });
+    expect(JSON.stringify(signedEvent.payload)).not.toMatch(/signer-|env-reconciliation|Parte/);
+  });
+
+  async function closedInbox(request: Awaited<ReturnType<typeof makeClicksignRequest>>) {
+    const eventId = `synthetic-closed-${randomUUID()}`;
+    return prisma.integrationInboxEvent.create({ data: {
+      organizationId: context.organizationId, installationId: connectorInstallationId, provider: "CLICKSIGN",
+      signatureValid: true, eventId, payloadChecksum: "synthetic-checksum",
+      payload: { eventId, eventType: "ENVELOPE_CLOSED", envelopeId: request.externalId, signerId: null, occurredAt: null },
+    } });
+  }
+
+  it("inbox autenticado preserva a FK em COMPLETED e a origem nas evidências de duas partes, sem duplicar no replay", async () => {
+    const request = await makeClicksignRequest("inbox-complete", 2);
+    const inbox = await closedInbox(request);
+    const provider = reconciledProvider(request);
+    const completed = await completeRealSignatureRequest(context, request.id, connectorInstallationId, inbox.id);
+    expect(completed.status).toBe("ASSINADO");
+    for (const party of completed.parties) expect(party.evidence).toMatchObject({
+      source: "PROVIDER_RECONCILIATION", kind: "SIGN_EVENT", sourceInboxEventId: inbox.id,
+      evidenceRef: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+    const events = await prisma.signatureEvent.findMany({ where: { requestId: request.id, eventType: { in: ["PARTY_SIGNED", "COMPLETED"] } } });
+    expect(events.filter((event) => event.eventType === "PARTY_SIGNED")).toHaveLength(2);
+    expect(events.filter((event) => event.sourceInboxEventId === inbox.id)).toMatchObject([{ eventType: "COMPLETED" }]);
+    await completeRealSignatureRequest(context, request.id, connectorInstallationId, inbox.id);
+    expect(provider.reconcileSignatures).toHaveBeenCalledTimes(1);
+    expect(await prisma.signatureEvent.count({ where: { requestId: request.id, eventType: { in: ["PARTY_SIGNED", "COMPLETED"] } } })).toBe(3);
+  });
+
+  it.each(["missing", "empty", "tenant", "installation", "provider", "envelope", "event-type", "event-id", "signature", "quarantined", "consumed"])("recusa inbox incompatível (%s) antes do provider ou de promover partes", async (invalid) => {
+    const request = await makeClicksignRequest(`inbox-${invalid}`, 2);
+    const inbox = await closedInbox(request);
+    const provider = reconciledProvider(request);
+    let inboxId = inbox.id;
+    if (invalid === "missing") inboxId = "missing-inbox";
+    if (invalid === "empty") inboxId = "";
+    if (invalid === "tenant") {
+      const other = await prisma.organization.findFirstOrThrow({ where: { id: { not: context.organizationId } } });
+      await prisma.integrationInboxEvent.update({ where: { id: inbox.id }, data: { organizationId: other.id } });
+    }
+    if (invalid === "installation") {
+      const other = await prisma.connectorInstallation.findFirstOrThrow({ where: { id: { not: connectorInstallationId } } });
+      await prisma.integrationInboxEvent.update({ where: { id: inbox.id }, data: { installationId: other.id } });
+    }
+    if (invalid === "provider") await prisma.integrationInboxEvent.update({ where: { id: inbox.id }, data: { provider: "OTHER" } });
+    if (invalid === "signature") await prisma.integrationInboxEvent.update({ where: { id: inbox.id }, data: { signatureValid: false } });
+    if (invalid === "quarantined") await prisma.integrationInboxEvent.update({ where: { id: inbox.id }, data: { status: "QUARANTINED" } });
+    if (["envelope", "event-type", "event-id"].includes(invalid)) await prisma.integrationInboxEvent.update({ where: { id: inbox.id }, data: { payload: {
+      eventId: invalid === "event-id" ? "other-event" : inbox.eventId,
+      eventType: invalid === "event-type" ? "PARTY_SIGNED" : "ENVELOPE_CLOSED",
+      envelopeId: invalid === "envelope" ? "other-envelope" : request.externalId,
+    } } });
+    if (invalid === "consumed") await prisma.signatureEvent.create({ data: { organizationId: context.organizationId, requestId: request.id, sourceInboxEventId: inbox.id, eventType: "ERROR", occurredAt: new Date() } });
+    const error = await completeRealSignatureRequest(context, request.id, connectorInstallationId, inboxId).catch((error: unknown) => error);
+    expect(error).toMatchObject({ errorClass: "VALIDATION", reasonCode: "SOURCE_INBOX_INVALID", correlationId: expect.any(String) });
+    expect(String(error)).not.toContain(inbox.eventId);
+    expect(String(error)).not.toContain(request.externalId);
+    expect(provider.reconcileSignatures).not.toHaveBeenCalled();
+    expect(provider.finalEvidence).not.toHaveBeenCalled();
+    expect(await prisma.signatureParty.count({ where: { requestId: request.id, status: "SIGNED" } })).toBe(0);
+    expect(await prisma.signatureEvent.count({ where: { requestId: request.id, eventType: "PARTY_SIGNED" } })).toBe(0);
+    await prisma.integrationInboxEvent.delete({ where: { id: inbox.id } });
+  });
+
+  it("origem de inbox sobrevive a falha no PDF e retries concorrentes sem duplicar assinatura", async () => {
+    const request = await makeClicksignRequest("inbox-retry");
+    const inbox = await closedInbox(request);
+    reconciledProvider(request, { finalFailure: true });
+    await Promise.allSettled(Array.from({ length: 3 }, () => completeRealSignatureRequest(context, request.id, connectorInstallationId, inbox.id)));
+    const party = await prisma.signatureParty.findUniqueOrThrow({ where: { id: request.parties[0].id } });
+    expect(party.status).toBe("SIGNED");
+    expect(party.evidence).toMatchObject({ sourceInboxEventId: inbox.id });
+    expect(await prisma.signatureEvent.count({ where: { requestId: request.id, eventType: "PARTY_SIGNED" } })).toBe(1);
+    expect(await prisma.signatureEvent.count({ where: { sourceInboxEventId: inbox.id } })).toBe(0);
+    const proof = await prisma.signatureReconciliationEvidence.findUniqueOrThrow({ where: { partyId: party.id }, include: { signatureEvent: true, sourceInboxEvent: true } });
+    expect(proof).toMatchObject({ sourceInboxEventId: inbox.id, requestId: request.id, organizationId: context.organizationId, installationId: connectorInstallationId, signatureEvent: { eventType: "PARTY_SIGNED" }, sourceInboxEvent: { id: inbox.id } });
+    expect(proof.evidenceRef).toMatch(/^[a-f0-9]{64}$/);
+    expect(await prisma.signatureEvent.count({ where: { requestId: request.id, eventType: "COMPLETED" } })).toBe(0);
+    await expect(prisma.signatureReconciliationEvidence.update({ where: { id: proof.id }, data: { evidenceRef: "b".repeat(64) } })).rejects.toThrow("SIGNATURE_EVIDENCE_IMMUTABLE");
+    await expect(prisma.signatureReconciliationEvidence.delete({ where: { id: proof.id } })).rejects.toThrow("SIGNATURE_EVIDENCE_IMMUTABLE");
+    await expect(prisma.$executeRaw`TRUNCATE TABLE signature_reconciliation_evidence`).rejects.toThrow("SIGNATURE_EVIDENCE_IMMUTABLE");
+    await expect(prisma.signatureParty.update({ where: { id: party.id }, data: { evidence: { forged: true } } })).rejects.toThrow("SIGNATURE_EVIDENCE_CONTEXT_IMMUTABLE");
+    await expect(prisma.signatureEvent.update({ where: { id: proof.signatureEventId }, data: { payload: {} } })).rejects.toThrow("SIGNATURE_EVIDENCE_CONTEXT_IMMUTABLE");
+    await expect(prisma.integrationInboxEvent.update({ where: { id: inbox.id }, data: { payload: {} } })).rejects.toThrow("SIGNATURE_EVIDENCE_CONTEXT_IMMUTABLE");
+    await expect(prisma.integrationInboxEvent.delete({ where: { id: inbox.id } })).rejects.toThrow();
+    await expect(prisma.signatureRequest.delete({ where: { id: request.id } })).rejects.toThrow();
+    await expect(prisma.signatureRequest.update({ where: { id: request.id }, data: { documentChecksum: "forged" } })).rejects.toThrow("SIGNATURE_EVIDENCE_CONTEXT_IMMUTABLE");
+    await prisma.integrationInboxEvent.update({ where: { id: inbox.id }, data: { status: "PROCESSING" } });
+    expect(await prisma.signatureReconciliationEvidence.count({ where: { partyId: party.id } })).toBe(1);
+    reconciledProvider(request);
+    await completeRealSignatureRequest(context, request.id, connectorInstallationId, inbox.id);
+    expect(await prisma.signatureEvent.count({ where: { sourceInboxEventId: inbox.id, eventType: "COMPLETED" } })).toBe(1);
+  });
+
+  it("handler produtivo reconcilia partes PENDING, preserva prova após falha do PDF e conclui no retry", async () => {
+    const request = await makeClicksignRequest("handler-pending", 2);
+    const inbox = await closedInbox(request);
+    const definition = await prisma.connectorDefinition.findUniqueOrThrow({ where: { code: "CLICKSIGN_API_V3" } });
+    await prisma.connectorInstallation.update({ where: { id: connectorInstallationId }, data: { connectorDefinitionId: definition.id } });
+    const job = await prisma.integrationJob.create({ data: { organizationId: context.organizationId, installationId: connectorInstallationId, jobType: "PROCESS_SIGNATURE_WEBHOOK", payload: { inboxEventId: inbox.id }, correlationId: randomUUID() } });
+    const provider = reconciledProvider(request, { finalFailure: true });
+    await expect(clicksignService.processClicksignWebhookJob(job)).rejects.toMatchObject({ reasonCode: "PDF_INVALID" });
+    expect(provider.reconcileSignatures).toHaveBeenCalledTimes(1);
+    expect(await prisma.signatureReconciliationEvidence.count({ where: { requestId: request.id, sourceInboxEventId: inbox.id } })).toBe(2);
+    expect(await prisma.signatureRequest.findUniqueOrThrow({ where: { id: request.id } })).toMatchObject({ status: "AGUARDANDO_ASSINATURAS", finalDocumentId: null });
+    expect(await prisma.integrationInboxEvent.findUniqueOrThrow({ where: { id: inbox.id } })).toMatchObject({ status: "RECEIVED" });
+    expect(await prisma.integrationQuarantineItem.count({ where: { installationId: connectorInstallationId, externalId: inbox.eventId } })).toBe(0);
+    reconciledProvider(request);
+    await clicksignService.processClicksignWebhookJob(job);
+    await clicksignService.processClicksignWebhookJob(job);
+    expect(await prisma.signatureRequest.findUniqueOrThrow({ where: { id: request.id } })).toMatchObject({ status: "ASSINADO" });
+    expect(await prisma.signatureEvent.count({ where: { requestId: request.id, eventType: "COMPLETED" } })).toBe(1);
+    expect(await prisma.integrationInboxEvent.findUniqueOrThrow({ where: { id: inbox.id } })).toMatchObject({ status: "PROCESSED" });
+    expect(await prisma.signatureReconciliationEvidence.count({ where: { requestId: request.id } })).toBe(2);
+  });
+
+  it("evidência rejeita vínculo relacional cruzado sem alterar dados históricos", async () => {
+    const request = await makeClicksignRequest("cross-proof");
+    const other = await makeClicksignRequest("cross-proof-other");
+    const inbox = await closedInbox(request);
+    reconciledProvider(request, { finalFailure: true });
+    await expect(completeRealSignatureRequest(context, request.id, connectorInstallationId, inbox.id)).rejects.toMatchObject({ reasonCode: "PDF_INVALID" });
+    const proof = await prisma.signatureReconciliationEvidence.findUniqueOrThrow({ where: { partyId: request.parties[0].id } });
+    const { id: _id, recordedAt: _recordedAt, ...data } = proof;
+    void _id; void _recordedAt;
+    await expect(prisma.signatureReconciliationEvidence.create({ data: { ...data, partyId: other.parties[0].id, requestId: other.id } })).rejects.toThrow("SIGNATURE_EVIDENCE_CONTEXT_INVALID");
+    expect(await prisma.signatureReconciliationEvidence.count({ where: { requestId: other.id } })).toBe(0);
+  });
+
+  it("falha do PDF após reconciliação preserva SIGNED sem concluir nem persistir SIGNED_FINAL", async () => {
+    const request = await makeClicksignRequest("pdf-failure");
+    reconciledProvider(request, { finalFailure: true });
+    const putSpy = vi.spyOn(contractFileStorage, "put");
+    await expect(completeRealSignatureRequest(context, request.id, connectorInstallationId, null)).rejects.toMatchObject({ reasonCode: "PDF_INVALID" });
+    const reloaded = await prisma.signatureRequest.findUniqueOrThrow({ where: { id: request.id }, include: { parties: true } });
+    expect(reloaded.status).toBe("AGUARDANDO_ASSINATURAS");
+    expect(reloaded.parties[0]?.status).toBe("SIGNED");
+    expect(reloaded.finalDocumentId).toBeNull();
+    expect(await prisma.contractDocument.count({ where: { contractId: reloaded.contractId, kind: "SIGNED_FINAL" } })).toBe(0);
+    expect(putSpy).not.toHaveBeenCalled();
+    putSpy.mockRestore();
+  });
+
+  it("reconciliações repetidas e concorrentes são idempotentes", async () => {
+    const request = await makeClicksignRequest("concurrent");
+    reconciledProvider(request, { finalFailure: true });
+    await Promise.allSettled(Array.from({ length: 4 }, () => completeRealSignatureRequest(context, request.id, connectorInstallationId, null)));
+    expect(await prisma.signatureEvent.count({ where: { requestId: request.id, eventType: "PARTY_SIGNED" } })).toBe(1);
+    const reloaded = await prisma.signatureRequest.findUniqueOrThrow({ where: { id: request.id }, include: { parties: true } });
+    expect(reloaded.parties[0]?.status).toBe("SIGNED");
+    expect(reloaded.status).toBe("AGUARDANDO_ASSINATURAS");
+  });
+
+  it("evidência parcial, tenant alheio e instalação alheia falham fechado", async () => {
+    const request = await makeClicksignRequest("guards", 2);
+    reconciledProvider(request, { partial: true });
+    await expect(completeRealSignatureRequest(context, request.id, connectorInstallationId, null)).rejects.toMatchObject({ reasonCode: "SIGNATURE_EVIDENCE_PENDING" });
+    expect(await prisma.signatureParty.count({ where: { requestId: request.id, status: "SIGNED" } })).toBe(0);
+
+    const otherOrganization = await prisma.organization.findFirstOrThrow({ where: { id: { not: context.organizationId } } });
+    await expect(completeRealSignatureRequest({ ...context, organizationId: otherOrganization.id }, request.id, connectorInstallationId, null)).rejects.toMatchObject({ reasonCode: "SIGNATURE_EVIDENCE_INVALID", correlationId: expect.any(String) });
+    await expect(completeRealSignatureRequest(context, request.id, "other-installation", null)).rejects.toMatchObject({ reasonCode: "SIGNATURE_EVIDENCE_INVALID" });
+  });
+
+  it.each(["CANCELADO", "RECUSADO"] as const)("reconciliação não altera solicitação %s", async (terminalStatus) => {
+    const request = await makeClicksignRequest(`terminal-${terminalStatus.toLowerCase()}`);
+    await prisma.signatureRequest.update({ where: { id: request.id }, data: { status: terminalStatus } });
+    const provider = reconciledProvider(request);
+    await expect(completeRealSignatureRequest(context, request.id, connectorInstallationId, null)).rejects.toMatchObject({ reasonCode: "LOCAL_STATE_INELIGIBLE" });
+    expect(provider.reconcileSignatures).not.toHaveBeenCalled();
+    const reloaded = await prisma.signatureRequest.findUniqueOrThrow({ where: { id: request.id }, include: { parties: true } });
+    expect(reloaded.status).toBe(terminalStatus);
+    expect(reloaded.parties[0]?.status).toBe("PENDING");
+  });
+
   it("webhook (9H IntegrationInboxEvent → SignatureEvent): idempotente em replay, nenhuma segunda infra de webhook (item 3)", async () => {
     const { contract } = await makeApprovedSale(context, projectId, companyId, customerId, `WHK-${token}`, "280000");
     const template = await createContractTemplate(context, { projectId, name: `Modelo Webhook ${token}` });
@@ -210,7 +451,7 @@ describe.skipIf(!process.env.DATABASE_URL).sequential("Fase 9K.4 — Fechamento 
     const document = await generateContractDocument(context, { contractId: contract.id, templateVersionId: version.id });
 
     const clicksignRequest = await prepareSignatureRequest(context, { contractId: contract.id, documentId: document.id, provider: "CLICKSIGN", parties: [{ displayName: "X", role: "BUYER" }] });
-    await expect(sendSignatureRequest(context, clicksignRequest.id)).rejects.toThrow(/não tem adapter real habilitado/);
+    await expect(sendSignatureRequest(context, clicksignRequest.id)).rejects.toThrow(/Clicksign|Integração/);
 
     const mockRequest = await prepareSignatureRequest(context, { contractId: contract.id, documentId: document.id, parties: [{ displayName: "Y", role: "BUYER" }] });
     const cancelled = await cancelSignatureRequest(context, { requestId: mockRequest.id, reason: "Teste" });
