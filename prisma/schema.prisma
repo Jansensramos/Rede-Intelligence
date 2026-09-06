@@ -1012,6 +1012,7 @@ model Organization {
   integrationDeadLetters          IntegrationDeadLetter[]
   integrationQuarantineItems      IntegrationQuarantineItem[]
   connectorDocumentReferences     ConnectorDocumentReference[]
+  driveDocumentVersions           DriveDocumentVersion[]
   externalPriceObservations       ExternalPriceObservation[]
   apiClients                      ApiClient[]
   marketAreas                     MarketArea[]
@@ -9548,6 +9549,7 @@ model ConnectorInstallation {
   quarantineItems       IntegrationQuarantineItem[]
   healthSnapshots       IntegrationHealthSnapshot[]
   documentReferences    ConnectorDocumentReference[]
+  driveDocumentVersions DriveDocumentVersion[]
   jobs                  IntegrationJob[]
 
   @@index([organizationId, connectorDefinitionId])
@@ -9921,6 +9923,24 @@ model IntegrationHealthSnapshot {
 
   @@index([installationId, capturedAt])
   @@map("integration_health_snapshots")
+}
+
+model DriveDocumentVersion {
+  id             String @id @default(cuid())
+  organizationId String @map("organization_id")
+  installationId String @map("installation_id")
+  scope          String
+  externalFileId String @map("external_file_id")
+  revisionKey    String @map("revision_key")
+  available      Boolean
+  metadata       Json
+  recordedAt     DateTime @default(now()) @map("recorded_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  installation   ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([installationId, scope, externalFileId, revisionKey])
+  @@index([organizationId, installationId])
+  @@map("drive_document_versions")
 }
 
 model ConnectorDocumentReference {

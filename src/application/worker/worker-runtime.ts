@@ -4,6 +4,7 @@ import { claimNextJobAcrossOrganizations, completeJob, failJob, heartbeatJob } f
 import type { RetryableErrorClass } from "@/domain/integrations";
 import { logger } from "@/infrastructure/observability/logger";
 import { dispatchJob } from "./job-dispatcher";
+import { DriveError } from "@/infrastructure/adapters/drive/google-drive";
 import { ClicksignProviderError, type ClicksignEvidenceFailureReason, type ClicksignErrorClass } from "@/infrastructure/adapters/signature/clicksign-signature-provider";
 import { SignatureReconciliationError, type SignatureReconciliationFailureReason } from "@/domain/sales/signature-provider";
 
@@ -42,6 +43,7 @@ export interface WorkerDependencies {
 const defaults: WorkerDependencies = { claim: claimNextJobAcrossOrganizations, dispatch: dispatchJob, complete: completeJob, fail: failJob, heartbeat: heartbeatJob };
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const classify = (error: unknown): RetryableErrorClass => {
+  if (error instanceof DriveError) return error.errorClass;
   if (error instanceof SignatureReconciliationError) return reconciliationJobClasses[error.reasonCode];
   if (error instanceof ClicksignProviderError) {
     return error.reasonCode === null ? clicksignJobClasses[error.errorClass] : clicksignEvidenceJobClasses[error.reasonCode];
@@ -106,6 +108,11 @@ export class DurableWorker {
       logger.info("Job concluído.", { ...context, durationMs: Date.now() - startedAt, status: "succeeded" });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha desconhecida.";
+      if (error instanceof DriveError) {
+        await this.dependencies.fail(job.id, error.errorClass, `${error.reason}; correlation=${error.correlationId}`, error.retryAfterMs);
+        logger.error("Google Drive falhou.", { ...context, correlationId: error.correlationId, errorClass: error.errorClass });
+        return;
+      }
       if (error instanceof SignatureReconciliationError) {
         const safeMessage = `Reconciliação recusada: ${error.reasonCode}. Correlação: ${error.correlationId}.`;
         if (error.reasonCode === "SIGNATURE_EVIDENCE_PENDING" && error.retryAfterMs != null) await this.dependencies.fail(job.id, classify(error), safeMessage, error.retryAfterMs);

@@ -5,6 +5,8 @@ import { deliverPendingOutboxEvents } from "@/application/integrations/webhook-d
 import { MockGoogleDriveConnector, type MockDriveFile } from "@/domain/integrations";
 import { prisma } from "@/infrastructure/database/prisma";
 import { processClicksignWebhookJob } from "@/application/sales/clicksign-service";
+import { syncGoogleDriveInstallation } from "@/application/integrations/google-drive-service";
+import { DRIVE_CODE } from "@/infrastructure/adapters/drive/google-drive";
 
 type Payload = Record<string, unknown>;
 const payloadOf = (job: IntegrationJob) => (job.payload && typeof job.payload === "object" && !Array.isArray(job.payload) ? job.payload as Payload : {});
@@ -50,6 +52,11 @@ export async function dispatchJob(job: IntegrationJob, signal: AbortSignal) {
   }
   if (job.jobType === "SYNC_INSTALLATION" || job.jobType === "POLL_INSTALLATION") {
     const { installation, context } = await integrationContext(job);
+    if (installation.connectorDefinition.code === DRIVE_CODE) {
+      await syncGoogleDriveInstallation(context, installation.id, "INCREMENTAL", signal);
+      signal.throwIfAborted();
+      return;
+    }
     if (installation.connectorDefinition.code !== "GOOGLE_DRIVE_MOCK") throw new Error(`Adapter ${installation.connectorDefinition.code} não possui execução segura no worker atual.`);
     const files = Array.isArray(payload.files) ? payload.files.map((item) => {
       const file = item as Omit<MockDriveFile, "modifiedAt"> & { modifiedAt: string | Date };

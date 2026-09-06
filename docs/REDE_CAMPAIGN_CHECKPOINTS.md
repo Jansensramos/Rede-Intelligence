@@ -21,7 +21,7 @@ QA, auditoria, commit e CI continuam separados por fase; nenhuma evidência exte
 | --- | --- | --- |
 | 9P.3A — correção bloqueadora | Evidência imutável, recuperação pelo handler, classificação do adapter e logs | Correção com QA local aprovado; publicação Git bloqueada por permissão |
 | 9P.3A — smoke final | Envelope Sandbox existente, correlação e PDF final | Adiado pelo usuário para o fim; não concluído |
-| 9P.3B | Google Drive | Contrato preparado; implementação e gates pendentes |
+| 9P.3B | Google Drive | Implementado; QA e auditoria local aprovados; API real adiada; publicação por fase autorizada |
 | 9P.3 — e-mail | E-mail transacional | Provedor do piloto pendente |
 | 9P.4 | Bancos, conciliação, funding e bureau de crédito | Sistemas concretos dependem dos pilotos |
 | 9P.5 | Sienge e CRM utilizado pelo cliente | Sistemas concretos dependem dos pilotos |
@@ -148,3 +148,46 @@ Patch revisável separado da correção: `work/9p3a-correction-reviewed.patch` (
 Não houve reset, mudança de worktree ou recriação de repositório para contornar a restrição.
 É necessário restabelecer escrita nos metadados Git para publicar checkpoints por fase.
 Preparação técnica da próxima fase não equivale a fase implementada ou aprovada.
+
+## 9P.3B — checkpoint local validado
+
+Base desta entrega: `0efdc72ed57be33978a2d3a06b60905424313c0c`, observada no checkout.
+Implementação: transporte Drive de leitura, Meu Drive/pasta e Drive compartilhado, modos
+DISABLED/MOCK/REAL, cofre, tenant/RBAC, cursor vinculado ao escopo/credencial, paginação
+transacional, retomada, lease, versões preservadas, worker e interface de configuração.
+
+- QA: 82/82 focais; 992/992 totais em 117 arquivos; tipos, lint e build aprovados.
+- Banco: uma migration aditiva; 32 migrations em QA. Backup restaurado e comparado antes
+  da alteração; seed também validado em banco criado vazio. Banco histórico do Clicksign intacto.
+- Auditoria local e hashes: `PHASE_9P3B_AUDIT_RECORD.md`.
+- Git: sem commit/push nesta entrega, conforme instrução explícita. Worktree aberto.
+- Riscos: OAuth e API Google reais não exercitados; auditoria adversarial independente pendente.
+
+Nova orientação de retomada: adiar APIs externas até o fim da Fase 10 e continuar camadas
+independentes. Isso não transforma integrações pendentes em operacionais. QA e auditoria
+locais continuam separados por fase; a orientação de não fazer commit/push permanece.
+
+## Autorização atual da campanha
+
+O usuário autorizou subsequentemente commit e CI separados por fase, sem acumular várias
+fases no mesmo diff. Essa orientação substitui a retenção sem commit acima. Publicar e
+verificar o SHA da 9P.3B antes de implementar a etapa seguinte.
+
+Todas as validações reais de APIs externas ficam para o fim; contratos, interfaces
+provider-neutral, DISABLED/MOCK/REAL e testes com transporte controlado entram agora.
+Git/CI são os canais de publicação e verificação autorizados, não smokes dos provedores.
+Na Fase 10, AI Gateway inicia em DISABLED/MOCK, Operator não executa sistemas externos reais
+e Autopilot é recomendatório, exigindo aprovação humana antes de qualquer mutação.
+
+### Bloqueio efetivo de publicação após a autorização
+
+A permissão de escrita no Git comum e nos subdiretórios exatos do worktree foi concedida
+pelo mecanismo de permissões, mas `git add` continuou recusado ao criar `index.lock`.
+A tentativa de execução fora do sandbox foi rejeitada automaticamente porque a política
+do ambiente desabilita `sandbox_approval`. Nenhum commit ou push da 9P.3B ocorreu;
+nenhum CI novo foi disparado. Branch observada: `feature/fase-9p3b-google-drive`,
+HEAD `0efdc72ed57be33978a2d3a06b60905424313c0c`.
+
+O diff permanece exclusivamente da 9P.3B e seu checkpoint documental. Em cumprimento à
+regra de não acumular fases, a próxima implementação aguarda escrita Git efetiva e CI
+do checkpoint atual. Os resultados locais não são usados como substitutos do CI.
