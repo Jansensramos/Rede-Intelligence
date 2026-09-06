@@ -10,13 +10,21 @@ O checkpoint registra resultado técnico, testes efetivamente executados, Git e 
 Código validado localmente não significa integração operacional ou disponibilidade cloud.
 Bloqueio externo é comunicado e impede declarar o gate correspondente concluído.
 
+Atualização autorizada pelo usuário em 2026-09-06: adiar os ajustes/validação da API Clicksign
+para o fim da campanha e prosseguir com as demais fases. A pendência REAL da 9P.3A deixa de
+bloquear o desenvolvimento subsequente, mas continua impedindo declarar Clicksign operacional.
+QA, auditoria, commit e CI continuam separados por fase; nenhuma evidência externa é presumida.
+
 ## Sequência solicitada
 
 | Checkpoint | Escopo | Estado |
 | --- | --- | --- |
-| 9P.3A — correção bloqueadora | Evidência imutável, recuperação pelo handler, classificação do adapter e logs | QA e auditoria locais aprovados; CI pendente |
-| 9P.3A — smoke final | Envelope Sandbox existente, correlação e PDF final | Alvo localizado no banco de testes; token ausente |
-| 9P.3B–9P.5 | Demais integrações, conforme contratos de fase | Aguardam gate anterior e recuperação dos contratos detalhados |
+| 9P.3A — correção bloqueadora | Evidência imutável, recuperação pelo handler, classificação do adapter e logs | Correção com QA local aprovado; publicação Git bloqueada por permissão |
+| 9P.3A — smoke final | Envelope Sandbox existente, correlação e PDF final | Adiado pelo usuário para o fim; não concluído |
+| 9P.3B | Google Drive | Contrato preparado; implementação e gates pendentes |
+| 9P.3 — e-mail | E-mail transacional | Provedor do piloto pendente |
+| 9P.4 | Bancos, conciliação, funding e bureau de crédito | Sistemas concretos dependem dos pilotos |
+| 9P.5 | Sienge e CRM utilizado pelo cliente | Sistemas concretos dependem dos pilotos |
 | 9Q — restante | Gates de release e operação | Aguardando |
 | 9R, 9S | Próximas fases do roadmap aprovado | Aguardam contratos detalhados |
 | 10A | AI Gateway | Aguardando |
@@ -28,6 +36,11 @@ Bloqueio externo é comunicado e impede declarar o gate correspondente concluíd
 | 10G | Investment Committee | Aguardando |
 | 10H | REDE Operator | Aguardando |
 | 10I | Autopilot | Aguardando |
+
+A sequência 9P foi recuperada da tarefa “2 Desenvolvimento REDE Intelligence”, mensagens
+`56c65957-4456-4b12-8306-0794c534c80c` e `3d9b299e-0c03-412e-af99-93f59e0d6a5b`.
+A aprovação histórica define a ordem dos conectores; não define bancos, CRM ou credenciais
+dos pilotos. Esses detalhes não serão inferidos como evidência de integração concluída.
 
 ## 9P.3A — registro de backup e migration
 
@@ -53,7 +66,7 @@ ao banco de testes da porta 55432 após esse gate. Um segundo cluster de QA, na 
 recebeu a restauração do mesmo backup, com usuário `rede_app` sem privilégios administrativos.
 Esse cluster mantém o nome de banco permitido pelo wrapper oficial, sem flexibilizar a proteção.
 
-## Limites atuais
+## Estado anterior à tentativa REAL de `793b92c`
 
 O backup é de testes; não é backup de produção nem substitui a localização do banco operacional.
 Na busca posterior, o executor histórico revelou que o smoke usa deliberadamente
@@ -72,7 +85,7 @@ com este checkpoint. A variante local `immutable-final-stage.ts`, com launcher
 e verifica a evidência imutável após a conclusão. Os arquivos e relatórios históricos foram
 preservados. Preparar o executor não equivale a executar o smoke.
 
-## QA local executado
+## QA local de `793b92c` — registro histórico
 
 - Prisma validate e generate: aprovados.
 - Migration deploy e seed no ambiente isolado: aprovados.
@@ -86,4 +99,52 @@ preservados. Preparar o executor não equivale a executar o smoke.
 - Build produtivo final: aprovado, 28 páginas.
 - Preflight somente leitura do novo smoke manual: aprovado, sem token solicitado.
 - Auditoria local: `PHASE_9P3A_REAUDIT_RECORD.md`; M1 encerrada no escopo técnico testado.
-- Publicação Git e CI: pendentes de execução deste checkpoint.
+- Publicação Git: `793b92c1f576f66b0b0fe65c618d82c0e9eed1c7`, enviado para
+  `origin/feature/fase-9p3a-clicksign`. CI subsequente reprovado conforme registro abaixo.
+
+## 9P.3A — correção após gates reais
+
+O CI [33994120122](https://github.com/Jansensramos/Rede-Intelligence/actions/runs/33994120122)
+falhou no seed: expiração fixa da reserva demonstrativa. O smoke falhou com
+`PROVIDER_RECONCILIATION_UNAVAILABLE`: método omitido na composição do serviço.
+Diagnóstico e limites da auditoria anterior estão em `PHASE_9P3A_REAUDIT_RECORD.md`.
+
+Ambos foram corrigidos no mesmo checkpoint 9P.3A. Nenhuma nova migration é necessária.
+O QA complementar usa banco criado vazio na porta 55434; o banco histórico da porta 55432
+não recebeu seed nem testes. A tentativa REAL não foi repetida, e a ausência de credencial
+permanece um bloqueio externo para a conclusão operacional.
+
+QA complementar executado em 2026-09-05:
+
+- Focal: **141/141 testes, 6/6 arquivos**, porta 55433, saída zero.
+- Banco vazio na porta 55434: as 31 migrations aplicadas e seed concluído. Repetição do
+  seed também concluída; o wrapper oficial executou novamente deploy/seed antes dos testes.
+- Wrapper oficial: **955/955 testes, 114/114 arquivos**, sem skip, saída zero, 297,48 segundos.
+- TypeScript: aprovado. ESLint final: aprovado, sem avisos.
+- Preflight somente leitura: aprovado, sem solicitar token.
+- `.env` e todas as migrations preservados. Sem migration adicional neste commit de correção.
+- Build produtivo: aprovado, saída zero, 28 páginas. Git/CI da correção: pendentes.
+- Gate REAL: adiado para o fim da campanha por autorização de 2026-09-06.
+
+Logs privados: `work/9p3a-correction-focal.log`, `work/9p3a-correction-fresh-setup.log`,
+`work/9p3a-correction-seed-repeat-final.log`, `work/9p3a-correction-full.log`,
+`work/9p3a-correction-types.log`, `work/9p3a-correction-lint-final.log` e
+`work/9p3a-correction-build.log`. A tentativa de repetição que detectou a reserva CONVERTED
+foi preservada separadamente em `work/9p3a-correction-seed-repeat.log`.
+
+## Retomada de 2026-09-06 — bloqueio de publicação
+
+O usuário retirou o Clicksign REAL do caminho crítico de desenvolvimento e o reservou para
+o fim da campanha. O build da correção terminou com saída zero; a auditoria local e o QA
+ficam registrados acima. A 9P.3B tem contrato preparado em `PHASE_9P3B_GOOGLE_DRIVE_CONTRACT.md`.
+
+O comando de preparação do commit foi recusado por falta de permissão para criar `index.lock`
+nos metadados do worktree, localizados em outro diretório do repositório principal.
+A política atual permite leitura do Git e não permite solicitar ampliação pelo sandbox.
+Não foi criado commit da correção nem disparado novo CI. HEAD permanece `793b92c`.
+O CI reprovado desse HEAD não foi substituído por uma aprovação local.
+
+Patch revisável separado da correção: `work/9p3a-correction-reviewed.patch` (privado).
+Não houve reset, mudança de worktree ou recriação de repositório para contornar a restrição.
+É necessário restabelecer escrita nos metadados Git para publicar checkpoints por fase.
+Preparação técnica da próxima fase não equivale a fase implementada ou aprovada.

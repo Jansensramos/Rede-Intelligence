@@ -54,7 +54,7 @@ import {
   activateSalesPriceTable, addPostSaleUpdate, approveSale, approveSalesCommission, blockSalesUnit, confirmSalesReservation,
   convertSalesLead, createPostSaleRequest, createSale, createSalesCommission, createSalesCommissionPolicy, createSalesLead,
   createSalesPriceTable, createSalesProposal, createSalesReservation, createSalesUnit, markUnitDelivered, recordInspectionOutcome,
-  scheduleInspection, upsertBrokerProfile,
+  releaseSalesReservation, scheduleInspection, upsertBrokerProfile,
 } from "../src/application/sales/sales-service";
 import { allocateAdministrativeCost, calculateEfficiencyVariance, simulateIncentivePool } from "../src/domain/people-performance";
 import { seedAccountingDemo } from "./seed-accounting";
@@ -400,10 +400,15 @@ async function main() {
   if (salesLead.stage !== "CONVERTIDO") salesLead = await convertSalesLead(context, { leadId: salesLead.id, customerId: buyerCustomer.id });
 
   let salesProposal = await prisma.salesProposal.findFirst({ where: { salesUnitId: salesUnitSold.id, customerId: buyerCustomer.id } });
-  if (!salesProposal) salesProposal = await createSalesProposal(context, { salesUnitId: salesUnitSold.id, customerId: buyerCustomer.id, brokerId: broker.id, priceTableId: salesPriceTable.id, proposedPrice: "610000", discountAmount: "10000", validUntil: new Date("2026-09-15T00:00:00.000Z"), paymentConditionSummary: { entrada: "10%", saldo: "financiamento + mensais" } });
+  if (!salesProposal) salesProposal = await createSalesProposal(context, { salesUnitId: salesUnitSold.id, customerId: buyerCustomer.id, brokerId: broker.id, priceTableId: salesPriceTable.id, proposedPrice: "610000", discountAmount: "10000", validUntil: new Date(Date.now() + 30 * 86_400_000), paymentConditionSummary: { entrada: "10%", saldo: "financiamento + mensais" } });
 
-  let salesReservation = await prisma.salesReservation.findFirst({ where: { salesUnitId: salesUnitSold.id, customerId: buyerCustomer.id } });
-  if (!salesReservation) salesReservation = await createSalesReservation(context, { salesUnitId: salesUnitSold.id, customerId: buyerCustomer.id, proposalId: salesProposal.id, expiresAt: new Date("2026-09-05T00:00:00.000Z"), responsibleId: user.id, condition: { sinal: "R$ 5.000" } });
+  let salesReservation = await prisma.salesReservation.findFirst({ where: { salesUnitId: salesUnitSold.id, customerId: buyerCustomer.id, status: { in: ["ACTIVE", "CONFIRMED", "CONVERTED"] } } });
+  // A previous interrupted seed may have left an expired reservation. Preserve its history.
+  if (salesReservation?.status === "ACTIVE" && salesReservation.expiresAt <= new Date()) {
+    await releaseSalesReservation(context, salesReservation.id, "Reserva demonstrativa expirada antes da conclusão do seed.");
+    salesReservation = null;
+  }
+  if (!salesReservation) salesReservation = await createSalesReservation(context, { salesUnitId: salesUnitSold.id, customerId: buyerCustomer.id, proposalId: salesProposal.id, expiresAt: new Date(Date.now() + 7 * 86_400_000), responsibleId: user.id, condition: { sinal: "R$ 5.000" } });
   if (salesReservation.status === "ACTIVE") salesReservation = await confirmSalesReservation(context, salesReservation.id);
 
   let sale = await prisma.sale.findFirst({ where: { salesUnitId: salesUnitSold.id, status: { not: "CANCELLED" } } });

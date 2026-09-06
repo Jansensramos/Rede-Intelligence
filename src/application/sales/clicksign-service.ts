@@ -99,12 +99,13 @@ export async function clicksignProviderForOrganization(organizationId: string, t
       throw error;
     }
   };
-  const provider: SignatureProvider = {
+  const provider: Required<SignatureProvider> = {
     code: "CLICKSIGN",
     send: (input) => guarded(() => base.send(input)),
     cancel: (input) => guarded(() => base.cancel(input)),
     status: (externalId) => guarded(() => base.status(externalId)),
     notify: (externalId, message) => guarded(() => base.notify(externalId, message)),
+    reconcileSignatures: (input) => guarded(() => base.reconcileSignatures(input)),
     finalEvidence: (externalId) => guarded(() => base.finalEvidence(externalId)),
   };
   return {

@@ -1,7 +1,8 @@
-import { createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/infrastructure/database/prisma";
 import { integrationSecretVault } from "@/infrastructure/security/secret-vault";
+import type { ClicksignHttpRequest } from "@/infrastructure/adapters/signature/clicksign-signature-provider";
 import { clicksignProviderForOrganization, configureClicksignInstallation, receiveClicksignWebhook } from "./clicksign-service";
 
 const token = randomUUID().slice(0, 8);
@@ -102,5 +103,37 @@ describe.skipIf(!process.env.DATABASE_URL).sequential("Clicksign 9P.3A — webho
     await prisma.connectorInstallation.update({ where: { id: primaryInstallationId }, data: { status: "PAUSED" } });
     await expect(clicksignProviderForOrganization(organizationId, { request: async () => { throw new Error("não deve chamar"); } })).rejects.toThrow("não encontrada ou indisponível");
     await prisma.connectorInstallation.update({ where: { id: primaryInstallationId }, data: { status: "ACTIVE" } });
+  });
+
+  it("resolve credencial no vault e reconcilia pelo provider composto preservando a validação do adaptador", async () => {
+    const requests: ClicksignHttpRequest[] = [];
+    let documentStatus = "closed";
+    const resolved = await clicksignProviderForOrganization(organizationId, { request: async (request) => {
+      requests.push(request);
+      const path = new URL(request.url).pathname;
+      const data = path.endsWith("/events")
+        ? [{ id: "composition-event", attributes: { name: "sign", data: { signer: { key: "composition-signer" } } } }]
+        : path.endsWith("/documents")
+          ? [{ id: "composition-document", type: "documents" }]
+          : { id: "composition-document", attributes: { status: documentStatus } };
+      return { status: 200, headers: { "content-type": "application/vnd.api+json" }, body: new TextEncoder().encode(JSON.stringify({ data })), finalUrl: request.url };
+    } });
+    expect(resolved.installationId).toBe(primaryInstallationId);
+    expect(resolved.provider.reconcileSignatures).toBeTypeOf("function");
+    const input = { externalId: "composition-envelope", expectedExternalPartyIds: ["composition-signer"] };
+    await expect(resolved.provider.reconcileSignatures!(input)).resolves.toEqual({
+      documentStatus: "CLOSED",
+      documentRef: createHash("sha256").update("composition-document").digest("hex"),
+      signedParties: [{ externalPartyId: "composition-signer", evidenceRef: createHash("sha256").update("composition-event").digest("hex") }],
+    });
+    expect(requests.map((request) => `${request.method} ${new URL(request.url).pathname}`)).toEqual([
+      "GET /api/v3/envelopes/composition-envelope/documents",
+      "GET /api/v3/envelopes/composition-envelope/documents/composition-document",
+      "GET /api/v3/envelopes/composition-envelope/documents/composition-document/events",
+    ]);
+    expect(requests.every((request) => request.headers.Authorization === `access-${token}`)).toBe(true);
+    documentStatus = "running";
+    await expect(resolved.provider.reconcileSignatures!(input)).rejects.toMatchObject({ errorClass: "CONFLICT", reasonCode: "DOCUMENT_NOT_CLOSED", correlationId: expect.any(String) });
+    expect(requests).toHaveLength(5);
   });
 });

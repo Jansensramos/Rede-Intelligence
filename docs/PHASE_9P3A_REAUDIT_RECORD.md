@@ -7,8 +7,11 @@ Esta é uma auditoria local do agente executor; não é um parecer independente 
 
 ## Veredito técnico
 
-**APROVADO LOCAL para as correções bloqueadoras. M1 encerrada no escopo da reconciliação implementada.**
-O smoke REAL final não foi executado neste checkpoint e permanece um gate externo separado.
+**Gate da fase reaberto após o smoke e o CI do commit `793b92c`.**
+O QA abaixo registra a execução anterior, cujo alcance foi insuficiente: o teste do handler
+substituía o resolvedor, e o seed foi validado sobre backup já populado. A tentativa REAL
+subsequente encontrou uma falha de composição e o CI encontrou uma reserva demonstrativa
+vencida. As correções e a nova validação constam no registro complementar ao fim deste documento.
 
 | Achado | Evidência da correção | Resultado |
 | --- | --- | --- |
@@ -56,3 +59,27 @@ Permanecem não comprovados: conclusão REAL com o token atual, webhook público
 de conteúdo e operação cloud. Os demais riscos residuais do contrato Clicksign permanecem
 explicitamente registrados. Triggers não protegem contra um administrador que os remova.
 O código está apto à validação de CI; esse resultado não declara produção operacional.
+
+## Reabertura — smoke e CI de `793b92c`
+
+- CI [33994120122](https://github.com/Jansensramos/Rede-Intelligence/actions/runs/33994120122):
+  falhou no seed em banco vazio. A reserva tinha expiração fixa em `2026-09-05T00:00:00Z`.
+  Install, Prisma validate/generate e as 31 migrations passaram antes da falha.
+- Smoke manual, execução única: `PROVIDER_RECONCILIATION_UNAVAILABLE`, correlação
+  `e5e715de-a03a-4c1f-89c7-7946fe56b9ea`. O wrapper de `clicksignProviderForOrganization`
+  omitia `reconcileSignatures`, embora o adaptador o implementasse. A falha ocorreu antes
+  da consulta externa de reconciliação. Não é evidência de token inválido.
+- Limpeza confirmada: credencial removida, instalação PAUSED, solicitação
+  AGUARDANDO_ASSINATURAS e parte PENDING. O relatório original foi preservado em arquivo
+  privado identificado pela correlação. Nenhum retry REAL foi executado pelo agente.
+- Correção: encaminhamento de `reconcileSignatures` pelo mesmo guard das demais operações;
+  `Required<SignatureProvider>` exige a superfície completa na composição Clicksign.
+  O teste de integração resolve a instalação e o cofre reais, usa apenas transporte
+  controlado e verifica os três endpoints, credencial, hashes e erro DOCUMENT_NOT_CLOSED.
+- Seed: prazos relativos para novas propostas/reservas; reserva vencida de execução
+  interrompida é liberada pelo serviço existente, preservando o histórico; reserva CONVERTED
+  é reutilizada. A primeira repetição do QA encontrou a omissão desse último estado,
+  corrigida antes do novo commit. Nenhuma regra de expiração do domínio foi alterada.
+- Migration adicional desta correção: nenhuma. QA em cluster novo, porta 55434, banco
+  inicialmente vazio e usuário sem privilégios administrativos. O banco do smoke foi preservado.
+- Resultado da nova validação e Git/CI: acompanhar `REDE_CAMPAIGN_CHECKPOINTS.md`.
