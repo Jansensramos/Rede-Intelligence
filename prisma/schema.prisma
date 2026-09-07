@@ -893,6 +893,7 @@ enum LegalFinancialEventStatus {
 }
 
 model Organization {
+  financialProviderEvidence FinancialProviderEvidence[]
   id                              String                           @id @default(cuid())
   name                            String
   slug                            String                           @unique
@@ -9517,6 +9518,7 @@ model ConnectorDefinition {
 }
 
 model ConnectorInstallation {
+  financialProviderEvidence FinancialProviderEvidence[]
   id                    String                       @id @default(cuid())
   organizationId        String                       @map("organization_id")
   connectorDefinitionId String                       @map("connector_definition_id")
@@ -12203,4 +12205,25 @@ model LaunchDecision {
   @@unique([organizationId, projectId, checksum], map: "launch_decisions_org_project_checksum_key")
   @@index([organizationId, projectId, decidedAt], map: "launch_decisions_org_project_decided_idx")
   @@map("launch_decisions")
+}
+
+// 9P.4: immutable local evidence, removable only after retention expires.
+model FinancialProviderEvidence {
+  id String @id
+  organizationId String @map("organization_id")
+  installationId String @map("installation_id")
+  jobId String @map("job_id")
+  operation String
+  targetId String @map("target_id")
+  externalKeyHash String @map("external_key_hash")
+  contentHash String @map("content_hash")
+  encryptedPayload String @map("encrypted_payload") @db.Text
+  simulated Boolean @default(true)
+  recordedAt DateTime @default(now()) @map("recorded_at")
+  expiresAt DateTime @map("expires_at")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  installation ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([installationId, operation, targetId, externalKeyHash], map: "financial_provider_evidence_installation_id_operation_target__k")
+  @@index([organizationId, installationId, expiresAt], map: "financial_provider_evidence_organization_id_installation_id_e_i")
+  @@map("financial_provider_evidence")
 }

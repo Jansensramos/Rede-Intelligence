@@ -88,7 +88,7 @@ export async function claimNextJobAcrossOrganizations(leaseOwner: string, leaseD
     WHERE id = (
       SELECT id FROM integration_jobs
       WHERE status NOT IN ('SUCCEEDED', 'CANCELLED', 'DEAD_LETTER')
-        AND job_type IN ('SYNC_INSTALLATION', 'POLL_INSTALLATION', 'DELIVER_WEBHOOKS', 'PROCESS_DESIGN_FILE', 'PROCESS_SIGNATURE_WEBHOOK', 'SEND_TRANSACTIONAL_EMAIL')
+        AND job_type IN ('SYNC_INSTALLATION', 'POLL_INSTALLATION', 'DELIVER_WEBHOOKS', 'PROCESS_DESIGN_FILE', 'PROCESS_SIGNATURE_WEBHOOK', 'SEND_TRANSACTIONAL_EMAIL', 'FINANCIAL_PROVIDER')
         AND ((status = 'QUEUED' AND scheduled_at <= ${nowIso}::timestamp)
           OR (status = 'RUNNING' AND lease_expires_at IS NOT NULL AND lease_expires_at < ${nowIso}::timestamp))
       ORDER BY CASE priority WHEN 'CRITICAL' THEN 0 WHEN 'NORMAL' THEN 1 ELSE 2 END, scheduled_at ASC

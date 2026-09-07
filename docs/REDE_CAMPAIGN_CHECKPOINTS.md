@@ -222,3 +222,30 @@ Git: HEAD continua `470933d`, diff somente da 9P.3C, sem commit/push pelo agente
 CI da 9P.3C aguarda publicação pelo usuário. Próxima fase na sequência: 9P.4, camadas locais
 de bancos/conciliação/funding/bureau, sem escolher sistemas de piloto ou executar APIs reais.
 Não iniciada neste diff; avanço após publicação e verificação do checkpoint atual.
+
+## 9P.4 — financeiro e crédito local
+
+Base publicada pelo usuário: `2dd403419b63ee95b7514802b87a58300ac504c8`, 9P.3C.
+GitHub Actions [34121184857](https://github.com/Jansensramos/Rede-Intelligence/actions/runs/34121184857)
+confirmado com sucesso. Branch de trabalho fornecida: `codex/fase-9p4-local`.
+O usuário mantém commit e push sob sua execução pelo PowerShell.
+
+Escopo lido no Relatório Mestre atualizado em 05/09/2026, Apêndice D, páginas 15–17:
+bancos/conciliação, bureau e FundingProvider. Contrato detalhado:
+`PHASE_9P4_LOCAL_FINANCIAL_CONTRACT.md`. Auditoria e QA: `PHASE_9P4_AUDIT_RECORD.md`.
+
+Camadas locais implementadas: contratos e transporte injetável MOCK, instalação por tenant,
+RBAC persistido, fila, paginação/cursores, idempotência, rate limit, retry/dead-letter, dossiê
+de funding congelado/cifrado, relatórios mínimos imutáveis e expurgo auditado. Uma migration
+aditiva após backup restaurado e validado. Não alteram saldo, conciliação, crédito ou
+desembolso oficiais com resultados sintéticos. REAL permanece fail-closed.
+
+QA conclusivo aprovado: 71/71 focais, 1.044/1.044 totais em 121 arquivos, Prisma,
+seed efêmero em banco vazio, TypeScript, ESLint, build e `git diff --check`.
+Revisão adversarial local pelo implementador concluída, com correções e limites registrados
+no relatório de auditoria; não representa auditoria independente nem validação REAL.
+HEAD permanece `2dd4034`, sem commit/push. CI da 9P.4 aguarda publicação pelo usuário.
+Próximo checkpoint: 9P.5, após as operações Git do usuário e confirmação do CI da 9P.4;
+não iniciado neste diff, para não acumular fases.
+Provedores, credenciais, chamadas, smokes e ajustes específicos de APIs externas permanecem
+reservados à campanha final, após as camadas locais do programa, conforme orientação atual.

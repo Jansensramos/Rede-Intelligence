@@ -9,6 +9,8 @@ import { syncGoogleDriveInstallation } from "@/application/integrations/google-d
 import { DRIVE_CODE } from "@/infrastructure/adapters/drive/google-drive";
 import { processEmailJob } from "@/application/integrations/transactional-email-service";
 import { EMAIL_JOB } from "@/domain/integrations/transactional-email";
+import { processFinancialJob } from "@/application/integrations/financial-provider-service";
+import { FINANCIAL_JOB } from "@/domain/integrations/financial-provider";
 
 type Payload = Record<string, unknown>;
 const payloadOf = (job: IntegrationJob) => (job.payload && typeof job.payload === "object" && !Array.isArray(job.payload) ? job.payload as Payload : {});
@@ -30,10 +32,11 @@ async function integrationContext(job: IntegrationJob) {
   return { installation, context: { organizationId: job.organizationId, userId: installation.createdById, role: membership.role as MembershipRole } };
 }
 
-export const supportedJobTypes = ["SYNC_INSTALLATION", "POLL_INSTALLATION", "DELIVER_WEBHOOKS", "PROCESS_DESIGN_FILE", "PROCESS_SIGNATURE_WEBHOOK", EMAIL_JOB] as const;
+export const supportedJobTypes = ["SYNC_INSTALLATION", "POLL_INSTALLATION", "DELIVER_WEBHOOKS", "PROCESS_DESIGN_FILE", "PROCESS_SIGNATURE_WEBHOOK", EMAIL_JOB, FINANCIAL_JOB] as const;
 
 export async function dispatchJob(job: IntegrationJob, signal: AbortSignal) {
   signal.throwIfAborted();
+  if (job.jobType === FINANCIAL_JOB) { await processFinancialJob(job, signal); return; }
   if (job.jobType === EMAIL_JOB) {
     await processEmailJob(job, signal);
     return;

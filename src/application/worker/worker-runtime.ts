@@ -7,6 +7,8 @@ import { dispatchJob } from "./job-dispatcher";
 import { DriveError } from "@/infrastructure/adapters/drive/google-drive";
 import { EMAIL_JOB, EmailError } from "@/domain/integrations/transactional-email";
 import { failEmailJob } from "@/application/integrations/transactional-email-service";
+import { FINANCIAL_JOB, FinancialProviderError } from "@/domain/integrations/financial-provider";
+import { failFinancialJob } from "@/application/integrations/financial-provider-service";
 import { ClicksignProviderError, type ClicksignEvidenceFailureReason, type ClicksignErrorClass } from "@/infrastructure/adapters/signature/clicksign-signature-provider";
 import { SignatureReconciliationError, type SignatureReconciliationFailureReason } from "@/domain/sales/signature-provider";
 
@@ -109,6 +111,12 @@ export class DurableWorker {
       await this.dependencies.complete(job.id, this.owner);
       logger.info("Job concluído.", { ...context, durationMs: Date.now() - startedAt, status: "succeeded" });
     } catch (error) {
+      if (job.jobType === FINANCIAL_JOB) {
+        const safe = error instanceof FinancialProviderError ? error : new FinancialProviderError("TRANSPORT_FAILURE", "NETWORK");
+        await failFinancialJob(job, safe);
+        logger.error("Conector financeiro local falhou.", { ...context, errorClass: safe.errorClass });
+        return;
+      }
       if (job.jobType === EMAIL_JOB) {
         const safe = error instanceof EmailError ? error : new EmailError("TRANSPORT_FAILURE", "NETWORK");
         await failEmailJob(job, safe);
