@@ -249,3 +249,20 @@ Próximo checkpoint: 9P.5, após as operações Git do usuário e confirmação 
 não iniciado neste diff, para não acumular fases.
 Provedores, credenciais, chamadas, smokes e ajustes específicos de APIs externas permanecem
 reservados à campanha final, após as camadas locais do programa, conforme orientação atual.
+
+## Retomada para 9P.5 — correção do gate anterior
+
+HEAD publicado: `e0169b701b7fc0782a41499699eef3f134dd1ea7`; branch fornecida pelo usuário:
+`codex/fase-9p5-local`, inicialmente limpa. A execução
+[34169846543](https://github.com/Jansensramos/Rede-Intelligence/actions/runs/34169846543)
+da 9P.4 terminou reprovada: 120 arquivos passaram, mas o beforeAll da suíte financeira
+procurava uma FundingProposal ausente no seed. Seus 15 testes não chegaram a executar;
+1.029 testes passaram e o build foi pulado pelo CI.
+
+A correção cria uma proposta sintética própria no preparo da suíte, sem alterar serviços,
+seed ou migrations. QA em cluster novo aprovado: 15/15 testes financeiros isolados antes
+de outras suítes, 71/71 focais, 1.044/1.044 totais em 121 arquivos; Prisma, deploy/seed,
+TypeScript, ESLint, build e diff check aprovados. Revisão adversarial local concluída.
+Detalhes e limites em `PHASE_9P4_AUDIT_RECORD.md`.
+Não iniciar implementação da 9P.5 neste diff: o gate da 9P.4 precisa ser publicado pelo
+usuário e aprovado no CI. Nenhum commit/push pelo agente e nenhuma API real executada.

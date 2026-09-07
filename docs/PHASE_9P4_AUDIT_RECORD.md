@@ -113,3 +113,46 @@ ser definidas. Chave de cifragem existente deve permanecer disponível enquanto 
 evidências ativas; rotação requer procedimento de migração/expurgo, sem fallback.
 Administrador do banco pode remover triggers; isso não é resistência a comprometimento
 administrativo. Não foi declarada conformidade jurídica ou disponibilidade produtiva.
+
+## Correção após publicação — 07/09/2026
+
+O usuário publicou `e0169b701b7fc0782a41499699eef3f134dd1ea7`. O GitHub Actions
+[34169846543](https://github.com/Jansensramos/Rede-Intelligence/actions/runs/34169846543),
+job `101887929295`, reprovou o beforeAll de
+`financial-provider.database.integration.test.ts:18`: `fundingProposal.findFirstOrThrow`
+não encontrou proposta. O seed não cria FundingProposal; o QA local anterior tinha dados
+de outras execuções. O gate de seed vazio anterior não incluía executar essa suíte
+isoladamente naquele banco. Assim, os resultados locais históricos não comprovaram sua
+independência da ordem. No CI: 120/121 arquivos aprovados, 1.029 testes aprovados,
+15 não executados por falha no hook; build não executado.
+
+Correção delimitada: o próprio beforeAll cria uma FundingProposal DRAFT sintética, com
+chave única e vínculo ao tenant/projeto do teste. Nenhum fornecedor real é selecionado;
+nenhum teste é removido, relaxado ou marcado como skip. Serviços e seed ficam preservados.
+Revisão adversarial da correção verifica independência da ordem, isolamento do vínculo,
+ausência de aprovação/desembolso e preservação das asserções existentes.
+
+QA complementar no PostgreSQL novo da porta 55435, banco inicialmente vazio
+`rede_intelligence_test`, papel `rede_app`: Prisma validate/generate/status, deploy das
+33 migrations e seed aprovados. A suíte financeira executou sozinha imediatamente após
+deploy/seed: **15/15 testes aprovados**, antes de qualquer outra suíte. Rodada focal:
+**71/71 testes em 5 arquivos**; suíte completa: **1.044/1.044 testes em 121 arquivos**,
+264,96 s, sem skip, exit 0 em `2026-09-07T23:39:57.756Z`.
+TypeScript e ESLint aprovados. Build aprovado, exit 0 em `2026-09-07T23:44:32.624Z`,
+28 páginas, BUILD_ID `qDcQRkyITERmsDdiM3jIR`. `git diff --check` aprovado.
+Manifesto privado: `work/9p4-ci-correction-qa.json`; logs `work/9p4-ci-correction-*.log`.
+Migrations novas: zero. `.env`, schema, seed, migrations e `next-env.d.ts` preservados.
+Os bancos das portas 55432 e 55434 não recebem migrations, seed ou testes desta correção.
+
+Na preparação da retomada, foi realizado backup adicional de QA na porta 55434, sem alteração
+posterior do schema: `outputs/backups/2026-09-07T23-27-52-980Z-test_database_url/database.dump`,
+16.887.585 bytes, SHA-256 `989b5f6ea7c097c8ab189aee0d57a55f4106bfc0be2e5fd00e7f757c91eddd58`.
+Restore `rede_restore_3fd4f547b0894a23adaf347b4b9294a0`, validado em
+`2026-09-07T23:28:45.779Z`: 375 tabelas, 71.162 registros, origem estável e conteúdo equivalente.
+Não é evidência de backup produtivo nem de implementação da 9P.5.
+
+Git da correção: worktree aberto, sem commit/push. A implementação da 9P.5 aguarda o novo
+fechamento manual e CI da 9P.4, preservando a separação de fases.
+
+Veredito da correção: QA e revisão adversarial local pelo implementador aprovados.
+O gate externo continua reprovado no SHA publicado; somente um novo CI pode substituí-lo.

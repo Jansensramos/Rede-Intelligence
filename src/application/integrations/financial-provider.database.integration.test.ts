@@ -15,7 +15,16 @@ describe.sequential("9P.4 financial provider persistence and adversarial gates",
     const project = account.projectId ?? (await prisma.project.findFirstOrThrow({ where: { organizationId: context.organizationId, companyId: account.companyId } })).id;
     fixtures.BANK = { projectId: project, targetId: account.id };
     const sale = await prisma.salesProposal.findFirstOrThrow({ where: { organizationId: context.organizationId } }); fixtures.BUREAU = { projectId: sale.projectId, targetId: sale.customerId };
-    const funding = await prisma.fundingProposal.findFirstOrThrow({ where: { organizationId: context.organizationId } }); fixtures.FUNDING = { projectId: funding.projectId, targetId: funding.id };
+    // Seed intentionally has no funding proposal. Own this fixture instead of depending
+    // on another test file having run first (or on leftovers in the local QA database).
+    const funding = await prisma.fundingProposal.create({ data: {
+      organizationId: context.organizationId, projectId: project, createdById: context.userId,
+      code: `QA-9P4-${randomUUID()}`, providerName: "Simulação local 9P.4 — sem provedor",
+      kind: "OUTRO", amount: "100000.00", currency: "BRL", indexer: "PRE_FIXADO",
+      spreadRate: "0", annualNominalRate: "0", termMonths: 12, graceMonths: 0,
+      amortizationSystem: "SAC", status: "DRAFT",
+    } });
+    fixtures.FUNDING = { projectId: funding.projectId, targetId: funding.id };
   });
   afterAll(async () => { await prisma.integrationJob.updateMany({ where: { installationId: { in: installations }, status: { in: ["QUEUED", "RUNNING"] } }, data: { status: "CANCELLED" } }); await prisma.connectorInstallation.updateMany({ where: { id: { in: installations } }, data: { status: "PAUSED" } }); await prisma.$disconnect(); });
   async function installation(capability: "BANK" | "BUREAU" | "FUNDING" = "BANK", perMinute = 10) { const i = await createFinancialInstallation(context, { name: "Financial local QA", projectId: fixtures[capability].projectId, capability, retentionDays: 30 }); installations.push(i.id); await configureFinancialInstallation(context, i.id, { mode: "MOCK", capability, retentionDays: 30, perMinute }); return i.id; }
