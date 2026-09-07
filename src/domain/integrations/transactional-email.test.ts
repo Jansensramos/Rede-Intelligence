@@ -1,0 +1,13 @@
+import { describe, expect, it, vi } from "vitest";
+import { deliverEmail, emailConfiguration, emailInput, renderEmail } from "./transactional-email";
+const input = { idempotencyKey: "test_key_01", to: "qa@example.invalid", template: "NOTICE_V1", variables: { name: "<script>&", reference: "Estudo" } };
+describe("Transactional email local contract", () => {
+  it("renders immutable template versions and escapes HTML", () => { const r = renderEmail(input); expect(r.html).toContain("&lt;script&gt;&amp;"); expect(r.text).toContain("<script>&"); expect(renderEmail({ ...input, template: "APPROVAL_REQUIRED_V1" }).subject).toContain("humana"); });
+  it.each(["DISABLED", "REAL"] as const)("blocks %s before transport", async mode => { const send = vi.fn(); await expect(deliverEmail(mode, renderEmail(input), "key", new AbortController().signal, { kind: "LOCAL_SIMULATION", send })).rejects.toThrow(); expect(send).not.toHaveBeenCalled(); });
+  it("MOCK produces simulation only without fetch", async () => { const spy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("forbidden")); try { expect(await deliverEmail("MOCK", renderEmail(input), "key", new AbortController().signal)).toEqual({ disposition: "SIMULATED" }); expect(spy).not.toHaveBeenCalled(); } finally { spy.mockRestore(); } });
+  it("does not leak transport errors", async () => { await expect(deliverEmail("MOCK", renderEmail(input), "key", new AbortController().signal, { kind: "LOCAL_SIMULATION", send: async () => { throw new Error("private-secret-address"); } })).rejects.toThrow("EMAIL_TRANSPORT_FAILURE"); });
+  it("rejects unproven delivery receipts", async () => { await expect(deliverEmail("MOCK", renderEmail(input), "key", new AbortController().signal, { kind: "LOCAL_SIMULATION", send: async () => ({ disposition: "DELIVERED" as "SIMULATED" }) })).rejects.toThrow("EMAIL_INVALID_RECEIPT"); });
+  it("honors cancellation before transport", async () => { const c = new AbortController(); c.abort(); const send = vi.fn(); await expect(deliverEmail("MOCK", renderEmail(input), "key", c.signal, { kind: "LOCAL_SIMULATION", send })).rejects.toThrow(); expect(send).not.toHaveBeenCalled(); });
+  it.each([{ ...input, to: "a@b.com\r\nBcc:other@b.com" }, { ...input, template: "UNKNOWN" }, { ...input, variables: { name: "header\ninjection", reference: "r" } }, { ...input, credentials: "secret" }])("rejects invalid input %j", value => { expect(emailInput.safeParse(value).success).toBe(false); });
+  it("rejects fake REAL proof and unbounded rate configuration", () => { expect(emailConfiguration.safeParse({ mode: "REAL", verified: true }).success).toBe(false); expect(emailConfiguration.safeParse({ mode: "MOCK", perMinute: 100 }).success).toBe(false); });
+});

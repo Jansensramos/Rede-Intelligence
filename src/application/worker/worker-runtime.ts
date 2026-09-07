@@ -5,6 +5,8 @@ import type { RetryableErrorClass } from "@/domain/integrations";
 import { logger } from "@/infrastructure/observability/logger";
 import { dispatchJob } from "./job-dispatcher";
 import { DriveError } from "@/infrastructure/adapters/drive/google-drive";
+import { EMAIL_JOB, EmailError } from "@/domain/integrations/transactional-email";
+import { failEmailJob } from "@/application/integrations/transactional-email-service";
 import { ClicksignProviderError, type ClicksignEvidenceFailureReason, type ClicksignErrorClass } from "@/infrastructure/adapters/signature/clicksign-signature-provider";
 import { SignatureReconciliationError, type SignatureReconciliationFailureReason } from "@/domain/sales/signature-provider";
 
@@ -107,6 +109,12 @@ export class DurableWorker {
       await this.dependencies.complete(job.id, this.owner);
       logger.info("Job concluído.", { ...context, durationMs: Date.now() - startedAt, status: "succeeded" });
     } catch (error) {
+      if (job.jobType === EMAIL_JOB) {
+        const safe = error instanceof EmailError ? error : new EmailError("TRANSPORT_FAILURE", "NETWORK");
+        await failEmailJob(job, safe);
+        logger.error("E-mail local falhou.", { ...context, errorClass: safe.errorClass });
+        return;
+      }
       const message = error instanceof Error ? error.message : "Falha desconhecida.";
       if (error instanceof DriveError) {
         await this.dependencies.fail(job.id, error.errorClass, `${error.reason}; correlation=${error.correlationId}`, error.retryAfterMs);

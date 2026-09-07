@@ -191,3 +191,34 @@ HEAD `0efdc72ed57be33978a2d3a06b60905424313c0c`.
 O diff permanece exclusivamente da 9P.3B e seu checkpoint documental. Em cumprimento à
 regra de não acumular fases, a próxima implementação aguarda escrita Git efetiva e CI
 do checkpoint atual. Os resultados locais não são usados como substitutos do CI.
+
+## Publicação da 9P.3B e abertura da 9P.3C
+
+O usuário publicou `470933d67c16a0a090c24cbeefe97c9feefb7f43`. O GitHub Actions
+[34062682209](https://github.com/Jansensramos/Rede-Intelligence/actions/runs/34062682209)
+terminou com `success`, verificado nesta retomada. Isso supera o bloqueio histórico de
+publicação da 9P.3B acima, sem transformar seu smoke REAL em aprovado.
+
+A branch `codex/fase-9p3c-email-local` foi criada manualmente pelo usuário nessa base.
+Orientação atual: implementar e auditar somente a 9P.3C, sem commit/push pelo agente.
+O usuário realizará Git pelo PowerShell. Não avançar ou acumular a 9P.4 neste diff.
+
+Contrato local: `PHASE_9P3C_TRANSACTIONAL_EMAIL_CONTRACT.md`.
+QA e auditoria: `PHASE_9P3C_AUDIT_RECORD.md`.
+Provedor transacional permanece não escolhido. REAL fail-closed, credenciais e todos os
+smokes externos reservados à campanha final. Nenhuma evidência externa da 9P.3C produzida.
+
+### 9P.3C — fechamento local
+
+Implementados contratos provider-neutral, templates versionados, fila cifrada, idempotência
+por tenant/instalação, RBAC persistido, rate limit de simulação, retry/dead-letter auditados,
+fencing de lease/tentativa, actions e despacho pelo worker. REAL permanece fail-closed.
+
+QA conclusivo: 51/51 focais, 1.016/1.016 totais em 119 arquivos, Prisma, seed em banco vazio,
+TypeScript, ESLint, build e diff check aprovados. Nenhuma migration nova. Auditoria local
+aprovada, com achados e limites registrados em `PHASE_9P3C_AUDIT_RECORD.md`.
+
+Git: HEAD continua `470933d`, diff somente da 9P.3C, sem commit/push pelo agente.
+CI da 9P.3C aguarda publicação pelo usuário. Próxima fase na sequência: 9P.4, camadas locais
+de bancos/conciliação/funding/bureau, sem escolher sistemas de piloto ou executar APIs reais.
+Não iniciada neste diff; avanço após publicação e verificação do checkpoint atual.
