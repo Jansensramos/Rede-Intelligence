@@ -9,6 +9,8 @@ import { EMAIL_JOB, EmailError } from "@/domain/integrations/transactional-email
 import { failEmailJob } from "@/application/integrations/transactional-email-service";
 import { FINANCIAL_JOB, FinancialProviderError } from "@/domain/integrations/financial-provider";
 import { failFinancialJob } from "@/application/integrations/financial-provider-service";
+import { failEnterpriseJob } from "@/application/integrations/enterprise-provider-service";
+import { ENTERPRISE_JOB, EnterpriseError } from "@/domain/integrations/enterprise-provider";
 import { ClicksignProviderError, type ClicksignEvidenceFailureReason, type ClicksignErrorClass } from "@/infrastructure/adapters/signature/clicksign-signature-provider";
 import { SignatureReconciliationError, type SignatureReconciliationFailureReason } from "@/domain/sales/signature-provider";
 
@@ -111,6 +113,12 @@ export class DurableWorker {
       await this.dependencies.complete(job.id, this.owner);
       logger.info("Job concluído.", { ...context, durationMs: Date.now() - startedAt, status: "succeeded" });
     } catch (error) {
+      if (job.jobType === ENTERPRISE_JOB) {
+        const safe = error instanceof EnterpriseError ? error : new EnterpriseError("TRANSPORT_FAILURE", "NETWORK");
+        await failEnterpriseJob(job, safe);
+        logger.error("Conector empresarial local falhou.", { ...context, errorClass: safe.errorClass });
+        return;
+      }
       if (job.jobType === FINANCIAL_JOB) {
         const safe = error instanceof FinancialProviderError ? error : new FinancialProviderError("TRANSPORT_FAILURE", "NETWORK");
         await failFinancialJob(job, safe);

@@ -1,0 +1,6 @@
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from "node:crypto";
+import { EnterpriseError } from "@/domain/integrations/enterprise-provider";
+function key() { const secret = process.env.INTEGRATION_SECRET_KEY; if (!secret || secret.length < 32) throw new EnterpriseError("CONTENT_UNAVAILABLE"); return createHash("sha256").update(`enterprise-evidence-v1:${secret}`).digest(); }
+export function enterpriseDigest(value: unknown) { return createHmac("sha256", key()).update(JSON.stringify(value)).digest("hex"); }
+export function encryptEnterpriseEvidence(value: unknown, scope: string) { const iv = randomBytes(12); const cipher = createCipheriv("aes-256-gcm", key(), iv); cipher.setAAD(Buffer.from(scope)); return Buffer.concat([iv, cipher.update(JSON.stringify(value), "utf8"), cipher.final(), cipher.getAuthTag()]).toString("base64"); }
+export function decryptEnterpriseEvidence(value: string, scope: string): unknown { try { const bytes = Buffer.from(value, "base64"); const cipher = createDecipheriv("aes-256-gcm", key(), bytes.subarray(0, 12)); cipher.setAAD(Buffer.from(scope)); cipher.setAuthTag(bytes.subarray(-16)); return JSON.parse(Buffer.concat([cipher.update(bytes.subarray(12, -16)), cipher.final()]).toString("utf8")); } catch { throw new EnterpriseError("CONTENT_UNAVAILABLE"); } }

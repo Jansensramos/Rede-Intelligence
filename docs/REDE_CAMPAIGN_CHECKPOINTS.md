@@ -266,3 +266,34 @@ TypeScript, ESLint, build e diff check aprovados. Revisão adversarial local con
 Detalhes e limites em `PHASE_9P4_AUDIT_RECORD.md`.
 Não iniciar implementação da 9P.5 neste diff: o gate da 9P.4 precisa ser publicado pelo
 usuário e aprovado no CI. Nenhum commit/push pelo agente e nenhuma API real executada.
+
+## 9P.5 — ERP e CRM locais
+
+Retomada autorizada pelo usuário, que informou o CI corretivo da 9P.4 verde.
+Base atual: `c1511b71b7b1e760f95ff3447ecceb15168b020f`; branch fornecida:
+`codex/fase-9p5-local`. O conector GitHub não retornou execução para esse SHA;
+a confirmação do usuário é registrada como tal, com link independente pendente.
+Essa autorização supera a pausa histórica acima para a implementação local.
+
+Escopo: Relatório Mestre de 05/09/2026, Apêndice D, e contratos anteriores.
+Contrato: `PHASE_9P5_LOCAL_ENTERPRISE_CONTRACT.md`.
+QA, backup e auditoria: `PHASE_9P5_AUDIT_RECORD.md`.
+
+Camadas implementadas: dezesseis projeções sobre entidades existentes, ERP/CRM
+provider-neutral, instalação por tenant, RBAC persistido, crosswalk manual,
+fila com idempotência, cursor e quarentena cifrados, rate limit, retry/dead-letter,
+evidências e revisões imutáveis e expurgo auditado. Divergências não sobrescrevem
+dados oficiais. REAL permanece fail-closed; nenhum fornecedor foi selecionado.
+
+Uma migration aditiva após backup real restaurado e validado; migrations anteriores
+preservadas. Credenciais, chamadas, smokes e ajustes específicos de APIs externas
+permanecem para a campanha final. Não há evidência REAL nova neste checkpoint.
+
+QA local conclusivo aprovado: 97/97 focais, 1.098/1.098 totais em 123 arquivos,
+Prisma, deploy/seed efêmero, TypeScript, ESLint, build e `git diff --check`.
+Auditoria adversarial local pelo implementador concluída, com limites e histórico
+de correções registrados no relatório; não equivale a auditoria independente.
+
+Fechamento Git manual pelo usuário: nenhum commit ou push pelo agente. CI da 9P.5
+aguarda publicação. Próximo checkpoint na sequência: 9Q restante, sujeito ao seu
+contrato e aos gates do checkpoint atual; não iniciado nem acumulado neste diff.

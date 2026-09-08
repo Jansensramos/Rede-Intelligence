@@ -893,6 +893,7 @@ enum LegalFinancialEventStatus {
 }
 
 model Organization {
+  enterpriseSyncEvidence EnterpriseSyncEvidence[]
   financialProviderEvidence FinancialProviderEvidence[]
   id                              String                           @id @default(cuid())
   name                            String
@@ -1036,6 +1037,7 @@ model Organization {
 }
 
 model User {
+  enterpriseEvidenceReviews EnterpriseEvidenceReview[]
   id                               String                            @id @default(cuid())
   email                            String                            @unique
   name                             String
@@ -9518,6 +9520,7 @@ model ConnectorDefinition {
 }
 
 model ConnectorInstallation {
+  enterpriseSyncEvidence EnterpriseSyncEvidence[]
   financialProviderEvidence FinancialProviderEvidence[]
   id                    String                       @id @default(cuid())
   organizationId        String                       @map("organization_id")
@@ -9630,6 +9633,8 @@ model DataOwnershipPolicy {
 }
 
 model ExternalEntityReference {
+  enterpriseSourceKey String? @map("enterprise_source_key")
+  enterpriseSyncEvidence EnterpriseSyncEvidence[]
   id                 String                       @id @default(cuid())
   organizationId     String                       @map("organization_id")
   installationId     String                       @map("installation_id")
@@ -9648,6 +9653,7 @@ model ExternalEntityReference {
   documentReferences ConnectorDocumentReference[]
 
   @@unique([installationId, externalType, externalId])
+  @@unique([organizationId, enterpriseSourceKey, externalType, externalId], map: "enterprise_crosswalk_source_key")
   @@index([organizationId, entityType, entityId])
   @@map("external_entity_references")
 }
@@ -9843,6 +9849,7 @@ model EventCatalogEntry {
 }
 
 model IntegrationJob {
+  enterpriseSyncEvidence EnterpriseSyncEvidence[]
   id             String                 @id @default(cuid())
   organizationId String                 @map("organization_id")
   installationId String?                @map("installation_id")
@@ -12205,6 +12212,43 @@ model LaunchDecision {
   @@unique([organizationId, projectId, checksum], map: "launch_decisions_org_project_checksum_key")
   @@index([organizationId, projectId, decidedAt], map: "launch_decisions_org_project_decided_idx")
   @@map("launch_decisions")
+}
+
+// 9P.5: immutable local enterprise evidence and human review.
+model EnterpriseSyncEvidence {
+  id String @id
+  organizationId String @map("organization_id")
+  installationId String @map("installation_id")
+  jobId String @map("job_id")
+  referenceId String @map("reference_id")
+  versionHash String @map("version_hash")
+  contentHash String @map("content_hash")
+  localHash String @map("local_hash")
+  encryptedPayload String @map("encrypted_payload") @db.Text
+  divergent Boolean
+  simulated Boolean @default(true)
+  recordedAt DateTime @default(now()) @map("recorded_at")
+  expiresAt DateTime @map("expires_at")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  installation ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  job IntegrationJob @relation(fields: [jobId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reference ExternalEntityReference @relation(fields: [referenceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  review EnterpriseEvidenceReview?
+  @@unique([installationId, referenceId, versionHash], map: "enterprise_evidence_version_key")
+  @@index([organizationId, installationId, expiresAt], map: "enterprise_evidence_retention_idx")
+  @@map("enterprise_sync_evidence")
+}
+
+model EnterpriseEvidenceReview {
+  id String @id
+  organizationId String @map("organization_id")
+  evidenceId String @unique @map("evidence_id")
+  userId String @map("user_id")
+  decision String
+  recordedAt DateTime @default(now()) @map("recorded_at")
+  evidence EnterpriseSyncEvidence @relation(fields: [evidenceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@map("enterprise_evidence_reviews")
 }
 
 // 9P.4: immutable local evidence, removable only after retention expires.
