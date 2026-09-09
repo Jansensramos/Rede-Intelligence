@@ -297,3 +297,32 @@ de correções registrados no relatório; não equivale a auditoria independente
 Fechamento Git manual pelo usuário: nenhum commit ou push pelo agente. CI da 9P.5
 aguarda publicação. Próximo checkpoint na sequência: 9Q restante, sujeito ao seu
 contrato e aos gates do checkpoint atual; não iniciado nem acumulado neste diff.
+
+## 9Q.2A — Release Readiness Local
+
+Base publicada da 9P.5: `52543782609db50d65313e08f74d6b9b961e88e9`.
+GitHub Actions [34228347883](https://github.com/Jansensramos/Rede-Intelligence/actions/runs/34228347883)
+confirmado com success. Branch fornecida: `codex/fase-9q2a-release-readiness-local`.
+A ordem de serviço do usuário define esta divisão formal: 9Q.2A local agora;
+9Q.2B para cloud e APIs reais ao final. Não se declara a 9Q.2 integral concluída.
+
+Contrato e arquitetura: `PHASE_9Q2A_LOCAL_RELEASE_CONTRACT.md`.
+Runbooks: `PHASE_9Q2A_OPERATIONS_RUNBOOK.md`.
+Implantação e onboarding: `PHASE_9Q2A_PILOT_ONBOARDING_PLAN.md`.
+Segurança, QA e evidências: `PHASE_9Q2A_SECURITY_QA_RECORD.md`.
+
+Camadas locais: predeploy automatizado, manifesto de migrations e superfícies,
+identidade segura, health/readiness, bloqueio produtivo, métricas por tenant,
+Manual Online, ajuda contextual e confirmações auditadas de onboarding.
+Nenhuma migration nova; schema e migrations anteriores preservados. Backup de QA
+restaurado em banco isolado e seed em outro banco vazio efetivamente executados.
+
+QA final: 179/179 focais em 14 arquivos; 1.130/1.130 na suíte oficial em 127
+arquivos; Prisma, migration status, seed efêmero, TypeScript, ESLint, build de
+28 páginas, predeploy, 14 checks HTTP locais, CSP e `git diff --check` aprovados.
+Um resíduo de função temporária de teste do Drive foi encontrado em rodada intermediária;
+o setup tornou-se idempotente e todas as repetições finais passaram. Auditoria local
+concluída sem bloqueador no escopo 9Q.2A; não equivale a validação independente ou REAL.
+
+Commit e push permanecem exclusivamente manuais pelo usuário. Nenhuma fase posterior
+foi iniciada. Cloud, credenciais, smokes e integrações reais seguem pendentes da 9Q.2B.

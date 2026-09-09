@@ -47,6 +47,7 @@ import { ECOSYSTEM_ENTRIES, HELP_ENTRY, OPERATIONAL_AREAS, type OperationalArea 
 import type { OperationalContext } from "@/application/workspace/operational-context";
 import type { ContextOptionGroup } from "@/application/workspace/context-options";
 import { canAccessWorkspacePath } from "@/domain/auth/read-capabilities";
+import { contextualHelp } from "@/domain/release/manual";
 
 const AREA_ICONS: Record<string, typeof LayoutDashboard> = {
   "gestao-executiva": LayoutDashboard,
@@ -185,6 +186,7 @@ export function WorkspaceShell({
             <strong>{context.project?.name ?? "—"}</strong>
           </div>
           <div className="topbar-actions">
+            {contextualHelp(pathname) && <Link href={`/ajuda#${contextualHelp(pathname)!.id}`}>Ajuda desta tela</Link>}
             <span className="engine-chip"><i /> ENGINE v1.0</span>
           </div>
         </header>

@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 
 // No credentials in arguments or output. Restore only into a newly created database;
 // never replace, reset or drop an existing database.
+try {
 if (existsSync(".env")) process.loadEnvFile(".env");
 const key = process.argv[2] ?? "DATABASE_URL";
 if (!["DATABASE_URL", "TEST_DATABASE_URL"].includes(key)) throw new Error("Unsupported database selector.");
@@ -20,9 +21,8 @@ function run(tool, args, databaseName = database, administrative = false) {
   const credentials = administrative && process.env.BACKUP_ADMIN_USER && process.env.BACKUP_ADMIN_PASSWORD
     ? { PGUSER: process.env.BACKUP_ADMIN_USER, PGPASSWORD: process.env.BACKUP_ADMIN_PASSWORD } : {};
   try { return execFileSync(join(bin, `${tool}.exe`), args, { env: { ...env, ...credentials, PGDATABASE: databaseName }, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }); }
-  catch (error) {
-    const detail = String(error.stderr ?? error.code ?? "unavailable").replaceAll(env.PGPASSWORD || "\0", "[REDACTED]").replaceAll(process.env.BACKUP_ADMIN_PASSWORD || "\0", "[REDACTED]");
-    throw new Error(`Local backup failed at ${tool}; no migration is authorized by this result. ${detail}`);
+  catch {
+    throw new Error(`Local backup failed at ${tool}; no migration is authorized by this result. Diagnostic details withheld.`);
   }
 }
 function sql(query, databaseName = database) { return run("psql", ["-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", query], databaseName).trim(); }
@@ -53,3 +53,7 @@ const report = { startedWith: key, database, restoreDatabase, createdAt: new Dat
 writeFileSync(join(directory, "verification.json"), JSON.stringify(report, null, 2) + "\n");
 if (!valid) throw new Error("Backup restore verification failed or the source changed. Migration remains blocked.");
 console.log(JSON.stringify({ ...report, tables: undefined }));
+} catch {
+  console.error("Backup local recusado. Nenhuma migration autorizada; confira o ambiente e os artefatos privados. Valores e detalhes do banco foram omitidos.");
+  process.exitCode = 1;
+}

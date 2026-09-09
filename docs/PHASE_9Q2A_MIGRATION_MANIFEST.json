@@ -1,0 +1,172 @@
+[
+  {
+    "name": "20260817135000_persistent_multi_tenant_foundation",
+    "checksum": "cc1aa7c95c407494cf21424e7db0f9f2420e1309462384f85c314a95024f15a9",
+    "windowsChecksum": "d32de552d9834af78c8b10ab4edbe589cb5b0b6566ea0229808383702ab2c517"
+  },
+  {
+    "name": "20260817141500_draft_snapshot_policies_alerts",
+    "checksum": "cc85606e36c60d173f0f407c2a29c51d9869aa3f896d6d5d464c49ff584392e8",
+    "windowsChecksum": "c4fe36a584f6925c2e69d15b40300762ba10501953ebb0d3070e6ecf058d0e46"
+  },
+  {
+    "name": "20260817144500_rede_score_sensitivity",
+    "checksum": "ce1944434fb7d330999e6a35c9745090e3cb35ebc19f9f7029a1e501d77a637d",
+    "windowsChecksum": "25a4aecef4e7b1a1f6911ce760a998eac00c879187d7d7f7aaea4773e705b69d"
+  },
+  {
+    "name": "20260817153000_rede_red_team_v1",
+    "checksum": "fcdd326d7421d575276a6f6745c9e7f7fa865648866178dc69784506c759b3b9",
+    "windowsChecksum": "54302af240b92b4add50f92839307ffb8216a0dcd2f0b3fae275dbba063b8687"
+  },
+  {
+    "name": "20260817153100_red_team_queued_default",
+    "checksum": "de955f877c137650c9ffc1e4d9ef648e0c1ae9c751fc105462b5b7f214740daa",
+    "windowsChecksum": "a884837db2a2396456e0a4872ec68a10e9a0cadb7bc4ed99aa7b3b71a9e33255"
+  },
+  {
+    "name": "20260817201500_rede_land_intelligence",
+    "checksum": "13df07eb9595b96235724ed6f61d9133fa35eb7f55499c7dbe7688fbeabccf75",
+    "windowsChecksum": "b700769c1dd653e7d3e0b5d39c04d2bd7f12d65cbc5b52cae2d1d5cd8683d86e"
+  },
+  {
+    "name": "20260817230000_rede_studio_committee_master_report",
+    "checksum": "b7f464048af12d8d9b648a8a55f17b79fb9ca9ba3e3faca803a5dea441fbc16e",
+    "windowsChecksum": "8a69fa7997337c622e52221759e43b677b2adf9f123fcb99ecc7d858ba8d3176"
+  },
+  {
+    "name": "20260818000000_rede_ai",
+    "checksum": "e565002f2826515e27c14990a6ab44f378a5222b497f3c4c17dc569c715acdbd",
+    "windowsChecksum": "c0eb5a76e2a0ce6e98c0d0c922c4b30c9caf5ebf9285379444804ae72ad70a5f"
+  },
+  {
+    "name": "20260818030000_rede_design_intelligence",
+    "checksum": "853908b95b9df992f2a35271abdb47b087aa95111487b3aacac7eb6002ecb454",
+    "windowsChecksum": "d51b4506a40e5f51aaa47cb2b07734631f01b770622397ba01c2e86bb8c5ffff"
+  },
+  {
+    "name": "20260818031000_design_ai_source",
+    "checksum": "89ab3188f0212c105fba2d5c9de786c5941a93e0079c256b4101bf5dffbf0b3e",
+    "windowsChecksum": "d287988a8c5d7f1aa1ca0740cd2ee6522b00d9073f0d77bd82e99ea7f22f8d80"
+  },
+  {
+    "name": "20260818032000_design_review_report",
+    "checksum": "5b3b2f81108d7aed0abf1bb925f736a29dde2740525f0993cdf16070a5b70b28",
+    "windowsChecksum": "b6f28e44713ad2b3c24f089e7ee95c78118feb0ed368200b83ea7c5c70de7074"
+  },
+  {
+    "name": "20260820145324_budget_persistence",
+    "checksum": "f607fce34da445e34a03af1f4722e19e9deb212fa4eb829c4aae28b7df897a56",
+    "windowsChecksum": "485b51d346492a6dbb4144699fe06764bfcb274938cfba096508a81a814bd3a8"
+  },
+  {
+    "name": "20260820161313_bim_geometry_viewer_clashes",
+    "checksum": "f3ad3c39d02772a9e472fd9321fef2ca3b78ced14f365ffa159f52d5280079dc",
+    "windowsChecksum": "4367ef8a2edb9a35b1adc4cdfdcf77e128841fc691d35a38ff25ca4a191b9bb1"
+  },
+  {
+    "name": "20260820171908_phase_9a_operations_base",
+    "checksum": "be11c41cac75d2a698e427ed3591a594f54ee12e6474aa781055152386cb747b",
+    "windowsChecksum": "9bd17124d1b82f82b592282579f914ab44ef29f613244cf7f78c63539322a4fb"
+  },
+  {
+    "name": "20260820180000_phase_9b_financial_foundation",
+    "checksum": "42498484a5b824d8e449e0355d07b107a69f789c846152b55174499560daa111",
+    "windowsChecksum": "65011e8230434cc2badffba31fe39cd86205c0c39128453494182e1dc5ad3f0f"
+  },
+  {
+    "name": "20260820233000_phase_9c_procurement_contracts_measurements",
+    "checksum": "aceafac3bab7a103b4d508635d2f58981497f259a991713f1be23ea539512f57",
+    "windowsChecksum": "a896afdf8ff2762ee3f556a6aca542e7f5c4ab5939911f400436ba71997a73e7"
+  },
+  {
+    "name": "20260821140000_phase_9d_legal_due_diligence_obligations",
+    "checksum": "c9da24b1f0722ef28e69536a3069f8d159b4aec41e945d237f675b3dee30ef59",
+    "windowsChecksum": "9ab3980fe9082d2c122dd531a77b7fae9c3b4b21c7d9e835d9c38df301e12098"
+  },
+  {
+    "name": "20260822120000_phase_9e_sales_customers_receivables_postsales",
+    "checksum": "fbd17b77296be07316af636e1668592dcc23e2a84906eb706e2457a08ec3e4fe",
+    "windowsChecksum": "7f3e1619a9cfb722db30df5f177e5e4acdecbf57428d0955cfcf1fc91d603022"
+  },
+  {
+    "name": "20260822153439_phase_9h_integrations_connectors",
+    "checksum": "f6753ebfbdd92718f6d856beca91c126232bc2df0e3ac543cdf7432e7e67474b",
+    "windowsChecksum": "1fccd8e50a4c77b1541b08b0c890e2ede86b7a128850edb9d3a3325baa49914c"
+  },
+  {
+    "name": "20260822182538_phase_9h_resilience_api_foundation",
+    "checksum": "42e30382bba7ba295b20799c00b386a564bfb4c88bb5fb265308ecd228144469",
+    "windowsChecksum": "a68eb33d82bb8a32ef31e1df991167d5e597eb87276de3207adbabe539f99c14"
+  },
+  {
+    "name": "20260822183000_phase_9f_people_efficiency_root_cause",
+    "checksum": "f6f94e71f450f810c2febef17ccb5dc5440c06bdf3f92e86b4bf5bae904f935e",
+    "windowsChecksum": "d4599976ca6eeabd93d905c8d627c86550c147f28a5fa0aa49735237fa0c8e3c"
+  },
+  {
+    "name": "20260822220000_phase_9g_accounting_tax_controllership",
+    "checksum": "1679bae20cae01c905da96d53cddbc427af67872b5b89da830ac082dfcda5720",
+    "windowsChecksum": "266b04c09b7ffa0144e5282dfa3b7e23ad57d9ad74d913148b4878f34843b027"
+  },
+  {
+    "name": "20260822230000_phase_9i_rede_data_portfolio_intelligence",
+    "checksum": "09081ef2252e09764d457d8554dab687f3d2f29be8f41fab383c281c854248dc",
+    "windowsChecksum": "d548782a45dc0010ab86365c851cd434b259c97c02384eec1eaafd2f0d948f54"
+  },
+  {
+    "name": "20260823000000_phase_9i_bim_compositions_dataset_foundation",
+    "checksum": "164725a48012f8f9222e402a98c098bc46e2b28f4e2acf3be89dd3a65369b0fe",
+    "windowsChecksum": "26b33e8a85a6a74297bf1969e5fc0b568623b4fe9adc8ee7f6c2a7c4b2f30568"
+  },
+  {
+    "name": "20260824140000_phase_9j_market_product_intelligence",
+    "checksum": "6f67a0503f79be0ef3907c0031e6b9a7c69e1fb882a23e776ccb73367256d6b3",
+    "windowsChecksum": "7b0ef19353e14031b30eec77c60b3ee74d6c3a01e7fa125f09c6660183dfee98"
+  },
+  {
+    "name": "20260825120000_phase_9k_commercial_closing",
+    "checksum": "f405fc4a0ec1658446696750a0da9152827a73c036675af8213e1277bfa19d9d",
+    "windowsChecksum": "016988e2c903456be657d89eda0022717216bb7ad88e5b11a4c52ae59d509d19"
+  },
+  {
+    "name": "20260826150000_phase_9n_capital_funding_intelligence_proposal",
+    "checksum": "c37d4be08baa11a62acd0766742e6a00ce1efbacd7b87e2ea8b8919e1f4d93ee",
+    "windowsChecksum": "5da75cc75ed227a8836c3186044f57ff421f0d61b85491c63f74473f6f1c9ca4"
+  },
+  {
+    "name": "20260827120000_phase_9m_engineering_auto_budget_proposal",
+    "checksum": "31ee846dbb3fd248991317f41f9937b42049c45700fe1a084c495e824a184005",
+    "windowsChecksum": "c5fde5912c03225c00c0c1aa27150096d084f45864ca910ba94b25b13b2e8a78"
+  },
+  {
+    "name": "20260828110000_phase_9o_macro_launch_intelligence",
+    "checksum": "60db33ae43758543dd90fbaea1dd3cc8d6c5b2153f6c035fb8ccc3920c0428cf",
+    "windowsChecksum": "0e9e205e102cdf70b965c628f19ec337dad968fe4e31d49eba87eaca2240f59d"
+  },
+  {
+    "name": "20260901120000_phase_9q1b_session_tenant_rbac",
+    "checksum": "a726af2f947f58a447770c3b47ab6570e13014ecdb2ccc16e93d84e65e00beb4",
+    "windowsChecksum": "10f27377f4504d43099d43ff329afc3a1928ae26479592cef84d0ecb7cd6d31a"
+  },
+  {
+    "name": "20260905220000_phase_9p3a_immutable_signature_evidence",
+    "checksum": "476cc1db5eb51ecd7b8a70475e069de3e7e4a080b5f3666c443e962a297fb834",
+    "windowsChecksum": "c3abaa8b61caeeb6b10c07a8164480f2934c61d7742421ac30643340f9e2e4ff"
+  },
+  {
+    "name": "20260906120000_phase_9p3b_drive_versions",
+    "checksum": "e36428716ef259e638af1ef8245738acb68a235ab653f48a4d49dbcc1eaa2c4c",
+    "windowsChecksum": "6ab06aaf2ab6041d90502f78b137a63791a665d29eb01f677d4232171e8141d7"
+  },
+  {
+    "name": "20260907123000_phase_9p4_local_financial_evidence",
+    "checksum": "cb6ca15797abc10f5a0bd6b901510f058ecf90e4ee02944d1b1d3ec42f9487c1",
+    "windowsChecksum": "b0ab3352c88852a2a4bdd48c7be7a35ab5fa09b3b631389051ad64c4a733b425"
+  },
+  {
+    "name": "20260908001500_phase_9p5_enterprise_evidence",
+    "checksum": "5cb444edf1ea3ee0639621bce4a9799b6df7ae38758a5836d3d0812c84fb6b98",
+    "windowsChecksum": "9485fe6494a297192a1e802bfffcba96a77395aad9abebad624b8543c83952fd"
+  }
+]

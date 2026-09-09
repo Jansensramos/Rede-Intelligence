@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predeploy:local": "node --import ./scripts/patch-node-os.mjs --import tsx scripts/predeploy-local.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

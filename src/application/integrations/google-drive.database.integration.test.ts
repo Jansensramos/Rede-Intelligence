@@ -52,6 +52,9 @@ describe.sequential("Google Drive 9P.3B — durable scoped synchronization", () 
   });
   it("rolls back a failed page and its cursor, then resumes without lost or duplicate versions", async () => {
     const id = await installed();
+    // An interrupted local run must not poison the next isolated QA execution.
+    await prisma.$executeRawUnsafe("DROP TRIGGER IF EXISTS drive_qa_reject ON drive_document_versions");
+    await prisma.$executeRawUnsafe("DROP FUNCTION IF EXISTS drive_qa_reject()");
     await prisma.$executeRawUnsafe("CREATE FUNCTION drive_qa_reject() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.external_file_id = 'reject-drive-page' THEN RAISE EXCEPTION 'controlled QA failure'; END IF; RETURN NEW; END $$");
     await prisma.$executeRawUnsafe("CREATE TRIGGER drive_qa_reject BEFORE INSERT ON drive_document_versions FOR EACH ROW EXECUTE FUNCTION drive_qa_reject()");
     const pages = [{ startPageToken: "start" }, { files: [file(), file("reject-drive-page")] }, { changes: [], newStartPageToken: "end" }];
@@ -61,7 +64,7 @@ describe.sequential("Google Drive 9P.3B — durable scoped synchronization", () 
       expect(await prisma.driveDocumentVersion.count({ where: { installationId: id } })).toBe(0);
       expect(await prisma.connectorDocumentReference.count({ where: { installationId: id } })).toBe(0);
       expect(await prisma.integrationCursor.count({ where: { installationId: id, capability: "GOOGLE_DRIVE_DOCUMENTS" } })).toBe(0);
-    } finally { await prisma.$executeRawUnsafe("DROP TRIGGER drive_qa_reject ON drive_document_versions"); await prisma.$executeRawUnsafe("DROP FUNCTION drive_qa_reject()"); }
+    } finally { await prisma.$executeRawUnsafe("DROP TRIGGER IF EXISTS drive_qa_reject ON drive_document_versions"); await prisma.$executeRawUnsafe("DROP FUNCTION IF EXISTS drive_qa_reject()"); }
     calls.mockRestore(); api([...pages]); await syncGoogleDriveInstallation(context, id);
     expect(await prisma.driveDocumentVersion.count({ where: { installationId: id } })).toBe(2);
   });

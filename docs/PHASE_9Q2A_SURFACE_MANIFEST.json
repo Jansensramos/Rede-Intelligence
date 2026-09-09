@@ -1,0 +1,142 @@
+[
+  {
+    "path": "src/app/actions/ai.ts",
+    "sha256": "50ab4dcbbc964b727bdc9cd1525524dc47972645c80b0d9fd882ee4fca54ff4e"
+  },
+  {
+    "path": "src/app/actions/auth.ts",
+    "sha256": "8646a04a2fcc9c10400199450bbc21826a5d09b9e0418002eef2eebfc0c0411c"
+  },
+  {
+    "path": "src/app/actions/authorization.ts",
+    "sha256": "01d2f7da48466a467dcb846453debc78e2b586042b263909699d8342b90579b0"
+  },
+  {
+    "path": "src/app/actions/capital.ts",
+    "sha256": "5dbf1d1f2cde36479764738ba975f11564781e7fa7449cf2f4eb8d8c09ae6c24"
+  },
+  {
+    "path": "src/app/actions/design.ts",
+    "sha256": "05e8e8e6044245f2362fba88bf3d58eba52bd5dc7c8a7f252d5edb63c530feba"
+  },
+  {
+    "path": "src/app/actions/engineering.ts",
+    "sha256": "c4c460903785ce29f6679dd76ce13eb33d1998772722c32beabf41bf5bb9f71d"
+  },
+  {
+    "path": "src/app/actions/enterprise-provider.ts",
+    "sha256": "08e53929c53ddd8f92429610fbabe6fcb9edcd370d9d1af9809aaf9332b710a8"
+  },
+  {
+    "path": "src/app/actions/executive-insights.ts",
+    "sha256": "97e4c6c41ac6d8d5f2b4e012d066a6ec5010a87ab4b94f761858308a3a00f6a4"
+  },
+  {
+    "path": "src/app/actions/financial-provider.ts",
+    "sha256": "b36710e72d55fe3ae5b964b1831f4d57ebd385ac1ce5c926c3621d08092010d5"
+  },
+  {
+    "path": "src/app/actions/financial.ts",
+    "sha256": "e9201fa37aa338c6013799bf1f95720026538a345e6bad278002c72aa5b5ad57"
+  },
+  {
+    "path": "src/app/actions/google-drive.ts",
+    "sha256": "9a3160ca1f72db7c70eb5c4ee0c9c823fe7a460f65d1ce9b0d1f037f3cc1b9ab"
+  },
+  {
+    "path": "src/app/actions/integrations.ts",
+    "sha256": "458fe0fba0b7b17b0b61af2b9073f6f73511d31ad97aca43ec1b86d24aff1153"
+  },
+  {
+    "path": "src/app/actions/investment.ts",
+    "sha256": "fce70b26874b94c7237746f4113b5040ce6b2e19b0ab3fa0efb93efaa77016d3"
+  },
+  {
+    "path": "src/app/actions/land.ts",
+    "sha256": "af300418f68b5e5efc4620f9bc7b0c3900f7a07fc4be4bb29a905c75ca6ba610"
+  },
+  {
+    "path": "src/app/actions/launch-intelligence.ts",
+    "sha256": "95b3f8cd84795db465cb524c5b2a7b092647d52558976141c4a74d639cbe2c6d"
+  },
+  {
+    "path": "src/app/actions/market-product.ts",
+    "sha256": "034fc7dea1c06532852299b9a3f8829c2ebfc5a0d6cb77ddece3756a1b152b18"
+  },
+  {
+    "path": "src/app/actions/operations.ts",
+    "sha256": "6dfcc76bbf0d2c8d23ea0f5a9bbaed1039f18909c20081ab568357b7500305ff"
+  },
+  {
+    "path": "src/app/actions/procurement.ts",
+    "sha256": "a70c570799c681f6abbcff9fd9ca7e222765a5bf9ae27f094007c7ca87dd3efb"
+  },
+  {
+    "path": "src/app/actions/studies.ts",
+    "sha256": "6af2349d47f298537ff40200547134da8d3a04a4877358bd1235788598bfd957"
+  },
+  {
+    "path": "src/app/actions/transactional-email.ts",
+    "sha256": "b5e539998b45a310a87b5079363ca5c26667a8876b81a4450eb441643cf9e8cf"
+  },
+  {
+    "path": "src/app/actions/workspace-context.ts",
+    "sha256": "76a867f37e64632591d189f1177f543e1090acd77bcc7cac67f6b4f55227df25"
+  },
+  {
+    "path": "src/app/actions/workspace-loader.ts",
+    "sha256": "84ab2ffb371dccc5244d908d483a80af05c44c49d18d2f32ee4fd9a37e9bb220"
+  },
+  {
+    "path": "src/app/api/ai/chat/route.ts",
+    "sha256": "c14558802e9178256b29836d8b254576382e4f6b079a5689d4ed32e6a527c6cf"
+  },
+  {
+    "path": "src/app/api/budgets/[id]/items/[itemId]/route.ts",
+    "sha256": "dd2a1cbfa1d05e9a2d65d8eb7c547911c65c5f946dacb77c4b1536b429777177"
+  },
+  {
+    "path": "src/app/api/budgets/[id]/route.ts",
+    "sha256": "c6c264d3f61c1a4629479381549a673c91ec712c397ce4572fb35fedb8c49a59"
+  },
+  {
+    "path": "src/app/api/budgets/[id]/summary/route.ts",
+    "sha256": "03802ea95914ec73089f73b577b12285ad0fc72e0837db635b3e673aa0c6ae37"
+  },
+  {
+    "path": "src/app/api/budgets/route.ts",
+    "sha256": "b0ffe4c377753a49444f65d162e8b4039a079c0d574e60783fe4857d568a7374"
+  },
+  {
+    "path": "src/app/api/design/bim/[modelId]/geometry/route.ts",
+    "sha256": "e288a5cc241740193243eb15de13c3d0889fd70cd9668d23b20a3fda352dbcb3"
+  },
+  {
+    "path": "src/app/api/design/bim/[modelId]/route.ts",
+    "sha256": "0cd04fcd3f4208a4efae6d3ed2110c1af3f8ed20f2662012ecf31d41726df38e"
+  },
+  {
+    "path": "src/app/api/design/files/[fileId]/route.ts",
+    "sha256": "2997e452e9f9b35e5d25557ac5f31300190e8c30f1f7bca14b62ca7f896d50ce"
+  },
+  {
+    "path": "src/app/api/health/live/route.ts",
+    "sha256": "308ac5f24f57e0d9fb6491fc28846593344e85b0ae91e4a74c7c6bb7af6ace87"
+  },
+  {
+    "path": "src/app/api/health/ready/route.ts",
+    "sha256": "ab69b71f11d905a3bfb788bfd4c1de35708d97e827ef7843bd0c5e2af97d5088"
+  },
+  {
+    "path": "src/app/api/v1/integrations/installations/route.ts",
+    "sha256": "73b36fea9cb5613178c5240c22441908126d79813ab285b893e741ed886af391"
+  },
+  {
+    "path": "src/app/api/v1/integrations/sync-requests/route.ts",
+    "sha256": "22b160b5816742e7ab83d2fecb7e6f361666371b63f513434f36426c25c7badf"
+  },
+  {
+    "path": "src/app/api/webhooks/clicksign/[installationId]/route.ts",
+    "sha256": "04198df258e3b6fd503000125c36cd258818157d37955680eaadc91b0bdb7045"
+  }
+]

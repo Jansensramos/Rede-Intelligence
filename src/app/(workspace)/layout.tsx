@@ -27,6 +27,7 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
   ]);
 
   if (!context.project) {
+    if (pathname === "/ajuda" || pathname.startsWith("/ajuda/")) return <main className="workspace" style={{ marginLeft: 0 }}>{children}</main>;
     return (
       <div className="app-shell app-shell-empty">
         <main className="workspace" style={{ marginLeft: 0, display: "grid", placeItems: "center", minHeight: "100vh" }}>
