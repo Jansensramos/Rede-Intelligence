@@ -27,6 +27,8 @@ describe("seleção do cofre por ambiente", () => {
       SECRETS_MANAGER_PREFIX: "rede/teste",
       SECRETS_MANAGER_PREFLIGHT_SECRET_ID: "referencia-preflight",
       KMS_KEY_ID: "referencia-kms",
+      ALERTING_PROVIDER: "external",
+      ALERTING_EXTERNAL_ENDPOINT: "https://alerts.example.invalid/webhook",
     });
     const createAdapter = vi.fn(() => ({
       create: vi.fn(async () => "referencia"),

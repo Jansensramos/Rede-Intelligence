@@ -25,7 +25,7 @@ describe("storage privado tenant-safe", () => {
   });
 
   it("separa provider local de produção", () => {
-    const local = createStorageProvider({ NODE_ENV: "test", DATABASE_URL: "postgresql://test", SESSION_COOKIE_NAME: "rede", TRUSTED_PROXY_HOPS: 0, STORAGE_PROVIDER: "local", STORAGE_FORCE_PATH_STYLE: "false", STORAGE_SIGNED_URL_TTL_SECONDS: 300, MALWARE_SCANNER_PROVIDER: "noop", SECRET_PROVIDER: "environment", KMS_PROVIDER: "local", WORKER_CONCURRENCY: 1, WORKER_POLL_MS: 100, WORKER_LEASE_MS: 5000, WORKER_JOB_TIMEOUT_MS: 1000 });
+    const local = createStorageProvider({ NODE_ENV: "test", DATABASE_URL: "postgresql://test", SESSION_COOKIE_NAME: "rede", TRUSTED_PROXY_HOPS: 0, STORAGE_PROVIDER: "local", STORAGE_FORCE_PATH_STYLE: "false", STORAGE_SIGNED_URL_TTL_SECONDS: 300, MALWARE_SCANNER_PROVIDER: "noop", SECRET_PROVIDER: "environment", KMS_PROVIDER: "local", ALERTING_PROVIDER: "local", WORKER_CONCURRENCY: 1, WORKER_POLL_MS: 100, WORKER_LEASE_MS: 5000, WORKER_JOB_TIMEOUT_MS: 1000 });
     expect(local).toBeInstanceOf(LocalStorageProvider);
   });
 });

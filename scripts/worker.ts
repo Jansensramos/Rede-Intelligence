@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { DurableWorker } from "../src/application/worker/worker-runtime";
 import { prisma } from "../src/infrastructure/database/prisma";
@@ -5,6 +6,7 @@ import { logger } from "../src/infrastructure/observability/logger";
 import { parseRuntimeConfig } from "../src/infrastructure/config/runtime-config";
 import { configurationChecks } from "../src/domain/release/local-readiness";
 import { localDatabaseReleaseCheck } from "../src/application/release/local-readiness-service";
+import { emitOperationalAlert } from "../src/application/observability/operational-alerts";
 
 const positiveInt = (name: string, fallback: number) => {
   const parsed = Number(process.env[name] ?? fallback);
@@ -48,6 +50,9 @@ async function main() {
 
 main().catch(async (error) => {
   logger.error("Worker encerrado por falha fatal.", { component: "worker", event: "fatal", error });
+  // Falha fatal do processo inteiro, não de um tenant específico — best-effort, nunca
+  // atrasa o encerramento (bounded pelo timeout do transporte).
+  await emitOperationalAlert({ category: "WORKER_FATAL", severity: "critical", code: error instanceof Error ? error.name : "UnknownError", organizationId: "SYSTEM", correlationId: randomUUID() }).catch(() => undefined);
   await prisma.$disconnect();
   process.exitCode = 1;
 });

@@ -1,9 +1,11 @@
 import { createHash, createHmac, randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/infrastructure/database/prisma";
 import { integrationSecretVault } from "@/infrastructure/security/secret-vault";
 import type { ClicksignHttpRequest } from "@/infrastructure/adapters/signature/clicksign-signature-provider";
 import { clicksignProviderForOrganization, configureClicksignInstallation, receiveClicksignWebhook } from "./clicksign-service";
+import { setOperationalAlertReporterForTests } from "@/application/observability/operational-alerts";
+import type { ErrorReporterProvider } from "@/infrastructure/observability/providers";
 
 const token = randomUUID().slice(0, 8);
 const secret = `webhook-${token}`;
@@ -39,13 +41,23 @@ describe.skipIf(!process.env.DATABASE_URL).sequential("Clicksign 9P.3A — webho
     [primaryInstallationId, otherInstallationId] = installationIds;
   });
 
+  // Determinístico mesmo entre execuções: nunca depende de a suíte inteira ter terminado
+  // sem falha. `SignatureReconciliationEvidence` referencia esta instalação e o inbox
+  // event de origem com `onDelete: Restrict` (evidência de assinatura, propositalmente
+  // imutável) — deletar a instalação pode falhar por design quando um teste anterior
+  // já reconciliou uma assinatura. Em vez de apagar (o que violaria ou dependeria de
+  // violar essa proteção), a instalação é sempre pausada primeiro — isso por si só já
+  // garante que nenhuma execução futura de `clicksignProviderForOrganization`
+  // (que filtra por `status: "ACTIVE"`) volte a enxergá-la. A limpeza dos filhos sem
+  // proteção de evidência é best-effort, cada um isolado, sem interromper os demais.
   afterAll(async () => {
     try {
-      await prisma.integrationJob.deleteMany({ where: { installationId: { in: installationIds } } });
-      await prisma.integrationQuarantineItem.deleteMany({ where: { installationId: { in: installationIds } } });
-      await prisma.integrationInboxEvent.deleteMany({ where: { installationId: { in: installationIds } } });
-      await prisma.credentialReference.deleteMany({ where: { installationId: { in: installationIds } } });
-      await prisma.connectorInstallation.deleteMany({ where: { id: { in: installationIds } } });
+      await prisma.connectorInstallation.updateMany({ where: { id: { in: installationIds } }, data: { status: "PAUSED" } });
+      await prisma.integrationJob.deleteMany({ where: { installationId: { in: installationIds } } }).catch(() => undefined);
+      await prisma.integrationQuarantineItem.deleteMany({ where: { installationId: { in: installationIds } } }).catch(() => undefined);
+      await prisma.integrationInboxEvent.deleteMany({ where: { installationId: { in: installationIds } } }).catch(() => undefined);
+      await prisma.credentialReference.deleteMany({ where: { installationId: { in: installationIds } } }).catch(() => undefined);
+      await prisma.connectorInstallation.deleteMany({ where: { id: { in: installationIds } } }).catch(() => undefined);
       for (const reference of secretRefs) await integrationSecretVault.revoke(reference);
     } finally { await prisma.$disconnect(); }
   });
@@ -71,13 +83,21 @@ describe.skipIf(!process.env.DATABASE_URL).sequential("Clicksign 9P.3A — webho
     expect(await prisma.integrationJob.count({ where: { installationId: primaryInstallationId, jobType: "PROCESS_SIGNATURE_WEBHOOK", payload: { path: ["inboxEventId"], equals: first.inboxEventId } } })).toBe(1);
   });
 
-  it("mesmo eventId com payload diferente é preservado em quarentena", async () => {
-    const eventId = `conflict-${token}`;
-    const first = webhook(eventId, "env-a");
-    const changed = webhook(eventId, "env-b");
-    await receiveClicksignWebhook({ installationId: primaryInstallationId, rawBody: first, signature: signature(first) });
-    await expect(receiveClicksignWebhook({ installationId: primaryInstallationId, rawBody: changed, signature: signature(changed) })).resolves.toMatchObject({ status: "CONFLICT" });
-    expect(await prisma.integrationQuarantineItem.count({ where: { installationId: primaryInstallationId, externalId: `duplicate:${eventId}` } })).toBe(1);
+  it("mesmo eventId com payload diferente é preservado em quarentena e emite exatamente um alerta operacional", async () => {
+    const capture = vi.fn<(error: unknown, context?: Record<string, unknown>) => Promise<void>>(async () => undefined);
+    setOperationalAlertReporterForTests({ capture } as unknown as ErrorReporterProvider);
+    try {
+      const eventId = `conflict-${token}`;
+      const first = webhook(eventId, "env-a");
+      const changed = webhook(eventId, "env-b");
+      await receiveClicksignWebhook({ installationId: primaryInstallationId, rawBody: first, signature: signature(first) });
+      await expect(receiveClicksignWebhook({ installationId: primaryInstallationId, rawBody: changed, signature: signature(changed) })).resolves.toMatchObject({ status: "CONFLICT" });
+      expect(await prisma.integrationQuarantineItem.count({ where: { installationId: primaryInstallationId, externalId: `duplicate:${eventId}` } })).toBe(1);
+      expect(capture).toHaveBeenCalledOnce();
+      expect(capture.mock.calls[0][1]).toMatchObject({ category: "QUARANTINE", severity: "warning" });
+    } finally {
+      setOperationalAlertReporterForTests(undefined);
+    }
   });
 
   it("resolve tenant exclusivamente pela instalação do servidor", async () => {
@@ -101,8 +121,13 @@ describe.skipIf(!process.env.DATABASE_URL).sequential("Clicksign 9P.3A — webho
 
   it("REAL sem instalação/configuração válida falha fechado", async () => {
     await prisma.connectorInstallation.update({ where: { id: primaryInstallationId }, data: { status: "PAUSED" } });
-    await expect(clicksignProviderForOrganization(organizationId, { request: async () => { throw new Error("não deve chamar"); } })).rejects.toThrow("não encontrada ou indisponível");
-    await prisma.connectorInstallation.update({ where: { id: primaryInstallationId }, data: { status: "ACTIVE" } });
+    try {
+      await expect(clicksignProviderForOrganization(organizationId, { request: async () => { throw new Error("não deve chamar"); } })).rejects.toThrow("não encontrada ou indisponível");
+    } finally {
+      // Reset determinístico mesmo se a asserção acima falhar — a instalação nunca deve
+      // ficar PAUSED para os testes seguintes deste arquivo por causa desta asserção.
+      await prisma.connectorInstallation.update({ where: { id: primaryInstallationId }, data: { status: "ACTIVE" } });
+    }
   });
 
   it("resolve credencial no vault e reconcilia pelo provider composto preservando a validação do adaptador", async () => {

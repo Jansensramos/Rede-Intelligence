@@ -10,6 +10,7 @@ import {
   type FieldMappingRule,
   type ImportFormat,
 } from "@/domain/integrations";
+import { emitOperationalAlert } from "@/application/observability/operational-alerts";
 
 type IntegrationContext = Pick<AuthContext, "organizationId" | "userId" | "role">;
 const json = (value: unknown) => value as Prisma.InputJsonValue;
@@ -73,6 +74,11 @@ export async function importUniversalFile(context: IntegrationContext, input: {
     where: { id: run.id },
     data: { status, finishedAt: new Date(), itemsRead: parseReport.rows.length, itemsApplied: applied, itemsErrored: errored },
   });
+  // Um alerta por importação (não um por linha rejeitada) — evita tempestade quando
+  // muitas linhas do mesmo arquivo caem em quarentena.
+  if (errored > 0) {
+    await emitOperationalAlert({ category: "QUARANTINE", severity: "warning", code: `IMPORT:${input.capability}`, organizationId: context.organizationId, correlationId });
+  }
   await prisma.auditLog.create({
     data: { organizationId: context.organizationId, userId: context.userId, projectId: installation.projectId, action: "UNIVERSAL_IMPORT_COMPLETED", entityType: "IntegrationSyncRun", entityId: run.id, after: json({ format: input.format, applied, errored, status: finished.status }) },
   });

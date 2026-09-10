@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { validateDocumentUpload } from "./upload-validation";
 
 export interface MalwareScannerProvider {
   readonly name?: string;
@@ -23,9 +24,10 @@ export function createMalwareScanner(environment = process.env.NODE_ENV, provide
   return new NoopDevelopmentScanner();
 }
 
-export async function inspectUpload(input: { bytes: Uint8Array; fileName: string; scanner?: MalwareScannerProvider }) {
+export async function inspectUpload(input: { bytes: Uint8Array; fileName: string; mimeType?: string; scanner?: MalwareScannerProvider }) {
+  if (input.mimeType !== undefined) validateDocumentUpload({ fileName: input.fileName, mimeType: input.mimeType, bytes: input.bytes });
   const checksum = createHash("sha256").update(input.bytes).digest("hex");
-  const result = await (input.scanner ?? createMalwareScanner()).scan({ ...input, checksum });
+  const result = await (input.scanner ?? createMalwareScanner()).scan({ bytes: input.bytes, fileName: input.fileName, checksum });
   if (!result.clean) throw new Error("Arquivo rejeitado pela política de segurança.");
   return { checksum, scanner: result.reason ?? "verificado" };
 }

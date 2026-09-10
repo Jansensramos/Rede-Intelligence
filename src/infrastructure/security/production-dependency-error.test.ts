@@ -23,6 +23,9 @@ describe("classificação segura de falhas de dependências de produção", () =
     ["falha HTTP 503", providerError("ProviderError", { $metadata: { httpStatusCode: 503 } }), "SERVICE_UNAVAILABLE"],
     ["falha de transporte", providerError("Error", { code: "ECONNREFUSED" }), "SERVICE_UNAVAILABLE"],
     ["falha desconhecida", providerError("ProviderFailure"), "UNEXPECTED"],
+    ["HTTP 401 (credencial ausente/inválida)", providerError("AlertTransportError", { statusCode: 401 }), "MISSING_CREDENTIALS"],
+    ["HTTP 408 (timeout)", providerError("AlertTransportError", { statusCode: 408 }), "TIMEOUT"],
+    ["HTTP 429 (throttling/indisponibilidade transitória)", providerError("AlertTransportError", { statusCode: 429 }), "SERVICE_UNAVAILABLE"],
   ])("classifica %s sem ler a mensagem", (_label, error, expected) => {
     expect(classifyProductionDependencyFailure(error).kind).toBe(expected);
   });

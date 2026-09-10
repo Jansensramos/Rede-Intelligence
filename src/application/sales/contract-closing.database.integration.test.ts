@@ -358,6 +358,38 @@ describe.skipIf(!process.env.DATABASE_URL).sequential("Fase 9K.4 — Fechamento 
     expect(await prisma.signatureReconciliationEvidence.count({ where: { requestId: request.id } })).toBe(2);
   });
 
+  // Achado da reauditoria 9Q.2B (item 9): claimNextJob reivindica de novo qualquer job
+  // RUNNING cuja lease expirou ("recuperação de worker morto", job-runner.ts) — se um
+  // worker cair depois de quarentenar o inbox mas antes de completar o job, o mesmo job
+  // é reexecutado. Sem o guard de status terminal em processClicksignWebhookJob, a
+  // segunda execução duplicaria o IntegrationQuarantineItem.
+  it("idempotência: reprocessar um job já QUARANTINED não duplica o item de quarentena", async () => {
+    const definition = await prisma.connectorDefinition.findUniqueOrThrow({ where: { code: "CLICKSIGN_API_V3" } });
+    await prisma.connectorInstallation.update({ where: { id: connectorInstallationId }, data: { connectorDefinitionId: definition.id } });
+    const eventId = `synthetic-orphan-${randomUUID()}`;
+    const inbox = await prisma.integrationInboxEvent.create({ data: {
+      organizationId: context.organizationId, installationId: connectorInstallationId, provider: "CLICKSIGN",
+      signatureValid: true, eventId, payloadChecksum: "synthetic-checksum",
+      // envelopeId deliberadamente sem ExternalEntityReference correspondente — força
+      // o handler a cair no ramo de quarentena ("Envelope não pertence a uma
+      // solicitação desta instalação"), não no caminho de sucesso.
+      payload: { eventId, eventType: "ENVELOPE_CLOSED", envelopeId: `envelope-orfao-${eventId}`, signerId: null, occurredAt: null },
+    } });
+    const job = await prisma.integrationJob.create({ data: { organizationId: context.organizationId, installationId: connectorInstallationId, jobType: "PROCESS_SIGNATURE_WEBHOOK", payload: { inboxEventId: inbox.id }, correlationId: randomUUID() } });
+    const quarantineWhere = { installationId: connectorInstallationId, capability: "CLICKSIGN_SIGNATURE_WEBHOOK", externalId: eventId };
+
+    await clicksignService.processClicksignWebhookJob(job); // não lança — vira quarentena
+    expect(await prisma.integrationInboxEvent.findUniqueOrThrow({ where: { id: inbox.id } })).toMatchObject({ status: "QUARANTINED" });
+    expect(await prisma.integrationQuarantineItem.count({ where: quarantineWhere })).toBe(1);
+
+    // Redelivery simulada (o mesmo job, reexecutado como faria claimNextJob após lease
+    // expirada) — precisa ser idempotente: nenhum item novo, nenhum erro.
+    await clicksignService.processClicksignWebhookJob(job);
+    await clicksignService.processClicksignWebhookJob(job);
+    expect(await prisma.integrationQuarantineItem.count({ where: quarantineWhere })).toBe(1);
+    expect(await prisma.integrationInboxEvent.findUniqueOrThrow({ where: { id: inbox.id } })).toMatchObject({ status: "QUARANTINED" });
+  });
+
   it("evidência rejeita vínculo relacional cruzado sem alterar dados históricos", async () => {
     const request = await makeClicksignRequest("cross-proof");
     const other = await makeClicksignRequest("cross-proof-other");

@@ -570,7 +570,7 @@ export async function verifyInvestmentCondition(context: Pick<AuthContext, "user
 export async function registerProjectDocument(context: Pick<AuthContext, "userId" | "organizationId">, input: { investmentCaseId: string; checklistItemId: string | null; category: DataRoomCategory; title: string; fileName: string; mimeType: string; content: Uint8Array; confidentiality: "PUBLIC_INTERNAL" | "CONFIDENTIAL" | "STRICTLY_CONFIDENTIAL"; source?: string }) {
   const caseRow = await prisma.investmentCase.findFirst({ where: { id: input.investmentCaseId, organizationId: context.organizationId } });
   if (!caseRow) throw new Error("Investment Case não encontrado nesta organização.");
-  await inspectUpload({ bytes: input.content, fileName: input.fileName });
+  await inspectUpload({ bytes: input.content, fileName: input.fileName, mimeType: input.mimeType });
   const previous = await prisma.projectDocument.findFirst({ where: { investmentCaseId: caseRow.id, category: input.category, title: input.title }, orderBy: { version: "desc" } });
   const documentId = randomUUID();
   const version = (previous?.version ?? 0) + 1;

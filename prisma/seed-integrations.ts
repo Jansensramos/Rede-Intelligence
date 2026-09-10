@@ -97,6 +97,11 @@ export async function seedIntegrationsDemo(prisma: PrismaClient, input: SeedInte
   const driveConnector = new MockGoogleDriveConnector(driveFiles);
   const existingDriveRun = await prisma.integrationSyncRun.findFirst({ where: { installationId: driveInstallation.id, status: { in: ["SUCCEEDED", "PARTIAL"] } } });
   if (!existingDriveRun) await runConnectorSync(context, driveInstallation.id, { mode: "FULL", capability: "DOCUMENTS", connector: driveConnector });
+  // Reseed sobre um banco de teste não-efêmero (execução repetida sem recriar o banco):
+  // não repete o sync (evitaria duplicar DriveFile/versão), mas atualiza `lastSyncAt`
+  // para que a checagem de freshness (janela de 24h) não fique obsoleta pela idade do
+  // seed original, não pela saúde real da instalação.
+  else await prisma.connectorInstallation.update({ where: { id: driveInstallation.id }, data: { lastSyncAt: new Date() } });
   const driveSyncRun = await prisma.integrationSyncRun.findFirstOrThrow({ where: { installationId: driveInstallation.id }, orderBy: { startedAt: "desc" } });
 
   // Webhook duplicado deve ter efeito único (Caso Crítico B) — mesma chamada duas vezes, uma linha só.

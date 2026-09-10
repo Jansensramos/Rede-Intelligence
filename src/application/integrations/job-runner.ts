@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma, type IntegrationJob, type IntegrationJobStatus, type JobPriority } from "@prisma/client";
 import { prisma } from "@/infrastructure/database/prisma";
 import { decideRetry, type RetryableErrorClass } from "@/domain/integrations";
+import { emitOperationalAlert } from "@/application/observability/operational-alerts";
 
 const json = (value: unknown) => value as Prisma.InputJsonValue;
 
@@ -130,6 +131,8 @@ export async function failJob(jobId: string, errorClass: RetryableErrorClass, me
     prisma.integrationJob.update({ where: { id: jobId }, data: { status: "DEAD_LETTER", finishedAt: new Date(), lastError: message, leaseOwner: null, leaseExpiresAt: null } }),
     prisma.integrationDeadLetter.create({ data: { organizationId: job.organizationId, sourceType: "JOB", sourceId: job.id, installationId: job.installationId, reason: message, errorClass, payload: job.payload ?? undefined } }),
   ]);
+  // Emitido só depois do commit acima — falha do alerta nunca desfaz o dead-letter já persistido.
+  await emitOperationalAlert({ category: "DEAD_LETTER", severity: "critical", code: `${job.jobType}:${errorClass}`, organizationId: job.organizationId, correlationId: job.correlationId ?? job.id });
   return { action: "DEAD_LETTER" };
 }
 

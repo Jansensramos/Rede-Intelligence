@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { assertNotArchivedDatabase } from "../../../scripts/database-url-safety.mjs";
 
 const environmentSchema = z.enum(["development", "test", "production"]);
 
@@ -26,6 +27,8 @@ const baseSchema = z.object({
   SECRETS_MANAGER_PREFIX: z.string().min(1).max(200).optional(),
   SECRETS_MANAGER_PREFLIGHT_SECRET_ID: z.string().min(1).max(512).optional(),
   KMS_KEY_ID: z.string().min(1).max(2048).optional(),
+  ALERTING_PROVIDER: z.enum(["local", "external"]).default("local"),
+  ALERTING_EXTERNAL_ENDPOINT: z.string().url().optional(),
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(4),
   WORKER_POLL_MS: z.coerce.number().int().min(100).max(60_000).default(1000),
   WORKER_LEASE_MS: z.coerce.number().int().min(5_000).max(900_000).default(30_000),
@@ -49,6 +52,8 @@ function productionIssues(config: RuntimeConfig) {
   for (const key of ["AWS_REGION", "SECRETS_MANAGER_PREFIX", "SECRETS_MANAGER_PREFLIGHT_SECRET_ID", "KMS_KEY_ID"] as const) {
     if (!config[key]) missing.push(key);
   }
+  if (config.ALERTING_PROVIDER !== "external") missing.push("ALERTING_PROVIDER=external");
+  if (!config.ALERTING_EXTERNAL_ENDPOINT) missing.push("ALERTING_EXTERNAL_ENDPOINT");
   return missing;
 }
 
@@ -58,6 +63,10 @@ export function parseRuntimeConfig(environment: Record<string, string | undefine
     const names = [...new Set(result.error.issues.map((issue) => issue.path.join(".") || "configuração"))];
     throw new Error(`Configuração inválida: ${names.join(", ")}. Valores não foram exibidos.`);
   }
+  // Bloqueia DATABASE_URL apontando para um banco arquivado antes de qualquer outra
+  // etapa de boot (web, worker, preflight) — achado Bloqueador da reauditoria 9Q.2B:
+  // esta checagem antes só existia para TEST_DATABASE_URL.
+  assertNotArchivedDatabase(result.data.DATABASE_URL, "DATABASE_URL");
   if (result.data.NODE_ENV === "production") {
     const missing = productionIssues(result.data);
     if (missing.length) throw new Error(`Configuração de produção incompleta: ${missing.join(", ")}. Valores não foram exibidos.`);

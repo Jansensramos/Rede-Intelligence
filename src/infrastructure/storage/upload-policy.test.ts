@@ -18,4 +18,14 @@ describe("fundação segura de uploads", () => {
     expect(() => validateDesignUpload({ fileName: "ata.pdf", mimeType: "application/pdf", bytes: new Uint8Array([1, 2]) })).toThrow(/incompatível/);
     await expect(inspectUpload({ fileName: "x.pdf", bytes: new Uint8Array([1]), scanner: { scan: async () => ({ clean: false, reason: "assinatura interna" }) } })).rejects.toThrow("Arquivo rejeitado pela política de segurança.");
   });
+
+  it("quando mimeType é informado, aplica validação de MIME/extensão/assinatura antes do scanner", async () => {
+    const exeBytes = new Uint8Array([0x4d, 0x5a, 0x90, 0x00]);
+    await expect(inspectUpload({ fileName: "fatura.pdf", mimeType: "application/pdf", bytes: exeBytes })).rejects.toThrow(/executável/);
+  });
+
+  it("sem mimeType, preserva o comportamento anterior (compatibilidade com validateDesignUpload já aplicado a montante)", async () => {
+    const bytes = new TextEncoder().encode("ISO-10303-21");
+    await expect(inspectUpload({ fileName: "modelo.ifc", bytes })).resolves.toMatchObject({ checksum: expect.any(String) });
+  });
 });

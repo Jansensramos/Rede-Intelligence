@@ -11,6 +11,7 @@ import {
 import { createKmsProvider, createSecretProvider } from "@/infrastructure/security/secret-provider";
 import { storageProvider } from "@/infrastructure/storage/storage-provider";
 import { createMalwareScanner } from "@/infrastructure/storage/upload-policy";
+import { checkAlertingHealth } from "@/infrastructure/observability/alert-dispatcher";
 
 export type PreflightFailureKind = ProductionDependencyFailureKind;
 export interface ProductionDependencyDiagnostic {
@@ -33,6 +34,7 @@ export interface ProductionPreflightDependencies {
   secretManager(config: RuntimeConfig): Promise<void>;
   kms(config: RuntimeConfig): Promise<void>;
   malwareScanner(): Promise<void>;
+  alerting(config: RuntimeConfig): Promise<void>;
 }
 
 function defaultDependencies(): ProductionPreflightDependencies {
@@ -52,6 +54,7 @@ function defaultDependencies(): ProductionPreflightDependencies {
         );
       }
     },
+    alerting: async (config) => { await checkAlertingHealth(config); },
   };
 }
 
@@ -83,6 +86,7 @@ export async function runProductionPreflight(
     ["SECRET_PROVIDER", () => services.secretManager(config)],
     ["KMS_PROVIDER", () => services.kms(config)],
     ["MALWARE_SCANNER_PROVIDER", services.malwareScanner],
+    ["ALERTING_PROVIDER", () => services.alerting(config)],
   ];
   const unavailableServices: string[] = [];
   const checkedServices: string[] = [];

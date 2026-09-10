@@ -114,11 +114,16 @@ function classifySingle(error: unknown): ProductionDependencyFailureClassificati
   if (typed) return typed;
   const names = identifiers(error);
   const usefulClass = errorClass(error);
-  if (names.some((name) => CREDENTIAL_ERRORS.has(name))) return { kind: "MISSING_CREDENTIALS", errorClass: usefulClass };
-  if (names.some((name) => PERMISSION_ERRORS.has(name)) || httpStatus(error) === 403) return { kind: "PERMISSION_DENIED", errorClass: usefulClass };
-  if (names.some((name) => TIMEOUT_ERRORS.has(name))) return { kind: "TIMEOUT", errorClass: usefulClass };
   const status = httpStatus(error);
-  if (names.some((name) => UNAVAILABLE_ERRORS.has(name)) || (status !== undefined && status >= 500 && status <= 599)) {
+  // 401 = credencial ausente/inválida; 403 = credencial válida sem permissão. Tratados
+  // como falhas permanentes (não elegíveis a retry automático) pela mesma razão que os
+  // nomes correspondentes já são.
+  if (names.some((name) => CREDENTIAL_ERRORS.has(name)) || status === 401) return { kind: "MISSING_CREDENTIALS", errorClass: usefulClass };
+  if (names.some((name) => PERMISSION_ERRORS.has(name)) || status === 403) return { kind: "PERMISSION_DENIED", errorClass: usefulClass };
+  if (names.some((name) => TIMEOUT_ERRORS.has(name)) || status === 408) return { kind: "TIMEOUT", errorClass: usefulClass };
+  // 429 (Too Many Requests) é indisponibilidade transitória, não permissão — mesma
+  // categoria de 5xx e dos nomes de throttling já mapeados.
+  if (names.some((name) => UNAVAILABLE_ERRORS.has(name)) || status === 429 || (status !== undefined && status >= 500 && status <= 599)) {
     return { kind: "SERVICE_UNAVAILABLE", errorClass: usefulClass };
   }
   return undefined;

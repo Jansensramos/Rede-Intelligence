@@ -8,6 +8,7 @@ import type { SignatureProvider } from "@/domain/sales/signature-provider";
 import { assertIntegrationCapability } from "@/domain/integrations";
 import { applyProviderRateLimitSignal, checkAndConsumeRateLimit, checkCircuitBreakerGate, recordCircuitBreakerOutcome } from "@/application/integrations/resilience-service";
 import { cancelSignatureRequestFromProvider, completeRealSignatureRequest, markSignatureError, recordPartyDeclined, recordPartySigned } from "./signature-service";
+import { emitOperationalAlert } from "@/application/observability/operational-alerts";
 
 const json = (value: unknown) => value as Prisma.InputJsonValue;
 export const CLICKSIGN_WEBHOOK_MAX_BYTES = 1024 * 1024;
@@ -173,11 +174,14 @@ async function quarantineDuplicateConflict(input: { organizationId: string; inst
   const externalId = `duplicate:${input.event.eventId}`;
   const existing = await prisma.integrationQuarantineItem.findFirst({ where: { installationId: input.installationId, capability: "CLICKSIGN_SIGNATURE_WEBHOOK", externalId } });
   if (existing) return existing;
-  return prisma.integrationQuarantineItem.create({ data: {
+  const created = await prisma.integrationQuarantineItem.create({ data: {
     organizationId: input.organizationId, installationId: input.installationId, capability: "CLICKSIGN_SIGNATURE_WEBHOOK",
     externalType: input.event.eventType, externalId, reason: "Mesmo eventId recebido com conteúdo diferente.", errorClass: "CONFLICT",
     payload: json({ eventId: input.event.eventId, envelopeId: input.event.envelopeId }),
   } });
+  // Emitido só depois do commit acima — a criação já é a transição, não há retry aqui.
+  await emitOperationalAlert({ category: "QUARANTINE", severity: "warning", code: "CLICKSIGN_SIGNATURE_WEBHOOK:CONFLICT", organizationId: input.organizationId, correlationId: created.id });
+  return created;
 }
 
 export async function receiveClicksignWebhook(input: { installationId: string; rawBody: Uint8Array; signature: string | null }) {
@@ -213,11 +217,12 @@ export async function receiveClicksignWebhook(input: { installationId: string; r
 }
 
 async function quarantineUnknown(job: IntegrationJob, event: NormalizedClicksignWebhook, reason: string) {
-  await prisma.integrationQuarantineItem.create({ data: {
+  const created = await prisma.integrationQuarantineItem.create({ data: {
     organizationId: job.organizationId, installationId: job.installationId!, capability: "CLICKSIGN_SIGNATURE_WEBHOOK",
     externalType: event.eventType, externalId: event.eventId, reason, errorClass: "MAPPING",
     payload: json({ eventId: event.eventId, envelopeId: event.envelopeId }),
   } });
+  await emitOperationalAlert({ category: "QUARANTINE", severity: "warning", code: "CLICKSIGN_SIGNATURE_WEBHOOK:MAPPING", organizationId: job.organizationId, correlationId: job.correlationId ?? created.id });
 }
 
 async function quarantineAndMark(job: IntegrationJob, inboxId: string, event: NormalizedClicksignWebhook, reason: string) {
@@ -232,7 +237,17 @@ export async function processClicksignWebhookJob(job: IntegrationJob) {
   if (!inboxEventId) throw new Error("Job Clicksign sem inboxEventId.");
   const inbox = await prisma.integrationInboxEvent.findFirst({ where: { id: inboxEventId, organizationId: job.organizationId, installationId: job.installationId, provider: CLICKSIGN_PROVIDER, signatureValid: true } });
   if (!inbox || !inbox.payload) throw new Error("Evento Clicksign não encontrado no tenant do job.");
-  if (inbox.status === "PROCESSED") return;
+  // Idempotência para redelivery do job-runner (achado da reauditoria 9Q.2B, item 9):
+  // `claimNextJob` reivindica de novo qualquer job RUNNING cuja lease expirou —
+  // "recuperação de worker morto" é um cenário real, não hipotético (job-runner.ts). Se
+  // o worker anterior já tiver chegado a QUARANTINED (via `quarantineAndMark` abaixo)
+  // mas caído antes de `completeJob`, o job é reexecutado; sem este check, a segunda
+  // execução chamaria `quarantineAndMark` de novo e duplicaria o IntegrationQuarantineItem
+  // (quarantineUnknown não tem — e não precisa de — proteção find-before-create própria:
+  // basta nunca reexecutar a lógica de negócio depois que o inbox event já chegou a um
+  // status terminal). PROCESSED e QUARANTINED são os dois únicos status terminais que
+  // este handler produz (linha ~273 e dentro de quarantineAndMark).
+  if (inbox.status === "PROCESSED" || inbox.status === "QUARANTINED") return;
   const event = inbox.payload as unknown as NormalizedClicksignWebhook;
   const reference = await prisma.externalEntityReference.findFirst({ where: {
     organizationId: job.organizationId, installationId: job.installationId, externalType: "CLICKSIGN_ENVELOPE", externalId: event.envelopeId, entityType: "SignatureRequest",

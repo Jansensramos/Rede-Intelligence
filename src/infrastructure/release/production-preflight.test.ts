@@ -21,6 +21,8 @@ const validEnvironment = () => ({
   SECRETS_MANAGER_PREFIX: "rede/teste",
   SECRETS_MANAGER_PREFLIGHT_SECRET_ID: "referencia-preflight",
   KMS_KEY_ID: "referencia-kms",
+  ALERTING_PROVIDER: "external",
+  ALERTING_EXTERNAL_ENDPOINT: "https://alerts.example.invalid/webhook",
 });
 
 function doubles(): ProductionPreflightDependencies {
@@ -30,6 +32,7 @@ function doubles(): ProductionPreflightDependencies {
     secretManager: vi.fn(async () => undefined),
     kms: vi.fn(async () => undefined),
     malwareScanner: vi.fn(async () => undefined),
+    alerting: vi.fn(async () => undefined),
   };
 }
 
@@ -38,7 +41,7 @@ describe("preflight de produção", () => {
     const dependencies = doubles();
     const result = await runProductionPreflight(validEnvironment(), dependencies);
     expect(result.ok).toBe(true);
-    expect(result.checkedServices).toHaveLength(5);
+    expect(result.checkedServices).toHaveLength(6);
     expect(result.dependencyFailures).toEqual([]);
     expect(Object.values(dependencies).every((dependency) => vi.mocked(dependency).mock.calls.length === 1)).toBe(true);
   });
@@ -110,4 +113,30 @@ describe("preflight de produção", () => {
     expect(result.unavailableServices).toEqual([]);
     expect(result.dependencyFailures).toEqual([{ service: "KMS_PROVIDER", kind: "INVALID_CONFIGURATION", errorClass: "ConfigurationError" }]);
   });
+
+  it("reprova alerting inválido isoladamente (destino externo indisponível não derruba as demais dependências)", async () => {
+    const dependencies = doubles();
+    vi.mocked(dependencies.alerting).mockRejectedValueOnce(
+      new ProductionDependencyError("ALERTING_PROVIDER", "SERVICE_UNAVAILABLE", "AlertTransportError", "Destino de alerta indisponível."),
+    );
+    const result = await runProductionPreflight(validEnvironment(), dependencies);
+    expect(result.ok).toBe(false);
+    expect(result.unavailableServices).toEqual(["ALERTING_PROVIDER"]);
+    expect(result.dependencyFailures).toEqual([{ service: "ALERTING_PROVIDER", kind: "SERVICE_UNAVAILABLE", errorClass: "AlertTransportError" }]);
+    expect(result.checkedServices).toEqual(["DATABASE_URL", "STORAGE_PROVIDER", "SECRET_PROVIDER", "KMS_PROVIDER", "MALWARE_SCANNER_PROVIDER"]);
+  });
+
+  it.each(["DATABASE_URL", "STORAGE_PROVIDER", "SECRET_PROVIDER", "KMS_PROVIDER", "MALWARE_SCANNER_PROVIDER", "ALERTING_PROVIDER"] as const)(
+    "reprova %s isoladamente sem depender do sucesso das outras cinco dependências",
+    async (service) => {
+      const key = ({ DATABASE_URL: "database", STORAGE_PROVIDER: "storage", SECRET_PROVIDER: "secretManager", KMS_PROVIDER: "kms", MALWARE_SCANNER_PROVIDER: "malwareScanner", ALERTING_PROVIDER: "alerting" } as const satisfies Record<typeof service, keyof ProductionPreflightDependencies>)[service];
+      const dependencies = doubles();
+      vi.mocked(dependencies[key]).mockRejectedValueOnce(new Error("indisponível"));
+      const result = await runProductionPreflight(validEnvironment(), dependencies);
+      expect(result.ok).toBe(false);
+      expect(result.dependencyFailures.map((failure) => failure.service)).toEqual([service]);
+      expect(result.checkedServices).not.toContain(service);
+      expect(result.checkedServices).toHaveLength(5);
+    },
+  );
 });

@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { assertNotArchivedDatabase } from "./database-url-safety.mjs";
 
 // No credentials in arguments or output. Restore only into a newly created database;
 // never replace, reset or drop an existing database.
@@ -12,6 +13,13 @@ if (!["DATABASE_URL", "TEST_DATABASE_URL"].includes(key)) throw new Error("Unsup
 const url = new URL(process.env[key]);
 if (!["127.0.0.1", "localhost"].includes(url.hostname)) throw new Error("This backup command is restricted to the local PostgreSQL instance.");
 const database = decodeURIComponent(url.pathname.slice(1));
+// Bancos arquivados existem só para auditoria (ex.: rede_intelligence_test_archived_*);
+// nunca são alvo válido de backup/restore desta ferramenta. Usa a mesma política
+// central do runtime/worker/preflight (scripts/database-url-safety.mjs) — achado alto
+// da reauditoria 9Q.2B: esta checagem antes era uma cópia local duplicada, mais fraca
+// (só bloqueava a palavra exata "archived", não "archive"/"archival"), e podia divergir
+// silenciosamente do guard real usado pelo resto do sistema.
+assertNotArchivedDatabase(process.env[key], key);
 const restoreDatabase = `rede_restore_${randomUUID().replaceAll("-", "")}`;
 const directory = resolve("outputs", "backups", `${new Date().toISOString().replaceAll(/[:.]/g, "-")}-${key.toLowerCase()}`);
 mkdirSync(directory, { recursive: true });

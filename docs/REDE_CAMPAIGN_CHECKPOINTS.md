@@ -326,3 +326,332 @@ concluída sem bloqueador no escopo 9Q.2A; não equivale a validação independe
 
 Commit e push permanecem exclusivamente manuais pelo usuário. Nenhuma fase posterior
 foi iniciada. Cloud, credenciais, smokes e integrações reais seguem pendentes da 9Q.2B.
+
+## 9Q.2B — Cloud Production Readiness (preparação, sem ambiente real)
+
+Base publicada da 9Q.2A: `f04eb740316f56618a6d39dab1d27eabe5d064d0`, CI verde
+confirmado pelo usuário. Branch: `codex/fase-9q2b-cloud-production-readiness`, criada
+exatamente a partir desse commit. Nenhum commit ou push foi feito pelo agente nesta fase.
+
+Nenhum provedor cloud, região, conta, banco gerenciado, bucket ou credencial real
+existiu nesta sessão. O trabalho desta fase é código e documentação preparatórios,
+testáveis sem acesso externo — não execução real contra cloud.
+
+Documentos novos: `PHASE_9Q2B_CLOUD_TOPOLOGY.md`, `PHASE_9Q2B_IAM_KMS_POLICY.md`,
+`PHASE_9Q2B_SECRETS_ROTATION_PROCEDURE.md`, `PHASE_9Q2B_DEPLOY_ROLLBACK_PLAN.md`,
+`PHASE_9Q2B_DB_BACKUP_PITR.md`, `PHASE_9Q2B_STORAGE_SECURITY.md`,
+`PHASE_9Q2B_OBSERVABILITY_INCIDENTS.md`, `PHASE_9Q2B_INTEGRATIONS_SANDBOX_STATUS.md`,
+`PHASE_9Q2B_LGPD_CHECKLIST.md`, `PHASE_9Q2B_GO_NO_GO_MATRIX.md`.
+
+Código novo/alterado: validação de MIME/extensão/assinatura binária para a sala de
+documentos (gap real encontrado — data room não tinha essa checagem, só design/BIM
+tinha); gate fail-closed de alerting em produção (`ALERTING_PROVIDER`/
+`ALERTING_EXTERNAL_ENDPOINT`) com transporte webhook genérico, ligado como sexto
+serviço do preflight de produção; guarda pura de restauração isolada
+(`assertIsolatedRestoreTarget`), reaproveitável por uma futura ferramenta de restore
+cloud; três scripts PowerShell interativos gitignorados (`scripts/local/`) para
+criar/rotacionar/revogar segredo no AWS Secrets Manager via `Read-Host -AsSecureString`,
+sem tocar disco/argv/stdout. Nenhuma migration nova; 34 preservadas.
+
+### Correção focal (mesmo dia): isolamento de teste, migrations locais e endurecimento
+
+A primeira rodada desta fase terminou com 1.152/1.155 testes, 3 falhas atribuídas a
+resíduo órfão no Postgres local de teste (instalações Clicksign de 2026-09-04/05 e um
+`IntegrationSyncRun` do Drive obsoleto). O usuário pediu correção do isolamento sem
+apagar evidência imutável, migrations locais auditadas, e endurecimento adversarial de
+`alert-dispatcher.ts`/`upload-validation.ts`.
+
+**Isolamento sem apagar evidência**: o banco `rede_intelligence_test` poluído foi
+**renomeado** (não `DROP`) para `rede_intelligence_test_archived_20260904` — todo o
+conteúdo, incluindo `SignatureReconciliationEvidence`, permanece intacto e acessível sob
+esse nome — e um `rede_intelligence_test` novo e vazio foi criado (via role `postgres`
+local, já que `rede_app` não tem `CREATEDB`). 34 migrations aplicadas do zero + seed
+efêmero + suíte completa: **1.155/1.155 em 130 arquivos**, repetido em três rodadas
+consecutivas sobre o mesmo banco (sem recriá-lo) para provar determinismo real, não um
+acaso de banco limpo. Correções de causa raiz, não só o banco novo:
+`clicksign.database.integration.test.ts` não tenta mais `DELETE` da instalação no
+`afterAll` (isso já falhava por `onDelete: Restrict` de `SignatureReconciliationEvidence`
+sempre que um teste anterior reconciliava uma assinatura, deixando a instalação órfã em
+estado `ACTIVE`) — agora ela é sempre pausada primeiro, de forma incondicional, e a
+limpeza dos filhos sem proteção de evidência é best-effort; um `try/finally` novo garante
+o reset de status mesmo se a asserção do meio falhar. `prisma/seed-integrations.ts`
+atualiza `lastSyncAt` da instalação Drive quando um sync anterior já existe, em vez de
+deixá-lo envelhecer além da janela de 24h de freshness em bancos não recriados.
+`scripts/local-release-safety.test.mjs` ganhou verificação automática de que o
+manifesto de migrations bate em tamanho com o real, um caso explícito de "migration
+ausente", e um teste `spawnSync` provando que `scripts/worker.ts` recusa iniciar
+(exit≠0, sem tocar o banco) com configuração local inconsistente.
+
+**Migrations no banco de desenvolvimento** (`rede_intelligence`, local): as duas
+migrations pendentes da 9Q.2A (`20260907123000_phase_9p4_local_financial_evidence`,
+`20260908001500_phase_9p5_enterprise_evidence`) foram aplicadas via `prisma migrate
+deploy` em 2026-09-09T17:58:22-23Z, confirmado por `_prisma_migrations.finished_at`.
+**Nenhum backup existia antes dessa aplicação** — registrado honestamente, não
+fabricado. Um backup+restauração isolada foi executado depois (evidência do estado
+atual, não da janela anterior à migration): `valid: true`, SHA-256 registrado, restaurado
+em `rede_restore_57b13946...`, nunca sobre o banco de origem. 34 migrations confirmadas
+no repositório; nenhuma antiga alterada.
+
+**Documentação**: `docs/PHASE_9Q_RELEASE_CONTRACT.md` §6 citava "29 migrations
+esperadas" como estado atual (divergente); corrigido para uma frase autocorretiva
+("conferir sempre contra `prisma/migrations`") em vez de fixar um número que volta a
+ficar desatualizado. Checkpoints históricos que citam contagens antigas (30, 31, 32, 33)
+como descrição de uma fase passada não foram alterados — são registro correto do que
+era verdade naquele momento.
+
+**Preflight**: caminho inválido (`SESSION_SECRET`/`INTEGRATION_SECRET_KEY` ausentes)
+reprova com `localReady:false`/exit 1, real, executado. Caminho válido com
+`INTEGRATION_SECRET_KEY`/`REDE_RELEASE_SHA`/`REDE_BUILD_ID` efêmeros (não persistidos em
+`.env`) aprova com `localReady:true`/exit 0, todos os 9 checks `ok`, real, executado.
+
+**Smoke HTTP local**: servidor local real iniciado; liveness 200, readiness bloqueada
+(503, causa real: `INTEGRATION_SECRET_KEY` ausente do `.env` local) e readiness válida
+(200, com a chave efêmera), correlation ID aleatório e comprovadamente não controlável
+pelo cliente, CSP presente. Login real via Chrome (`admin@rede.local`, acesso
+demonstrativo) redirecionou para `/executivo` com dados reais; painel RBAC
+`/ajuda/prontidao` renderizou para OWNER com "Migrations: 34" real; RBAC de
+ANALYST/REVIEWER/VIEWER coberto por teste de integração já existente contra Postgres
+real (não refeito via segunda sessão de navegador). Upload (legítimo/MIME
+incompatível/executável disfarçado/magic bytes inválidos/scanner indisponível) validado
+por teste real de bytes, não por clique de navegador — distinção mantida explicitamente.
+
+**Endurecimento adversarial**: `alert-dispatcher.ts` ganhou `assertSafeAlertEndpoint` —
+recusa http, userinfo na URL, porta não-443, localhost, loopback (v4/v6), link-local
+(incl. metadados de nuvem 169.254.169.254), redes privadas (10/8, 172.16/12, 192.168/16)
+e unique-local IPv6 — mais rejeição de redirecionamento (`redirect:"manual"`, 3xx nunca é
+sucesso), `fetch` injetável, timeout já existente confirmado por teste. Achado real:
+401/408/429 não eram classificados por código HTTP em `production-dependency-error.ts`
+(caíam em `UNEXPECTED`) — corrigido para `MISSING_CREDENTIALS`/`TIMEOUT`/
+`SERVICE_UNAVAILABLE`, beneficia todos os adapters (AWS incluído), não só alerting.
+`upload-validation.ts` ganhou `assertSafeFileName`: rejeita override bidirecional
+(U+202A/C/D/E, U+2066/9 — disfarce visual de extensão), caractere de controle (incl.
+NUL), formato de path traversal/separador de caminho, nome vazio/>255 caracteres;
+acentuação/Unicode legítimo continua aceito. 51 testes novos no total desta correção
+(31 em `alert-dispatcher.test.ts`, 22 em `upload-validation.test.ts`, 19 em
+`production-dependency-error.test.ts`, 7 em `local-release-safety.test.mjs`, 17 em
+`production-preflight.test.ts`, todos verdes). Circuit breaker e resolução de DNS
+pinada contra rebinding **não foram implementados** — riscos residuais documentados,
+não uma lacuna escondida.
+
+Nenhuma chamada real foi feita a Clicksign, Google Drive, e-mail, bureau ou ERP/CRM —
+sem credencial disponível. Scanner antimalware de produção confirmado sem adapter real
+(bloqueador pré-existente, não fabricado nesta fase). Produção permanece bloqueada por
+`productionTrafficBlocked`, inalterado. Revisão LGPD preparada, não aprovada — sem
+responsável humano nesta sessão. Matriz Go/No-Go: nenhuma linha recebeu GO.
+
+**Classificação final desta fase: preparação local para Cloud Production Readiness.**
+Cloud real, deploy real, rollback real, PITR real, alertas com destino real e smokes
+contra integrações externas reais permanecem integralmente pendentes — não declarados,
+não fabricados. Suíte final desta correção: 1.206/1.206 em 130 arquivos.
+
+Commit e push permanecem exclusivamente manuais pelo usuário. Nenhuma fase posterior
+(9R, 9S, Fase 10) foi iniciada. Zero staged; worktree aberto para reauditoria.
+
+### Correção focal final (mesmo dia): SSRF, DNS rebinding, call sites produtivos
+
+A reauditoria adversarial anterior encontrou um bypass real de SSRF (IPv4 embutido em
+IPv6 em `assertSafeAlertEndpoint`) e a ausência de qualquer call site produtivo do
+alerting. Esta rodada corrige exatamente os seis achados dessa auditoria, sem tocar
+migrations, `.env`, banco arquivado ou schema.
+
+**B1 — IPv4 embutido em IPv6**: `alert-dispatcher.ts` ganhou expansão numérica completa
+do endereço IPv6 canônico (8 grupos de 16 bits) e reconhece as três formas de embutir um
+IPv4 (mapeado `::ffff:0:0/96`, NAT64 `64:ff9b::/96`, 6to4 `2002::/16`), extraindo e
+revalidando o IPv4 interno com a mesma política do IPv4 direto — além de multicast,
+reservado (`240.0.0.0/4`) e CGNAT (`100.64.0.0/10`), que também faltavam. Um bug de
+offset (`::ffff:0:0/96` checado no grupo errado) foi encontrado pela própria bateria de
+testes nova, corrigido, e reconfirmado.
+
+**B2 — DNS rebinding/TOCTOU**: sem dependência nova. `alert-dispatcher.ts` trocou `fetch`
+por `node:https` + `node:dns/promises`: resolve todos os registros A/AAAA, valida **cada
+um** com a mesma política, recusa se qualquer endereço resolvido for proibido (mistura
+público+privado incluída), e conecta pinado no endereço já validado — nunca resolve de
+novo entre validar e conectar. O hostname original é preservado como `Host` e como SNI
+(`servername`), então a verificação de certificado TLS continua contra o hostname real,
+nunca contra o IP; `rejectUnauthorized` nunca é tocado. Resolver e executor HTTP são
+injetáveis — nenhum teste faz DNS ou rede real.
+
+**Circuit breaker mínimo**: em memória, por instância de transporte — abre após N falhas
+consecutivas, suprime tentativas durante o cooldown, fecha sozinho se a tentativa após o
+cooldown tiver sucesso. Relógio injetável; testado sem espera real.
+
+**A1 — call sites produtivos**: antes desta correção, nada no código de aplicação chamava
+o alerting. Agora: `job-runner.ts::failJob` emite um alerta `DEAD_LETTER` depois do commit
+da transação (ponto único, cobre todos os tipos de job); `clicksign-service.ts` (2 pontos)
+e `import-service.ts` (1 por importação, não 1 por linha rejeitada — evita tempestade)
+emitem `QUARANTINE`; `scripts/worker.ts` emite `WORKER_FATAL` no `catch` fatal do
+processo. Todos via `src/application/observability/operational-alerts.ts` (novo):
+dedup de 5 min por categoria+código+tenant (tenant sempre como hash SHA-256, nunca o ID
+bruto), rate limit de 10/min por categoria+tenant, nunca lança (falha de transporte é
+logada sanitizada e contabilizada, nunca desfaz a transação de origem), payload restrito
+a categoria/severidade/timestamp/correlationId/tenantRef/código/ambiente/releaseId — sem
+PII, payload de integração ou conteúdo de documento.
+
+**M1**: `PHASE_9Q2B_DB_BACKUP_PITR.md` reescrito — não diz mais que a divergência do
+contrato mestre está pendente (já foi corrigida); registra estado atual (34) e a ausência
+real do backup pré-migration sem reescrever isso como resolvido.
+
+**M2 (texto original desta correção — corrigido abaixo em "Correção pós-reauditoria
+REPROVADA": a afirmação de que `DATABASE_URL` e `backup-local-database.mjs` já estavam
+cobertos era falsa; ver adiante)**: banco arquivado documentado sem ambiguidade — nome
+atual `rede_intelligence_test_archived_20260904`, arquivamento real em 2026-09-09 (não
+2026-09-04; o sufixo é a data do resíduo mais antigo, não da ação de arquivar).
+
+**B3**: `assertSafeFileName` agora rejeita nomes reservados do Windows
+(CON/PRN/AUX/NUL/COM1-9/LPT1-9, com ou sem extensão) e nome terminado em ponto ou espaço.
+
+**Regressão HTTP**: os 13 arquivos de teste de todos os adapters citados (Clicksign,
+Google Drive, e-mail, financial providers, enterprise/ERP-CRM, worker) — 253/253 testes —
+reconfirmados verdes sem nenhuma mudança de comportamento além da nova classificação de
+401/408/429 em `production-dependency-error.ts` (também usada por AWS Secrets
+Manager/KMS). Confirmado por leitura de código: nada no repositório usa essa
+classificação para decidir retry automaticamente hoje — é só informativa para o operador
+— então a mudança não pode reabrir retry infinito nem duplicar efeito colateral.
+
+**QA final desta correção**: `prisma validate`/`generate`/`migrate status` (banco de
+teste oficial) aprovados; TypeScript e ESLint limpos (zero erro, zero warning); preflight
+inválido (exit 1) e válido com config efêmera (exit 0, 9/9) reexecutados; build produtivo
+aprovado; suíte completa **1.263/1.263 em 130 arquivos, repetida duas vezes consecutivas
+sobre o mesmo banco de teste sem recriá-lo**; `git diff --check` aprovado.
+
+**Riscos residuais explicitamente não resolvidos**: proteção de tamanho de cabeçalho HTTP
+de resposta (camada abaixo do meu código); nenhum destino de alerta real foi contratado
+(o gate e os call sites existem, mas `ALERTING_PROVIDER` nunca é `external` nesta sessão);
+scanner antimalware de produção sem adapter real; nenhuma integração externa testada.
+
+Commit e push permanecem exclusivamente manuais pelo usuário. Nenhuma fase posterior
+foi iniciada. Zero staged; worktree aberto para nova reauditoria.
+
+### Correção pós-reauditoria REPROVADA (mesmo dia): DATABASE_URL sem proteção, achados residuais de B1/B2/A2, logger, quarentena
+
+A reauditoria adversarial seguinte à correção acima **reprovou** a preparação local,
+com 1 achado Bloqueador e 3 Altos. Este bloco documenta a correção desses achados — a
+seção "M2" acima, escrita na rodada anterior, estava **errada**: afirmava que
+`DATABASE_URL` e `backup-local-database.mjs` já usavam a guarda contra banco arquivado;
+na prática, `assertNotArchivedDatabase` só era alcançável por `assertTestDatabaseUrl`
+(exclusivo de `TEST_DATABASE_URL`), e `backup-local-database.mjs` tinha uma checagem
+`/archived/i` duplicada e independente. Essa divergência entre documentação e código é
+o próprio achado M1 desta rodada.
+
+**Bloqueador corrigido — `DATABASE_URL` sem proteção nenhuma**: `scripts/database-url-safety.mjs`
+passa a ser a única fonte da checagem (`assertNotArchivedDatabase`), com dois reforços:
+(1) o radical `/archiv/i` — cobre `archived`/`archive`/`archival` e qualquer
+prefixo/sufixo/separador, em vez de só a palavra exata `archived`; (2) fail-closed real —
+URL inválida, percent-encoding malformado ou entrada não textual agora **bloqueiam**
+(antes, uma URL inválida passava sem checar). A guarda está conectada em todos os pontos
+exigidos, sem cópia duplicada:
+- `src/infrastructure/config/runtime-config.ts::parseRuntimeConfig` — valida `DATABASE_URL`
+  logo após o schema zod, antes de qualquer outra etapa de boot (web, worker, preflight).
+- `src/infrastructure/database/prisma.ts` — valida `process.env.DATABASE_URL` no escopo do
+  módulo, antes de `new PrismaClient(...)` — é o choke point real: qualquer código que
+  precise do banco importa este módulo, cobrindo web e worker mesmo que algum chamador não
+  passe por `parseRuntimeConfig` primeiro.
+- `src/infrastructure/release/restore-safety.ts::assertIsolatedRestoreTarget` — valida
+  origem e destino de qualquer ferramenta de restauração (local hoje, cloud quando existir
+  um alvo gerenciado real).
+- `scripts/backup-local-database.mjs` — a checagem inline duplicada foi removida; agora
+  importa e chama `assertNotArchivedDatabase` diretamente, antes de `mkdirSync`/`pg_dump`/
+  `createdb`/`pg_restore`.
+- `assertTestDatabaseUrl` (`TEST_DATABASE_URL`, `run-tests.mjs`/`vitest.config.ts`)
+  continua protegida, sem alteração de comportamento externo.
+
+Verificado por subprocesso real (não só a função isolada):
+`scripts/local-release-safety.test.mjs` agora spawna `backup-local-database.mjs` e
+`worker.ts` de verdade com `DATABASE_URL` arquivada e confirma exit≠0, mensagem "arquivado"
+e nenhum vazamento de credencial em stdout/stderr.
+
+**B1 residual corrigido — IPv4-translated**: `isUnsafeIPv6` não cobria
+`::ffff:0:a.b.c.d` (RFC 2765/SIIT — distinto do IPv4-mapped porque `0xffff` está no
+grupo 4, não no grupo 5). `[::ffff:0:127.0.0.1]` e `[::ffff:0:169.254.169.254]` agora são
+recusados na Camada 1 (literal) e na Camada 2 (resolvido via DNS). Nota de exploração
+real: diferente do IPv4-mapped padrão, esta forma não tem tradução automática pelo
+socket do SO em stacks modernos — o fechamento é por completude da política declarada
+("todas as formas conhecidas"), não porque havia uma rota de exploração viva confirmada.
+
+**B2 residual corrigido — resposta DNS family=4 malformada fail-open**: `resolveSafeAddress`
+chamava `isUnsafeIPv4Parts` direto sobre `record.address.split(".").map(Number)` — um
+endereço não numérico produzia `NaN`, e toda comparação de faixa com `NaN` é `false`,
+então a resposta malformada era tratada como seguro. Novo `parseCanonicalIPv4` exige
+exatamente 4 grupos decimais 0-255, sem zero à esquerda, sinal, espaço, hexadecimal,
+forma decimal inteira ou dígito Unicode fora de ASCII — qualquer coisa fora desse
+formato (incluindo `family` diferente de 4 ou 6, ou um registro incompleto/hostil) é
+recusada antes de chegar à política de rede. Não explorável pelo resolver real de
+produção (`dns.lookup` sempre devolve `family=4` bem formado), mas fecha o contrato
+"fail-closed" para qualquer `DnsResolver` injetado — a interface é declaradamente
+plugável.
+
+**A2 corrigido — circuit breaker sem exclusão de probe no half-open**: o breaker anterior
+computava "aberto?" como função pura do tempo decorrido — qualquer número de chamadas
+concorrentes no instante em que o cooldown expirava passava junto. Reescrito como máquina
+de 3 estados (`CLOSED`/`OPEN`/`HALF_OPEN`): a primeira chamada síncrona depois do cooldown
+reivindica `HALF_OPEN` e é a única sonda; qualquer outra chamada da mesma leva —
+inclusive sob `Promise.all` real — encontra o estado já reivindicado e é suprimida, nunca
+uma segunda sonda. Sucesso único fecha; falha única (da sonda) reabre com cooldown fresco.
+Durante a implementação, o próprio teste de concorrência (`Promise.all`) expôs um bug
+real: `beforeAttempt()` estava dentro do mesmo `try/catch` que chama `onFailure()`, então
+uma tentativa *suprimida* (que nunca toca a rede) também contava como uma nova falha e
+derrubava o half-open prematuramente — corrigido movendo `beforeAttempt()` para fora do
+try/catch. O estado persiste no reporter cacheado em `operational-alerts.ts`
+(`cachedReporter`, inalterado nesta rodada) — sem essa persistência entre chamadas, o
+breaker nunca abriria de verdade.
+
+**Logger endurecido**: `sanitizeString` ganhou padrão de telefone BR (formatado e não
+formatado, sem apagar números pequenos legítimos — CEP, valores monetários, contadores),
+padrão de JWT "nu" (heurístico `eyJ...` sem exigir prefixo `bearer`/`token:`), e passou a
+redigir `organizationId`/`installationId`/`inboxId`/`userId` quando aparecem como
+`chave=valor`/`chave: valor` em **texto livre** (antes só chaves de objeto estruturado
+eram cobertas). `sanitizeLogValue` de `Error` agora inclui e sanitiza `.cause`
+recursivamente. Decisão preservada de propósito: como CHAVE de objeto estruturado em log
+interno, esses IDs continuam visíveis (depuração operacional) — só o payload externo de
+alerta usa `tenantRef` hasheado; o logger geral não substitui essa allowlist.
+
+**Idempotência da quarentena Clicksign (item 9)**: `claimNextJob` reivindica de novo
+qualquer `IntegrationJob` `RUNNING` cuja lease expirou ("recuperação de worker morto" —
+cenário real e deliberado do desenho de fila, não hipotético). Se um worker cair depois
+de `quarantineAndMark` marcar o inbox como `QUARANTINED` mas antes de `completeJob`, o
+mesmo job é reexecutado; sem guard, a segunda execução duplicaria o
+`IntegrationQuarantineItem`. `processClicksignWebhookJob` agora trata `QUARANTINED` como
+status terminal (ao lado do `PROCESSED` já existente) — sem nova migration, sem
+find-before-create sujeito a corrida: só usa a identidade já persistida
+(`inbox.status`). Teste de integração novo em
+`contract-closing.database.integration.test.ts` reprocessa o mesmo job 3x sobre um evento
+sem `ExternalEntityReference` correspondente e confirma exatamente 1 item de quarentena.
+
+**Dedup de importação (item 10) — decisão explícita, não mais implícita**: a chave de
+dedup permanece tenant+categoria+`code` (não inclui execução/`correlationId`) —
+documentado agora diretamente em `operational-alerts.ts` e testado em
+`operational-alerts.test.ts` ("dedup por tenant+categoria+code, não por execução"): duas
+importações distintas do mesmo `capability` para o mesmo tenant dentro da janela de 5 min
+geram só 1 alerta, de propósito (é a proteção anti-tempestade herdada da 9Q.2A —
+`import-service.ts` já limita a 1 alerta por importação, não por linha).
+
+**Teste oficial de dedup de 5 min (item 8)**: adicionado a `operational-alerts.test.ts`
+(antes só verificado por sonda manual fora da suíte) — primeira emissão ocorre, repetição
+dentro da janela é suprimida, emissão após expiração volta a ocorrer, categorias/tenants
+diferentes não colidem, relógio sempre injetado (sem espera real).
+
+**QA desta rodada**: `prisma validate` aprovado; `tsc --noEmit` limpo; `eslint .` limpo;
+34 migrations confirmadas, nenhuma alterada. Suíte oficial completa (`pnpm test`,
+`prisma migrate deploy`/`db seed`/`vitest run` contra o PostgreSQL local de teste) **não
+executada nesta sessão até o Postgres local ser iniciado explicitamente pelo operador**
+— ver o registro de QA desta correção para os números reais capturados antes e depois de
+subir o cluster local, incluindo os arquivos de teste que dependem de banco (ex.: o teste
+de idempotência da quarentena Clicksign acima, que não pôde ser executado nesta sessão e
+está marcado como tal). Nenhum teste pulado foi tratado como aprovado.
+
+**Riscos residuais explicitamente não resolvidos**: os mesmos da rodada anterior (sem
+destino de alerta real contratado, scanner antimalware de produção sem adapter real,
+nenhuma integração externa testada), mais: proteção de homóglifo Unicode multi-idioma
+para o radical "archiv" não implementada (fora de escopo — nenhum nome de banco legítimo
+usa outro alfabeto); `quarantineDuplicateConflict` (Clicksign, conflito de payload) mantém
+um TOCTOU estreito de find-before-create sob redelivery externa quase simultânea do
+provider — não corrigido nesta rodada por não ter sido demonstrado como estruturalmente
+alcançável, ao contrário do caminho de `quarantineUnknown` corrigido acima.
+
+**A 9Q.2B integral, o piloto e a produção continuam pendentes.** Esta correção fecha os
+achados da reauditoria REPROVADA sobre a preparação LOCAL — nada aqui declara cloud,
+PITR, alertas reais, scanner de produção, integrações externas ou Go/No-Go como
+comprovados.
+
+Commit e push permanecem exclusivamente manuais pelo usuário. Nenhuma fase posterior foi
+iniciada. Zero staged; worktree aberto para nova reauditoria adversarial.
