@@ -330,3 +330,97 @@ migration aditiva. Branch `codex/fase-9r` e HEAD-base
 rebase ou tag foi executado nesta correção. 9S e Fase 10 continuam não iniciadas.
 Nenhuma API externa, cloud real ou credencial real foi usada. Worktree aberto para
 reauditoria focal independente.
+
+---
+
+## 9. Correção focal de CI (2026-09-10) — `prisma db seed` falhava no GitHub Actions
+
+Depois da reauditoria focal (§8), o trabalho da 9R foi commitado (`d829725 feat: add
+phase 9R handover and post-sale operations`) e o CI (GitHub Actions,
+`.github/workflows/ci.yml`) rodou pela primeira vez contra um banco Postgres
+**totalmente vazio** (36 migrations aplicadas do zero, sem histórico local
+acumulado). O passo `prisma db seed` falhou; `prisma validate`/`generate`/`migrate
+deploy` passaram; TypeScript/ESLint/testes/build foram pulados por dependerem do
+seed.
+
+### 9.1 Causa real (comprovada, não hipotética)
+
+`prisma/seed.ts` (linha ~439, antes da correção) marcava a unidade demonstrativa
+`TOR-A-1301` como entregue chamando `markUnitDelivered`, precedido de uma
+`SalesUnitInspection` sintética com `scheduledAt` **fixo no calendário**
+(`"2026-09-20T00:00:00.000Z"`). O gate técnico corrigido na §8.1 desta reauditoria
+(`delivery-gate-service.ts`) filtra `scheduledAt: { lte: now }` — uma vistoria com
+data futura é corretamente ignorada, exatamente como uma vistoria de campo real não
+poderia "já ter acontecido" no futuro. Localmente essa data nunca chegou a ser
+testada de verdade porque os bancos dev/teste já tinham `TOR-A-1301` como `ENTREGUE`
+de uma execução anterior do seed (dias antes desta correção, quando o gate ainda não
+tinha essa checagem de data) — o guard idempotente do próprio seed
+(`if (deliveredUnit.status === "VENDIDA")`) então nunca reexecutava
+`markUnitDelivered` de fato nas minhas reexecuções locais do seed, mascarando o
+problema. O CI, partindo de um banco genuinamente vazio, expôs a falha real na
+primeira execução: `Entrega bloqueada — técnico: SEM_EVIDENCIA (Nenhuma vistoria
+registrada para esta venda.)`.
+
+### 9.2 Correção — exclusivamente em `prisma/seed.ts`
+
+Nenhuma linha de `markUnitDelivered`, `evaluateUnitDeliveryReadiness`,
+`gates.ts`/domínio, schema, ou qualquer migration foi tocada — o gate técnico
+permanece exatamente como corrigido na §8.1 (nenhum bypass, fallback ou aprovação
+automática introduzido). A correção troca a data fixa por
+`new Date(Date.now() - 24 * 60 * 60 * 1000)` ("ontem", relativo ao instante real de
+execução do seed) — sempre não-futura, nunca fica obsoleta de novo, qualquer que seja
+a data real em que o seed rodar (CI hoje, ou alguém rodando localmente daqui a um
+ano). A busca de reaproveitamento idempotente (`findFirst`) passou a filtrar
+explicitamente `salesUnit: { organizationId: organization.id }` — defesa em
+profundidade contra reaproveitar, por engano, a vistoria de outro tenant (mesmo
+padrão de `delivery-gate-service.ts`) — e ordenar por
+`[scheduledAt desc, createdAt desc, id desc]`, coerente com o próprio gate. O
+`checklist` da vistoria passou a incluir uma chave `_seedFixture` com um texto
+explícito identificando-a como fixture sintética do seed demonstrativo, nunca uma
+vistoria de campo real (regra 3 da correção). `assertDemoSeedAllowed` (bloqueio de
+produção, `src/domain/auth/demo-access.ts`) não foi tocado.
+
+### 9.3 Teste novo — reproduz o cenário real do CI
+
+`prisma/seed.database.integration.test.ts` (4 testes) roda o seed de verdade (sem
+mocks) contra um banco Postgres físico **isolado e descartável**
+(`rede_ci_seed_probe_<uuid>`, nunca o banco de teste compartilhado pelo resto da
+suíte) — 36 migrations aplicadas do zero, depois `prisma db seed` real, exatamente
+como o CI faz. Confirma: seed aprovado; `TOR-A-1301` só fica `ENTREGUE` depois da
+vistoria válida (pertencente à mesma venda/unidade, `outcome: ACCEPTED`, sem
+pendência, `scheduledAt` não futuro, marcada `_seedFixture`); o termo de entrega
+(`AuditLog`) tem os três gates (técnico/jurídico/financeiro) `APTO`; uma segunda
+execução do seed no mesmo banco é idempotente (exatamente 1 vistoria, exatamente 1
+`AuditLog` de entrega, nenhuma duplicação); `NODE_ENV=production` continua recusando
+o seed demonstrativo; nenhum `organizationId` de outro tenant satisfaz o gate técnico
+para a fixture real. Requer `CREATEDB` (via `BACKUP_ADMIN_USER`/`BACKUP_ADMIN_PASSWORD`
+localmente, ou o usuário `postgres` que o CI já usa nativamente) — sem essas
+credenciais localmente, o describe é pulado com motivo explícito (mesma convenção de
+`describe.skipIf(!process.env.DATABASE_URL)` já usada no projeto); o pulo só ocorre
+quando o erro de criação do banco é comprovadamente `SQLSTATE 42501` (permissão
+negada, confirmado por introspecção real) — qualquer outra causa propaga como falha
+real, nunca vira skip silencioso.
+
+### 9.4 QA desta correção
+
+| Item | Resultado |
+|---|---|
+| `prisma validate` / `generate` | ✅ |
+| `migrate status` (dev e teste) | ✅ 36 migrations, inalteradas |
+| Seed em banco vazio (via teste novo) | ✅ |
+| Segunda execução do seed no mesmo banco (via teste novo) | ✅ idempotente |
+| TypeScript | ✅ 0 erros |
+| ESLint | ✅ 0 erros |
+| Suíte oficial (1ª execução, com `BACKUP_ADMIN_USER`/`PASSWORD` para exercer o teste novo de verdade) | ✅ **135 arquivos, 1406 testes, 0 falhas** (+1 arquivo, +4 testes) |
+| Suíte oficial (repetição, mesmo banco, sem recriar) | ✅ idêntico — 135 arquivos, 1406 testes |
+| Build | ✅ 39 rotas (sem rota nova) |
+| `git diff --check` | ✅ só avisos CRLF |
+
+### 9.5 Declaração final desta correção
+
+Único arquivo de produção alterado: `prisma/seed.ts` — nenhuma migration, schema ou
+regra de domínio/serviço da 9R tocada; contagem de migrations permanece 36. Nenhuma
+API externa executada. Nenhum commit, push, merge, rebase ou tag foi executado nesta
+correção. Branch `codex/fase-9r`, HEAD `d829725396542b90e96cddb4b2b195606395df40`
+preservados. Zero staged. `.env`, `next-env.d.ts`, schema e migrations intactos. 9S e
+Fase 10 continuam não iniciadas.

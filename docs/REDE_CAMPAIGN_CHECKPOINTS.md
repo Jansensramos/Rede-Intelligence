@@ -719,3 +719,35 @@ Branch `codex/fase-9r` e HEAD-base `69d00f0e1207d0e3b2cab4118695d977bd50f29c`
 preservados. **9S e Fase 10 continuam não iniciadas.** Nenhuma API externa, cloud real
 ou credencial real foi usada. Nenhum commit, push, merge, rebase ou tag foi executado
 nesta correção. Zero staged; worktree aberto para reauditoria focal independente.
+
+### Correção focal de CI da 9R (2026-09-10) — `prisma db seed` falhava no GitHub Actions
+
+Após a reauditoria focal acima, o trabalho da 9R foi commitado
+(`d829725 feat: add phase 9R handover and post-sale operations`) e o primeiro run do
+CI (`.github/workflows/ci.yml`, contra um Postgres genuinamente vazio) falhou em
+`prisma db seed`: `Entrega bloqueada — técnico: SEM_EVIDENCIA (Nenhuma vistoria
+registrada para esta venda.)`. Causa real: `prisma/seed.ts` marcava a unidade
+demonstrativa `TOR-A-1301` como entregue usando uma `SalesUnitInspection` com
+`scheduledAt` fixo no calendário (`"2026-09-20"`) — o gate técnico corrigido na
+reauditoria acima corretamente ignora vistoria futura, e localmente o problema nunca
+apareceu porque os bancos dev/teste já tinham a unidade `ENTREGUE` de uma execução
+anterior (guard idempotente do seed nunca reexecutava o gate de verdade). Detalhe
+completo, honesto, em `docs/PHASE_9R_AUDIT_RECORD.md` §9.
+
+Correção exclusiva em `prisma/seed.ts` — `scheduledAt` passou a ser calculado
+relativo ao instante real de execução do seed (sempre "ontem", nunca fixo/obsoleto),
+a vistoria ganhou um marcador explícito (`_seedFixture`) e a busca idempotente passou
+a filtrar por `organizationId` explicitamente. **Nenhuma linha de
+`markUnitDelivered`, do gate técnico, schema ou migration foi tocada** — o gate
+permanece exatamente como a reauditoria o corrigiu, sem bypass, fallback ou aprovação
+automática. Teste novo (`prisma/seed.database.integration.test.ts`, 4 testes) roda o
+seed real contra um banco Postgres físico isolado e descartável, 36 migrations
+aplicadas do zero — reproduzindo o cenário exato do CI — e confirma idempotência,
+snapshot com os três gates `APTO`, recusa em produção e isolamento de tenant.
+
+QA: 135 arquivos, **1406 testes**, 0 falhas (suíte oficial, repetida sem recriar o
+banco); TypeScript/ESLint limpos; build aprovado (39 rotas); `git diff --check`
+aprovado; **36 migrations inalteradas**. Branch `codex/fase-9r`, HEAD
+`d829725396542b90e96cddb4b2b195606395df40` preservados. Nenhuma API externa, cloud
+real ou credencial real foi usada. Nenhum commit, push, merge, rebase ou tag foi
+executado. Zero staged; worktree aberto para a correção ser revisada.

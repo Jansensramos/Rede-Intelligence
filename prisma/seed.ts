@@ -435,8 +435,31 @@ async function main() {
   if (!salesCommission) salesCommission = await createSalesCommission(context, { saleId: sale.id, brokerId: broker.id, policyId: salesCommissionPolicy.id, basis: "SOLD_PRICE", percentage: "0.04", triggerEvent: "SIGNATURE" });
   if (salesCommission.status === "PENDING") salesCommission = await approveSalesCommission(context, salesCommission.id);
 
-  let salesInspection = await prisma.salesUnitInspection.findFirst({ where: { salesUnitId: salesUnitSold.id, saleId: sale.id } });
-  if (!salesInspection) salesInspection = await scheduleInspection(context, { salesUnitId: salesUnitSold.id, saleId: sale.id, scheduledAt: new Date("2026-09-20T00:00:00.000Z"), responsibleId: user.id, checklist: { pintura: "ok", hidraulica: "ok", eletrica: "ok" } });
+  // Correção focal de CI (2026-09-10): o gate técnico da 9R (achado Alto da reauditoria,
+  // ver docs/PHASE_9R_AUDIT_RECORD.md §8.1) exige a vistoria MAIS RECENTE com
+  // `scheduledAt` não futuro — uma data fixa no calendário ("2026-09-20") ficava no
+  // futuro sempre que o seed rodava antes dela (como no CI), e o gate corretamente
+  // devolvia SEM_EVIDENCIA (nenhuma vistoria elegível encontrada), bloqueando
+  // `markUnitDelivered`. Corrigido calculando `scheduledAt` relativo ao instante real
+  // de execução do seed (sempre no passado, nunca hardcoded) — nunca contorna o gate,
+  // só fornece uma vistoria genuinamente elegível. Reaproveita `salesUnit`/`saleId`
+  // já resolvidos acima (ambos únicos e já pertencentes a `organization.id`), e ainda
+  // filtra por `salesUnit.organizationId` explicitamente — defesa em profundidade
+  // contra reutilizar, por engano, uma vistoria de outro tenant.
+  let salesInspection = await prisma.salesUnitInspection.findFirst({
+    where: { salesUnitId: salesUnitSold.id, saleId: sale.id, salesUnit: { organizationId: organization.id } },
+    orderBy: [{ scheduledAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+  });
+  if (!salesInspection) {
+    salesInspection = await scheduleInspection(context, {
+      salesUnitId: salesUnitSold.id, saleId: sale.id, responsibleId: user.id,
+      scheduledAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // sempre "ontem" em relação à execução real do seed — nunca futuro, nunca fica obsoleto
+      checklist: {
+        pintura: "ok", hidraulica: "ok", eletrica: "ok",
+        _seedFixture: "Vistoria sintética gerada pelo seed demonstrativo (prisma/seed.ts) — não representa uma vistoria de campo real.",
+      },
+    });
+  }
   if (!salesInspection.outcome) salesInspection = await recordInspectionOutcome(context, { inspectionId: salesInspection.id, outcome: "ACCEPTED", pendingIssues: [] });
 
   let deliveredUnit = await prisma.salesUnit.findUniqueOrThrow({ where: { id: salesUnitSold.id } });
