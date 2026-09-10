@@ -168,5 +168,15 @@
     "name": "20260908001500_phase_9p5_enterprise_evidence",
     "checksum": "5cb444edf1ea3ee0639621bce4a9799b6df7ae38758a5836d3d0812c84fb6b98",
     "windowsChecksum": "9485fe6494a297192a1e802bfffcba96a77395aad9abebad624b8543c83952fd"
+  },
+  {
+    "name": "20260910131423_phase_9r_repasse_chaves_assistencia",
+    "checksum": "16f9ec79108cef78f76deb34bff50fc8818bc2a10aa0e12dee2b7c5b982bc73a",
+    "windowsChecksum": "1e94109a6e6ed2ec3d83583002225a806ff7572f8ddf79a40dfd9f4d5cf8b7f5"
+  },
+  {
+    "name": "20260910151500_phase_9r_structural_immutability",
+    "checksum": "bbc3c586dd0f359601326051699c5ff10a9dcb276be7f6a99b5127018a87a2b5",
+    "windowsChecksum": "f6884164063b42744668091b4692fc828e9f6cb3116120b1bc343759a5ff626b"
   }
 ]

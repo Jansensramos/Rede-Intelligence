@@ -11,7 +11,7 @@ import type { ErrorReporterProvider } from "@/infrastructure/observability/provi
  * do worker — nunca em toda exceção genérica, e nunca dentro de rota de readiness
  * (que é consultada a cada poll de health check).
  */
-export type AlertCategory = "DEAD_LETTER" | "QUARANTINE" | "WORKER_FATAL";
+export type AlertCategory = "DEAD_LETTER" | "QUARANTINE" | "WORKER_FATAL" | "REPASSE_DIVERGENTE" | "SLA_ASSISTENCIA_VENCIDO";
 
 export interface OperationalAlertEvent {
   category: AlertCategory;

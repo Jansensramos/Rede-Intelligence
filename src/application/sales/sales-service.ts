@@ -1,11 +1,20 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Prisma, type MembershipRole } from "@prisma/client";
 import type { AuthContext } from "@/application/auth/session";
 import { prisma } from "@/infrastructure/database/prisma";
 import { createExternalPayableObligation, createExternalReceivableObligation } from "@/application/financial-ops/external-obligation-port";
 import { transitionReceivableInstallment } from "@/application/financial-ops/financial-service";
+import { emitOperationalAlert } from "@/application/observability/operational-alerts";
+import { evaluateUnitDeliveryReadiness } from "@/application/handover/delivery-gate-service";
+import { postSaleEvidenceStorage } from "@/infrastructure/storage/post-sale-evidence-storage";
+import { validateDocumentUpload } from "@/infrastructure/storage/upload-validation";
 import * as engine from "@/domain/sales/engine";
 import type { SalesUnitStatus } from "@/domain/sales/engine";
+import { evaluatePostSaleSla, isValidPostSaleRecurrence } from "@/domain/handover/gates";
+import {
+  assignPostSaleSupplierSchema, setPostSaleCostSchema, markPostSaleRecurrenceSchema, addPostSaleEvidenceSchema,
+  type AssignPostSaleSupplierInput, type SetPostSaleCostInput, type MarkPostSaleRecurrenceInput, type AddPostSaleEvidenceInput,
+} from "@/domain/handover/schemas";
 import {
   addPostSaleUpdateSchema, approveSaleSchema, convertSalesLeadSchema, createBrokerProfileSchema, createPostSaleRequestSchema,
   createSalesCommissionPolicySchema, createSalesCommissionSchema, createSalesLeadSchema, createSalesPriceTableSchema, createSalesProposalSchema,
@@ -32,9 +41,32 @@ function assertApprover(context: Pick<AuthContext, "role">) {
   if (!approvalRoles.has(context.role)) throw new Error("Somente Administrador ou Owner pode aprovar este ato comercial.");
 }
 
-const audit = (context: MutationContext, projectId: string | null, action: string, entityType: string, entityId: string, after?: unknown) => ({
-  organizationId: context.organizationId, userId: context.userId, projectId, action, entityType, entityId, after: after === undefined ? undefined : json(after),
+/**
+ * `extra` é opcional e aditivo (achado Médio da reauditoria 9R): chamadas
+ * pré-existentes (5 argumentos) continuam produzindo exatamente o mesmo registro de
+ * antes — nenhuma delas foi tocada. Chamadas novas da 9R passam `extra` para incluir
+ * `before` (estado anterior real da entidade, nunca texto informado pelo cliente) e
+ * `correlationId` (sempre gerado no servidor — nunca aceito do cliente; ver
+ * `newCorrelationId`). `metadata` é allowlisted: só `correlationId` e `operationType`
+ * entram, nunca payload bruto, PII, URL ou ID de sistema externo.
+ */
+const audit = (
+  context: MutationContext,
+  projectId: string | null,
+  action: string,
+  entityType: string,
+  entityId: string,
+  after?: unknown,
+  extra?: { before?: unknown; correlationId?: string },
+) => ({
+  organizationId: context.organizationId, userId: context.userId, projectId, action, entityType, entityId,
+  after: after === undefined ? undefined : json(after),
+  ...(extra?.before !== undefined ? { before: json(extra.before) } : {}),
+  ...(extra?.correlationId !== undefined ? { metadata: json({ correlationId: extra.correlationId, operationType: action }) } : {}),
 });
+
+/** Sempre gerado no servidor — nunca aceito de entrada do cliente (regra 3 do escopo desta correção). */
+const newCorrelationId = () => randomUUID();
 
 async function projectForTenant(organizationId: string, projectId: string) {
   const project = await prisma.project.findFirst({ where: { id: projectId, organizationId } });
@@ -515,23 +547,78 @@ export async function recordInspectionOutcome(context: AuthContext, raw: RecordI
   return updated;
 }
 
-/** "Apta à entrega" combina três leituras (obra, financeiro, documentos) — nunca uma nova máquina de estados cross-domain. */
+const MARK_UNIT_DELIVERED_MAX_ATTEMPTS = 3;
+
+function isTransientWriteConflict(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
+}
+function jitterDelay(attempt: number) {
+  return new Promise((resolve) => setTimeout(resolve, 40 * attempt + Math.floor(Math.random() * 60)));
+}
+
+/**
+ * "Apta à entrega" combina três leituras (técnico/jurídico/financeiro via
+ * `evaluateUnitDeliveryReadiness`, Fase 9R) — nunca uma nova máquina de estados
+ * cross-domain. O snapshot dos três gates é gravado no `AuditLog` desta transição
+ * (`SALES_UNIT_DELIVERED`) — é o "termo de entrega": imutável pelo mesmo mecanismo já
+ * usado por toda decisão crítica da plataforma, sem uma entidade nova só para isto.
+ *
+ * Achado Médio da reauditoria 9R (corrigido) — TOCTOU entre a leitura dos gates e o
+ * commit: antes, os três gates eram lidos FORA da transação que efetivava a entrega,
+ * então uma revogação de licença, uma nova vistoria rejeitada ou uma reversão de
+ * repasse entre a leitura e o commit não eram detectadas. Agora: releitura do estado
+ * da unidade e dos três gates inteiramente DENTRO da mesma transação `Serializable`
+ * que muda o status e grava o termo — mesmo mecanismo já usado por
+ * `ensureInvestmentCase` (9K.1) para o mesmo tipo de conflito. Duas chamadas
+ * concorrentes só produzem 1 sucesso real: a que perde o conflito serializável
+ * (Postgres SSI, código `P2034`) é reexecutada (até `MARK_UNIT_DELIVERED_MAX_ATTEMPTS`
+ * vezes, com jitter) e, ao reler dentro da nova tentativa, encontra a unidade já
+ * `ENTREGUE` e retorna o mesmo resultado de forma idempotente — nunca uma segunda
+ * entrega, nunca um segundo termo.
+ */
 export async function markUnitDelivered(context: AuthContext, salesUnitId: string) {
   assertApprover(context);
   const unit = await salesUnitForTenant(context.organizationId, salesUnitId);
-  if (unit.status !== "VENDIDA") throw new Error("Somente unidades vendidas podem ser marcadas como entregues.");
+  const correlationId = newCorrelationId();
+
+  for (let attempt = 1; attempt <= MARK_UNIT_DELIVERED_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const current = await tx.salesUnit.findUniqueOrThrow({ where: { id: unit.id } });
+        if (current.status === "ENTREGUE") return current; // idempotente: outra chamada concorrente já entregou
+        if (current.status !== "VENDIDA") throw new Error("Somente unidades vendidas podem ser marcadas como entregues.");
+        const sale = await tx.sale.findFirst({ where: { salesUnitId: unit.id, status: "APPROVED" } });
+        if (!sale) throw new Error("Nenhuma venda aprovada encontrada para esta unidade.");
+        const readiness = await evaluateUnitDeliveryReadiness(tx, context.organizationId, unit.projectId, unit.id, sale.id);
+        if (readiness.overall !== "APTO") {
+          throw new Error(`Entrega bloqueada — técnico: ${readiness.technical.status} (${readiness.technical.reason}); jurídico: ${readiness.legal.status} (${readiness.legal.reason}); financeiro: ${readiness.financial.status} (${readiness.financial.reason}).`);
+        }
+        const result = await tx.salesUnit.updateMany({ where: { id: unit.id, status: "VENDIDA" }, data: { status: "ENTREGUE" } });
+        if (result.count === 0) throw new Error("A unidade não está mais vendida — outra operação a alterou primeiro.");
+        await tx.auditLog.create({
+          data: audit(
+            context, unit.projectId, "SALES_UNIT_DELIVERED", "SalesUnit", unit.id,
+            { saleId: sale.id, deliveryGateSnapshot: readiness },
+            { before: { status: current.status }, correlationId },
+          ),
+        });
+        return tx.salesUnit.findUniqueOrThrow({ where: { id: unit.id } });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20_000 });
+    } catch (error) {
+      if (!isTransientWriteConflict(error) || attempt === MARK_UNIT_DELIVERED_MAX_ATTEMPTS) throw error;
+      await jitterDelay(attempt);
+    }
+  }
+  // Inalcançável: o laço acima sempre retorna ou lança na última tentativa. Existe só para o TypeScript.
+  throw new Error("Não foi possível concluir a entrega após múltiplas tentativas.");
+}
+
+/** Pré-visualização somente leitura do gate de entrega — mesma função usada por `markUnitDelivered`, exposta para a UI mostrar o motivo do bloqueio antes de tentar. Fora de transação de propósito: é só leitura, nunca decide nem persiste nada. */
+export async function getUnitDeliveryReadiness(context: Pick<AuthContext, "organizationId">, salesUnitId: string) {
+  const unit = await salesUnitForTenant(context.organizationId, salesUnitId);
   const sale = await prisma.sale.findFirst({ where: { salesUnitId: unit.id, status: "APPROVED" } });
-  if (!sale) throw new Error("Nenhuma venda aprovada encontrada para esta unidade.");
-  const accepted = await prisma.salesUnitInspection.findFirst({ where: { salesUnitId: unit.id, saleId: sale.id, outcome: { in: ["ACCEPTED", "ACCEPTED_WITH_PENDING"] } } });
-  if (!accepted) throw new Error("É necessário ao menos uma vistoria aceita (com ou sem pendências) antes da entrega.");
-  const overdueOpen = await prisma.receivableInstallment.count({ where: { receivableAccount: { saleId: sale.id }, status: { in: ["PREVISTA", "EMITIDA", "PARCIALMENTE_RECEBIDA"] }, dueDate: { lt: new Date() } } });
-  if (overdueOpen > 0) throw new Error("Há parcelas vencidas em aberto no Financeiro; regularize antes de liberar a entrega.");
-  return prisma.$transaction(async (tx) => {
-    const result = await tx.salesUnit.updateMany({ where: { id: unit.id, status: "VENDIDA" }, data: { status: "ENTREGUE" } });
-    if (result.count === 0) throw new Error("A unidade não está mais vendida — outra operação a alterou primeiro.");
-    await tx.auditLog.create({ data: audit(context, unit.projectId, "SALES_UNIT_DELIVERED", "SalesUnit", unit.id, { saleId: sale.id }) });
-    return tx.salesUnit.findUniqueOrThrow({ where: { id: unit.id } });
-  });
+  if (!sale) return null;
+  return evaluateUnitDeliveryReadiness(prisma, context.organizationId, unit.projectId, unit.id, sale.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -565,8 +652,99 @@ export async function transitionPostSaleRequest(context: AuthContext, raw: Trans
   const request = await prisma.postSaleRequest.findFirst({ where: { id: input.requestId, organizationId: context.organizationId } });
   if (!request) throw new Error("Solicitação de pós-venda não encontrada nesta organização.");
   const updated = await prisma.postSaleRequest.update({ where: { id: request.id }, data: { status: input.status } });
-  await prisma.auditLog.create({ data: audit(context, null, "POST_SALE_REQUEST_TRANSITIONED", "PostSaleRequest", request.id, { from: request.status, to: input.status }) });
+  // correlationId adicionado nesta correção (item 3): resolução/reabertura/encerramento
+  // de assistência passam a ter rastreabilidade completa, sem alterar o comportamento
+  // já existente desta transição (9E).
+  await prisma.auditLog.create({ data: audit(context, null, "POST_SALE_REQUEST_TRANSITIONED", "PostSaleRequest", request.id, { from: request.status, to: input.status }, { before: { status: request.status }, correlationId: newCorrelationId() }) });
   return updated;
+}
+
+// ---------------------------------------------------------------------------
+// Fase 9R — Assistência técnica: fornecedor responsável, custo, reincidência e
+// evidência antes/depois. Estende `PostSaleRequest`/`PostSaleUpdate` (9E) — nenhum
+// domínio de assistência paralelo.
+// ---------------------------------------------------------------------------
+
+async function postSaleRequestForTenant(organizationId: string, requestId: string) {
+  const request = await prisma.postSaleRequest.findFirst({ where: { id: requestId, organizationId } });
+  if (!request) throw new Error("Solicitação de pós-venda não encontrada nesta organização.");
+  return request;
+}
+
+export async function assignPostSaleSupplier(context: AuthContext, raw: AssignPostSaleSupplierInput) {
+  assertMutable(context);
+  const input = assignPostSaleSupplierSchema.parse(raw);
+  const request = await postSaleRequestForTenant(context.organizationId, input.requestId);
+  if (input.supplierId) {
+    const supplier = await prisma.supplier.findFirst({ where: { id: input.supplierId, organizationId: context.organizationId } });
+    if (!supplier) throw new Error("Fornecedor não encontrado nesta organização.");
+  }
+  const updated = await prisma.postSaleRequest.update({ where: { id: request.id }, data: { supplierId: input.supplierId } });
+  await prisma.auditLog.create({ data: audit(context, null, "POST_SALE_REQUEST_SUPPLIER_ASSIGNED", "PostSaleRequest", request.id, { supplierId: input.supplierId }, { before: { supplierId: request.supplierId }, correlationId: newCorrelationId() }) });
+  return updated;
+}
+
+export async function setPostSaleCost(context: AuthContext, raw: SetPostSaleCostInput) {
+  assertMutable(context);
+  const input = setPostSaleCostSchema.parse(raw);
+  const request = await postSaleRequestForTenant(context.organizationId, input.requestId);
+  const updated = await prisma.postSaleRequest.update({
+    where: { id: request.id },
+    data: { estimatedCost: input.estimatedCost === undefined ? undefined : input.estimatedCost, actualCost: input.actualCost === undefined ? undefined : input.actualCost },
+  });
+  await prisma.auditLog.create({ data: audit(context, null, "POST_SALE_REQUEST_COST_SET", "PostSaleRequest", request.id, { estimatedCost: input.estimatedCost ?? null, actualCost: input.actualCost ?? null }, { before: { estimatedCost: request.estimatedCost, actualCost: request.actualCost }, correlationId: newCorrelationId() }) });
+  return updated;
+}
+
+/** Reincidência exige que ambos os chamados pertençam à mesma unidade (`isValidPostSaleRecurrence`, regra pura) — nunca inferida por texto livre. */
+export async function markPostSaleRecurrence(context: AuthContext, raw: MarkPostSaleRecurrenceInput) {
+  assertMutable(context);
+  const input = markPostSaleRecurrenceSchema.parse(raw);
+  const request = await postSaleRequestForTenant(context.organizationId, input.requestId);
+  const previous = await postSaleRequestForTenant(context.organizationId, input.recurrenceOfId);
+  const validity = isValidPostSaleRecurrence({ currentId: request.id, currentSalesUnitId: request.salesUnitId, previousId: previous.id, previousSalesUnitId: previous.salesUnitId });
+  if (!validity.valid) throw new Error(validity.reason);
+  const updated = await prisma.postSaleRequest.update({ where: { id: request.id }, data: { recurrenceOfId: previous.id } });
+  await prisma.auditLog.create({ data: audit(context, null, "POST_SALE_REQUEST_RECURRENCE_MARKED", "PostSaleRequest", request.id, { recurrenceOfId: previous.id }, { before: { recurrenceOfId: request.recurrenceOfId }, correlationId: newCorrelationId() }) });
+  return updated;
+}
+
+/** Evidência antes/depois do reparo. Reaproveita `validateDocumentUpload` (assinatura binária, MIME, tamanho — o mesmo guard endurecido na reauditoria 9Q.2B) e o `StorageProvider` genérico; o binário nunca entra no Postgres. */
+export async function addPostSaleEvidence(context: AuthContext, raw: AddPostSaleEvidenceInput & { bytes: Uint8Array }) {
+  assertMutable(context);
+  const input = addPostSaleEvidenceSchema.parse(raw);
+  const request = await postSaleRequestForTenant(context.organizationId, input.requestId);
+  const validated = validateDocumentUpload({ fileName: input.fileName, mimeType: input.mimeType, bytes: raw.bytes });
+  const stored = await postSaleEvidenceStorage.put({ organizationId: context.organizationId, packageId: request.id, fileName: input.fileName, bytes: raw.bytes });
+  const update = await prisma.postSaleUpdate.create({
+    data: {
+      requestId: request.id, authorId: context.userId,
+      note: input.note ?? `Evidência ${input.evidenceKind === "BEFORE" ? "antes" : "depois"} do reparo.`,
+      evidenceKind: input.evidenceKind, storageKey: stored.key, checksum: stored.checksum, fileName: input.fileName, mimeType: validated.mimeType, fileSize: stored.size,
+    },
+  });
+  // Referência segura da evidência: chave de storage + checksum SHA-256 (nunca o
+  // binário, nunca o nome de arquivo original do cliente sem contexto).
+  await prisma.auditLog.create({ data: audit(context, null, "POST_SALE_REQUEST_EVIDENCE_ADDED", "PostSaleUpdate", update.id, { requestId: request.id, evidenceKind: input.evidenceKind, storageKey: stored.key, checksum: stored.checksum }, { correlationId: newCorrelationId() }) });
+  return update;
+}
+
+/**
+ * Avalia SLA de assistência técnica em aberto e emite alerta operacional para os
+ * vencidos (call site produtivo, mesmo padrão de `job-runner.ts`/`clicksign-service.ts`
+ * — 9Q.2B). Violação nunca é persistida: é sempre derivada de `slaDueAt`+`status`
+ * (`evaluatePostSaleSla`, regra pura), então nunca diverge do estado real do chamado.
+ */
+export async function evaluatePostSaleSlaBreaches(context: Pick<AuthContext, "organizationId">, now: Date = new Date()) {
+  const openRequests = await prisma.postSaleRequest.findMany({
+    where: { organizationId: context.organizationId, status: { in: ["OPEN", "IN_PROGRESS", "WAITING_CUSTOMER"] }, slaDueAt: { not: null } },
+    select: { id: true, slaDueAt: true, status: true, category: true },
+  });
+  const breached = openRequests.filter((request) => evaluatePostSaleSla({ slaDueAt: request.slaDueAt, status: request.status, now }).violated);
+  for (const request of breached) {
+    await emitOperationalAlert({ category: "SLA_ASSISTENCIA_VENCIDO", severity: "warning", code: `POST_SALE:${request.category}`, organizationId: context.organizationId, correlationId: request.id });
+  }
+  return breached.map((request) => request.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -577,7 +755,7 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
   await projectForTenant(context.organizationId, projectId);
   await releaseExpiredReservations(context, projectId, referenceDate);
 
-  const [units, priceTables, proposals, reservations, sales, leads, commissionPolicies, inspections, postSaleRequests, brokerProfiles, contractTemplates] = await Promise.all([
+  const [units, priceTables, proposals, reservations, sales, leads, commissionPolicies, inspections, postSaleRequests, brokerProfiles, contractTemplates, disbursements, condominiumSetup] = await Promise.all([
     prisma.salesUnit.findMany({ where: { organizationId: context.organizationId, projectId }, include: { priceLines: { include: { priceTable: true } }, blocks: { where: { endedAt: null } } }, orderBy: { code: "asc" }, take: 2000 }),
     prisma.salesPriceTable.findMany({ where: { organizationId: context.organizationId, projectId }, include: { lines: true }, orderBy: { version: "desc" }, take: 50 }),
     prisma.salesProposal.findMany({ where: { organizationId: context.organizationId, projectId }, include: { customer: true, salesUnit: true, broker: true, creditBureauConsultations: { orderBy: { requestedAt: "desc" }, take: 1 } }, orderBy: { createdAt: "desc" }, take: 200 }),
@@ -586,9 +764,12 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
     prisma.salesLead.findMany({ where: { organizationId: context.organizationId, OR: [{ projectId }, { projectId: null }] }, orderBy: { createdAt: "desc" }, take: 200 }),
     prisma.salesCommissionPolicy.findMany({ where: { organizationId: context.organizationId, OR: [{ projectId }, { projectId: null }], isActive: true } }),
     prisma.salesUnitInspection.findMany({ where: { salesUnit: { organizationId: context.organizationId, projectId } }, include: { salesUnit: true }, orderBy: { scheduledAt: "desc" }, take: 200 }),
-    prisma.postSaleRequest.findMany({ where: { organizationId: context.organizationId, salesUnit: { projectId } }, include: { customer: true, salesUnit: true, updates: { orderBy: { createdAt: "desc" }, take: 5 } }, orderBy: { createdAt: "desc" }, take: 200 }),
+    prisma.postSaleRequest.findMany({ where: { organizationId: context.organizationId, salesUnit: { projectId } }, include: { customer: true, salesUnit: true, supplier: true, updates: { orderBy: { createdAt: "desc" }, take: 5 } }, orderBy: { createdAt: "desc" }, take: 200 }),
     prisma.brokerProfile.findMany({ where: { organizationId: context.organizationId }, include: { supplier: true } }),
     prisma.contractTemplate.findMany({ where: { organizationId: context.organizationId, projectId }, include: { versions: { orderBy: { version: "desc" }, take: 5 } }, orderBy: { createdAt: "desc" }, take: 50 }),
+    // Fase 9R — repasse bancário e implantação do condomínio (leitura só de resumo; mutações via `app/actions/handover.ts`).
+    prisma.bankFinancingDisbursement.findMany({ where: { organizationId: context.organizationId, sale: { projectId } }, include: { sale: { include: { salesUnit: true } }, financialInstitution: true }, orderBy: { createdAt: "desc" }, take: 200 }),
+    prisma.condominiumSetup.findUnique({ where: { projectId }, include: { administratorSupplier: true } }),
   ]);
 
   const activeLineByUnit = new Map(units.map((unit) => [unit.id, unit.priceLines.find((line) => line.priceTable.status === "ACTIVE") ?? null]));
@@ -634,7 +815,22 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
     commissionPolicies: commissionPolicies.map((policy) => ({ id: policy.id, triggerEvent: policy.triggerEvent, percentage: Number(policy.percentage), basis: policy.basis })),
     commissions: sales.flatMap((sale) => sale.commissions.map((commission) => ({ id: commission.id, sale: sale.id, broker: commission.broker.name, amount: Number(commission.amount), status: commission.status }))),
     inspections: inspections.map((inspection) => ({ id: inspection.id, unit: inspection.salesUnit.code, scheduledAt: inspection.scheduledAt.toISOString(), outcome: inspection.outcome })),
-    postSaleRequests: postSaleRequests.map((request) => ({ id: request.id, unit: request.salesUnit.code, customer: request.customer.name, customerId: request.customerId, category: request.category, status: request.status, updates: request.updates.length })),
+    // Fase 9R — supplier/custo/reincidência/SLA vencido (evaluatePostSaleSla, regra pura — nunca persistido).
+    postSaleRequests: postSaleRequests.map((request) => ({
+      id: request.id, unit: request.salesUnit.code, customer: request.customer.name, customerId: request.customerId, category: request.category, status: request.status, updates: request.updates.length,
+      supplier: request.supplier?.name ?? null, estimatedCost: request.estimatedCost ? Number(request.estimatedCost) : null, actualCost: request.actualCost ? Number(request.actualCost) : null,
+      recurrenceOfId: request.recurrenceOfId, slaDueAt: request.slaDueAt?.toISOString() ?? null,
+      slaViolated: evaluatePostSaleSla({ slaDueAt: request.slaDueAt, status: request.status, now: referenceDate }).violated,
+    })),
+    // Fase 9R — repasse bancário e implantação do condomínio.
+    bankFinancingDisbursements: disbursements.map((item) => ({
+      id: item.id, unit: item.sale.salesUnit.code, saleId: item.saleId, institution: item.financialInstitution.name, disbursementType: item.disbursementType,
+      expectedAmount: Number(item.expectedAmount), disbursedAmount: item.disbursedAmount ? Number(item.disbursedAmount) : null, status: item.status,
+    })),
+    condominiumSetup: condominiumSetup ? {
+      id: condominiumSetup.id, status: condominiumSetup.status, administrator: condominiumSetup.administratorSupplier?.name ?? null,
+      constitutedAt: condominiumSetup.constitutedAt?.toISOString() ?? null, transferredAt: condominiumSetup.transferredAt?.toISOString() ?? null,
+    } : null,
     brokers: brokerProfiles.map((profile) => ({ id: profile.id, name: profile.supplier.name, creci: profile.creci, defaultCommissionRate: profile.defaultCommissionRate ? Number(profile.defaultCommissionRate) : null })),
     contractTemplates: contractTemplates.map((template) => ({ id: template.id, name: template.name, status: template.status, versions: template.versions.map((version) => ({ id: version.id, version: version.version, status: version.status })) })),
     // Entrada para o Cliente 360 (Fase 9K.4B, item 1) — nenhum dado novo: só agrupa por cliente o

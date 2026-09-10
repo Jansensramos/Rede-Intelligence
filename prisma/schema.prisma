@@ -986,6 +986,8 @@ model Organization {
   salesContracts                  SalesContract[]
   salesCommissionPolicies         SalesCommissionPolicy[]
   postSaleRequests                PostSaleRequest[]
+  bankFinancingDisbursements      BankFinancingDisbursement[]
+  condominiumSetups               CondominiumSetup[]
   contractTemplates               ContractTemplate[]
   contractDocuments               ContractDocument[]
   signatureRequests               SignatureRequest[]
@@ -1246,6 +1248,7 @@ model Project {
   launchTriggers               LaunchTrigger[]
   launchEvaluations            LaunchEvaluation[]
   launchDecisions              LaunchDecision[]
+  condominiumSetup             CondominiumSetup?
 
   @@unique([organizationId, name])
   @@unique([organizationId, id], map: "projects_organization_id_id_key")
@@ -4672,6 +4675,7 @@ model FinancialInstitution {
   createdAt      DateTime      @default(now()) @map("created_at")
   organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   bankAccounts   BankAccount[]
+  financingDisbursements BankFinancingDisbursement[]
 
   @@unique([organizationId, name])
   @@map("financial_institutions")
@@ -4703,6 +4707,8 @@ model Supplier {
   salesProposals       SalesProposal[]
   sales                Sale[]
   salesCommissions     SalesCommission[]
+  postSaleRequests     PostSaleRequest[]
+  condominiumSetups    CondominiumSetup[]
 
   @@unique([organizationId, taxId])
   @@index([organizationId, status])
@@ -6838,6 +6844,11 @@ enum PostSaleStatus {
   CLOSED
 }
 
+enum PostSaleEvidenceKind {
+  BEFORE
+  AFTER
+}
+
 model SalesUnit {
   id              String          @id @default(cuid())
   organizationId  String          @map("organization_id")
@@ -7087,6 +7098,7 @@ model Sale {
   inspections        SalesUnitInspection[]
   postSaleRequests   PostSaleRequest[]
   receivableAccounts ReceivableAccount[]
+  financingDisbursements BankFinancingDisbursement[]
 
   @@index([organizationId, status])
   @@index([salesUnitId, status])
@@ -7257,31 +7269,148 @@ model PostSaleRequest {
   responsibleId  String?          @map("responsible_id")
   slaDueAt       DateTime?        @map("sla_due_at")
   status         PostSaleStatus   @default(OPEN)
+  // Fase 9R — assistência técnica: fornecedor responsável, reincidência e custo do
+  // reparo. Reaproveita `Supplier` (9C) e o próprio `PostSaleRequest` (auto-relação),
+  // sem criar um domínio de assistência paralelo.
+  supplierId     String?          @map("supplier_id")
+  recurrenceOfId String?          @map("recurrence_of_id")
+  estimatedCost  Decimal?         @map("estimated_cost") @db.Decimal(20, 2)
+  actualCost     Decimal?         @map("actual_cost") @db.Decimal(20, 2)
   createdById    String           @map("created_by_id")
   createdAt      DateTime         @default(now()) @map("created_at")
   updatedAt      DateTime         @updatedAt @map("updated_at")
 
-  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  salesUnit    SalesUnit        @relation(fields: [salesUnitId], references: [id], onDelete: Restrict)
-  sale         Sale             @relation(fields: [saleId], references: [id], onDelete: Restrict)
-  customer     Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  updates      PostSaleUpdate[]
+  organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  salesUnit     SalesUnit         @relation(fields: [salesUnitId], references: [id], onDelete: Restrict)
+  sale          Sale              @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  customer      Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  supplier      Supplier?         @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  recurrenceOf  PostSaleRequest?  @relation("PostSaleRecurrence", fields: [recurrenceOfId], references: [id], onDelete: SetNull)
+  recurrences   PostSaleRequest[] @relation("PostSaleRecurrence")
+  updates       PostSaleUpdate[]
 
   @@index([organizationId, status])
+  @@index([supplierId])
+  @@index([recurrenceOfId])
   @@map("post_sale_requests")
 }
 
 model PostSaleUpdate {
-  id        String   @id @default(cuid())
-  requestId String   @map("request_id")
-  authorId  String   @map("author_id")
+  id        String                @id @default(cuid())
+  requestId String                @map("request_id")
+  authorId  String                @map("author_id")
   note      String
+  // Fase 9R — evidência antes/depois de um reparo/chamado. Reaproveita o
+  // `StorageProvider` genérico já usado por documentos de contrato/design (mesmo
+  // shape: chave, checksum SHA-256, nome, tipo e tamanho) — nenhuma infraestrutura de
+  // armazenamento nova.
+  evidenceKind PostSaleEvidenceKind? @map("evidence_kind")
+  storageKey   String?               @map("storage_key")
+  checksum     String?
+  fileName     String?               @map("file_name")
+  mimeType     String?               @map("mime_type")
+  fileSize     Int?                  @map("file_size")
   createdAt DateTime @default(now()) @map("created_at")
 
   request PostSaleRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
   @@index([requestId, createdAt])
   @@map("post_sale_updates")
+}
+
+// -----------------------------------------------------------------------------
+// FASE 9R — Repasse bancário, Chaves (gates de entrega + condomínio) e Assistência
+// técnica. Fecha o ciclo entre a venda contratada (9E/9K.4B) e o encerramento do
+// empreendimento (9S, não iniciada). Reaproveita Sale/SalesContract/
+// SalesUnitInspection/PostSaleRequest (9E), Supplier (9C), ReceivableAccount/
+// Installment/Payment e FinancialInstitution (9B) — só duas entidades são novas
+// (`BankFinancingDisbursement`, `CondominiumSetup`); nenhum domínio paralelo de
+// vistoria, entrega, assistência ou financeiro é criado. `reconciledInstallmentId`/
+// `reconciledPaymentId` são referências simples (sem FK) de propósito: evitam tocar o
+// schema já denso de `ReceivableInstallment`/`ReceivablePayment` só para uma
+// back-relation opcional — a leitura conciliada é feita por consulta explícita no
+// serviço, nunca por join implícito do Prisma.
+// -----------------------------------------------------------------------------
+
+enum BankFinancingDisbursementType {
+  FINANCING
+  FGTS
+  SUBSIDY
+  OTHER
+}
+
+enum BankFinancingDisbursementStatus {
+  PENDING
+  REQUESTED
+  DISBURSED
+  RECONCILED
+  DIVERGENT
+  CANCELLED
+}
+
+/// Repasse bancário: financiamento/FGTS/subsídio do comprador liberado pelo banco e
+/// conciliado com a unidade/contrato/recebível. Nunca ajusta o recebível
+/// silenciosamente — divergência de valor mantém o status DIVERGENT até decisão
+/// humana explícita (ver `src/domain/handover/repasse.ts`).
+model BankFinancingDisbursement {
+  id                      String                           @id @default(cuid())
+  organizationId          String                           @map("organization_id")
+  saleId                  String                           @map("sale_id")
+  financialInstitutionId  String                           @map("financial_institution_id")
+  disbursementType        BankFinancingDisbursementType     @map("disbursement_type")
+  expectedAmount          Decimal                          @map("expected_amount") @db.Decimal(20, 2)
+  disbursedAmount         Decimal?                         @map("disbursed_amount") @db.Decimal(20, 2)
+  bankReference           String?                          @map("bank_reference")
+  status                  BankFinancingDisbursementStatus  @default(PENDING)
+  requestedAt             DateTime?                        @map("requested_at")
+  disbursedAt             DateTime?                        @map("disbursed_at")
+  reconciledAt            DateTime?                        @map("reconciled_at")
+  reconciledInstallmentId String?                          @map("reconciled_installment_id")
+  reconciledPaymentId     String?                          @map("reconciled_payment_id")
+  notes                   String?
+  createdById             String                           @map("created_by_id")
+  createdAt               DateTime                         @default(now()) @map("created_at")
+  updatedAt               DateTime                         @updatedAt @map("updated_at")
+
+  organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  sale                 Sale                 @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  financialInstitution FinancialInstitution @relation(fields: [financialInstitutionId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, saleId])
+  @@index([organizationId, status])
+  @@map("bank_financing_disbursements")
+}
+
+enum CondominiumSetupStatus {
+  PLANNED
+  IN_PROGRESS
+  IMPLEMENTED
+  CANCELLED
+}
+
+/// Implantação do condomínio: evento único de constituição/transferência de
+/// responsabilidade da incorporadora para o condomínio — não é gestão contínua de
+/// condomínio (fora do escopo da 9R, ver `docs/PHASE_9R_CONTRACT.md`).
+model CondominiumSetup {
+  id                      String                  @id @default(cuid())
+  organizationId          String                  @map("organization_id")
+  projectId               String                  @unique @map("project_id")
+  status                  CondominiumSetupStatus  @default(PLANNED)
+  administratorSupplierId String?                 @map("administrator_supplier_id")
+  responsibleId           String                  @map("responsible_id")
+  constitutedAt           DateTime?               @map("constituted_at")
+  transferredAt           DateTime?               @map("transferred_at")
+  notes                   String?
+  createdById             String                  @map("created_by_id")
+  createdAt               DateTime                @default(now()) @map("created_at")
+  updatedAt               DateTime                @updatedAt @map("updated_at")
+
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project                Project     @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  administratorSupplier  Supplier?   @relation(fields: [administratorSupplierId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@map("condominium_setups")
 }
 
 // -----------------------------------------------------------------------------

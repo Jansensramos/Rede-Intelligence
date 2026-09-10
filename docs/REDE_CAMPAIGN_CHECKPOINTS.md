@@ -26,7 +26,8 @@ QA, auditoria, commit e CI continuam separados por fase; nenhuma evidência exte
 | 9P.4 | Bancos, conciliação, funding e bureau de crédito | Sistemas concretos dependem dos pilotos |
 | 9P.5 | Sienge e CRM utilizado pelo cliente | Sistemas concretos dependem dos pilotos |
 | 9Q — restante | Gates de release e operação | Aguardando |
-| 9R, 9S | Próximas fases do roadmap aprovado | Aguardam contratos detalhados |
+| 9R | Repasse bancário, chaves (gates de entrega + condomínio) e assistência técnica | Contrato aprovado e implementado nesta sessão — ver seção dedicada ao final deste documento |
+| 9S | Encerramento do empreendimento/SPE, governança, resultado realizado | Aguarda contrato detalhado |
 | 10A | AI Gateway | Aguardando |
 | 10B | Context Engine | Aguardando |
 | 10C | Tool Layer | Aguardando |
@@ -655,3 +656,66 @@ comprovados.
 
 Commit e push permanecem exclusivamente manuais pelo usuário. Nenhuma fase posterior foi
 iniciada. Zero staged; worktree aberto para nova reauditoria adversarial.
+
+## Fase 9R — Repasse, Chaves e Assistência Técnica (branch `codex/fase-9r`, HEAD-base `69d00f0e1207d0e3b2cab4118695d977bd50f29c`)
+
+Escopo recuperado do Relatório Mestre (`work/master-report.txt`, não inventado — o
+repositório só registrava "9R aguarda contrato detalhado") e formalizado em
+`docs/PHASE_9R_CONTRACT.md`, aprovado com 5 decisões definitivas do usuário
+(nomenclatura `BankFinancingDisbursement`, `CondominiumSetup` mantido, gate jurídico
+consumindo `LegalLicense`/9D só por referência e snapshot agregado, portal do cliente
+fora do escopo). Implementação completa nesta sessão — detalhe técnico, achados da
+revisão adversarial própria e QA completo em `docs/PHASE_9R_AUDIT_RECORD.md`.
+
+Resumo: repasse bancário (criação → solicitação → liberação → conciliação, gerando o
+`ReceivablePayment` oficial via 9B/9E, nunca uma segunda contabilidade), gate de
+entrega técnico+jurídico+financeiro combinado (`markUnitDelivered` estendida, 9E),
+implantação de condomínio (evento único, estados terminais protegidos), assistência
+técnica estendida (fornecedor, custo, reincidência, evidência com checksum, SLA
+sempre derivado). Duas entidades novas apenas (`BankFinancingDisbursement`,
+`CondominiumSetup`); todo o resto reaproveitado de 9B/9C/9E, confirmado por teste
+arquitetural. Uma migration aditiva única, aplicada só após backup real verificado
+(dev e teste, ambos restaurados em banco isolado e validados antes da migration).
+
+QA: 134 arquivos, 1374 testes, 0 falhas (suíte oficial, repetida sem recriar o banco);
+TypeScript/ESLint limpos; build aprovado (40 rotas, nenhuma nova); preflight inválido
+recusado; `git diff --check` aprovado. 50 testes novos da 9R (unitários puros +
+integração PostgreSQL real, incluindo RBAC/IDOR, concorrência/idempotência real do
+repasse, e o teste arquitetural de ausência de domínio paralelo).
+
+**9S (encerramento, governança, resultado realizado) e Fase 10 (IA/agentes) não foram
+iniciadas.** Nenhuma API externa, cloud real ou credencial real foi usada nesta fase.
+Commit e push permanecem exclusivamente manuais pelo usuário. Zero staged; worktree
+aberto para auditoria independente.
+
+### Correção focal pós-reauditoria da 9R (2026-09-10)
+
+Uma reauditoria adversarial independente (só leitura) sobre a implementação acima
+devolveu **REPROVADO**: 1 achado Alto (gate técnico de entrega reaproveitava uma
+vistoria antiga aprovada em vez da mais recente) e 4 achados Médio (TOCTOU entre a
+leitura dos gates de entrega e o commit; trilha de auditoria sem `correlationId`/
+estado anterior; imutabilidade de `RECONCILED`/`IMPLEMENTED`/`CANCELLED` só na
+aplicação, sem espelho no banco; `P2002` tratado genericamente na conciliação
+concorrente). Todos os cinco foram corrigidos com mudança de código real e teste real
+contra PostgreSQL nesta sessão — detalhe completo, honesto e por achado em
+`docs/PHASE_9R_AUDIT_RECORD.md` §8.
+
+A migration original da 9R (`20260910131423_phase_9r_repasse_chaves_assistencia`) não
+foi editada. A proteção estrutural entrou por uma segunda migration aditiva
+(`20260910151500_phase_9r_structural_immutability`, triggers condicionais de
+imutabilidade + `TRUNCATE` bloqueado, mesmo padrão de
+`20260905220000_phase_9p3a_immutable_signature_evidence`), aplicada só após backup
+real de dev e teste com SHA-256/horário registrados e restauração validada em banco
+isolado — ver tabela em `docs/PHASE_9R_AUDIT_RECORD.md` §8.4.
+
+QA desta correção: 134 arquivos, **1402 testes**, 0 falhas (suíte oficial, repetida
+sem recriar o banco); TypeScript/ESLint limpos; build aprovado (39 rotas, nenhuma
+nova); preflight inválido recusado; `git diff --check` aprovado. 23 testes novos desta
+correção (9 gate técnico + 6 TOCTOU/concorrência real + 3 P2002 + 5 imutabilidade
+estrutural, incluindo SQL bruto e `TRUNCATE`); total da 9R passou de 50 para **78
+testes**.
+
+Branch `codex/fase-9r` e HEAD-base `69d00f0e1207d0e3b2cab4118695d977bd50f29c`
+preservados. **9S e Fase 10 continuam não iniciadas.** Nenhuma API externa, cloud real
+ou credencial real foi usada. Nenhum commit, push, merge, rebase ou tag foi executado
+nesta correção. Zero staged; worktree aberto para reauditoria focal independente.

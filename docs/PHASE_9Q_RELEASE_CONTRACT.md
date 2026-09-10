@@ -60,7 +60,7 @@ Todos os bloqueadores de piloto, mais: RPO/RTO sem medição, rollback não ensa
 |---|---|---|
 | Segurança | Responsável de Segurança | preflight, matriz RBAC/tenant, scan de dependências/imagens, redaction e revisão de segredos |
 | SRE/Cloud | Responsável de Operações | manifesto por SHA, health/readiness, alertas, capacidade, smoke, rollback |
-| Banco de Dados | Responsável pelo PostgreSQL | 34 migrations esperadas (contagem viva — conferir sempre contra `prisma/migrations` e o manifesto vigente, nunca fixar um número no texto), status, PITR, backup e restauração isolada |
+| Banco de Dados | Responsável pelo PostgreSQL | migrations esperadas (contagem viva — conferir sempre contra `prisma/migrations` e o manifesto vigente, nunca fixar um número no texto), status, PITR, backup e restauração isolada |
 | QA | Responsável de Qualidade | CI, totais de testes, testes negativos, build e smoke autenticado |
 | Produto/Onboarding | Responsável do piloto | organização/empresa/projeto/usuários provisionados e checklist assistido |
 | Suporte | Responsável de atendimento | contatos, severidades, escalonamento e diagnóstico sanitizado |
