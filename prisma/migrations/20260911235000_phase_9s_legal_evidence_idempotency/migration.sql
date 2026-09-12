@@ -1,0 +1,45 @@
+-- Fase 9S — correção focal pós-auditoria: idempotência estrutural do registro de
+-- LegalEvidenceDocument. Additive only — nenhuma migration anterior é editada.
+-- Aplicar somente após backup real de dev e teste, restaurado e validado em banco
+-- isolado (ver docs/PHASE_9S_AUDIT_RECORD.md, seção desta correção).
+--
+-- Causa confirmada pela auditoria: `registerLegalEvidenceDocument` fazia apenas um
+-- `findFirst` (check-then-act) antes do `create` — sem nenhuma constraint/índice
+-- único representando a identidade idempotente, duas chamadas concorrentes para o
+-- MESMO arquivo e o MESMO vínculo passavam ambas pela checagem e criavam dois
+-- registros `PENDING_REVIEW` distintos (reproduzido: 5 chamadas concorrentes → 5
+-- linhas). Rewiring de aplicação (P2002 tratado por constraint exata, nunca
+-- genérico) fora desta migration.
+--
+-- Identidade idempotente extraída do contrato/serviço já existentes (não
+-- inventada): organização + projeto + caso + vínculo jurídico (documentRequestId
+-- OU checklistItemId, nunca ambos — já XOR por CHECK) + checksum (SHA-256 do
+-- conteúdo — já a "impressão digital" do payload usada pelo `findFirst` original),
+-- restrita às linhas ainda "ativas" (`PENDING_REVIEW`/`VERIFIED`) — mesmo filtro de
+-- status que o `findFirst` original já usava. `REJECTED`/`REVOKED` são
+-- deliberadamente EXCLUÍDOS do índice: são estados terminais e o próprio design da
+-- revogação (contrato §21.9) já estabelece "nova evidência = nova linha, nunca
+-- sobrescreve" — reenviar o mesmo arquivo após uma rejeição ou revogação é uma
+-- NOVA operação lógica, não um retry da anterior, e deve poder criar uma nova
+-- linha `PENDING_REVIEW`.
+--
+-- Dois índices únicos PARCIAIS separados — nunca um único índice composto cobrindo
+-- as duas colunas de vínculo (`document_request_id`/`checklist_item_id`) ao mesmo
+-- tempo: como as duas são nullable e mutuamente exclusivas (XOR), um índice único
+-- comum sobre ambas nunca pegaria duas linhas com o MESMO `document_request_id`
+-- mas ambas com `checklist_item_id = NULL` — em Postgres, por padrão, NULL nunca é
+-- considerado igual a NULL para fins de unicidade, então essa dupla escaparia
+-- silenciosamente. Cada índice parcial cobre só as linhas onde a respectiva coluna
+-- de vínculo não é nula, eliminando essa ambiguidade por construção.
+--
+-- Nenhum backfill fabricado: os índices são construídos sobre os dados reais já
+-- existentes (nenhuma duplicata ativa foi encontrada em dev nem teste antes desta
+-- migration — verificado por consulta direta antes de aplicar); se alguma
+-- duplicata ativa existisse, a criação do índice falharia de forma visível
+-- (fail-closed), nunca silenciosamente.
+
+-- CreateIndex
+CREATE UNIQUE INDEX "legal_evidence_documents_active_request_identity_key" ON "legal_evidence_documents"("organization_id", "project_id", "diligence_case_id", "document_request_id", "checksum") WHERE "document_request_id" IS NOT NULL AND "status" IN ('PENDING_REVIEW', 'VERIFIED');
+
+-- CreateIndex
+CREATE UNIQUE INDEX "legal_evidence_documents_active_checklist_identity_key" ON "legal_evidence_documents"("organization_id", "project_id", "diligence_case_id", "checklist_item_id", "checksum") WHERE "checklist_item_id" IS NOT NULL AND "status" IN ('PENDING_REVIEW', 'VERIFIED');

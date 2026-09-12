@@ -27,7 +27,7 @@ QA, auditoria, commit e CI continuam separados por fase; nenhuma evidência exte
 | 9P.5 | Sienge e CRM utilizado pelo cliente | Sistemas concretos dependem dos pilotos |
 | 9Q — restante | Gates de release e operação | Aguardando |
 | 9R | Repasse bancário, chaves (gates de entrega + condomínio) e assistência técnica | Contrato aprovado e implementado nesta sessão — ver seção dedicada ao final deste documento |
-| 9S | Encerramento do empreendimento/SPE, governança, resultado realizado | Aguarda contrato detalhado |
+| 9S | Encerramento do empreendimento/SPE, governança, resultado realizado | Contrato aprovado e implementado nesta sessão — ver seção dedicada ao final deste documento |
 | 10A | AI Gateway | Aguardando |
 | 10B | Context Engine | Aguardando |
 | 10C | Tool Layer | Aguardando |
@@ -751,3 +751,209 @@ aprovado; **36 migrations inalteradas**. Branch `codex/fase-9r`, HEAD
 `d829725396542b90e96cddb4b2b195606395df40` preservados. Nenhuma API externa, cloud
 real ou credencial real foi usada. Nenhum commit, push, merge, rebase ou tag foi
 executado. Zero staged; worktree aberto para a correção ser revisada.
+
+## Fase 9S — Encerramento do Empreendimento, Governança e Resultado Realizado (branch `codex/fase-9s`, HEAD-base `f339ad0f2a9f11322a906d09f40f85e8a2db5725`)
+
+Escopo recuperado do Relatório Mestre (seções 27, 28, 45, 46, 53) e do próprio
+contrato da 9R (`docs/PHASE_9R_CONTRACT.md` §8, que já definia a fronteira entre as
+duas fases), formalizado em `docs/PHASE_9S_CONTRACT.md`, aprovado com 8 decisões
+definitivas do usuário (sem `DISSOLVED` em `CompanyStatus` — decisão societária só
+via `LegalDecision`, nunca baixa real; `VIEWER` sem `CLOSURE_READ`; reabertura só
+`OWNER`; regras exatas de assistência impeditiva; `SEM_EVIDENCIA` bloqueando campos
+centrais; aportes/devoluções só via `ProjectClosureDistribution`; nomes definitivos
+`ProjectClosureResult`/`ProjectClosureDistribution`; distribuição simples sem
+waterfall). Implementação completa nesta sessão — detalhe técnico, achados da
+revisão adversarial própria e QA completo em `docs/PHASE_9S_AUDIT_RECORD.md`.
+
+Resumo: gate de encerramento com 5 subgates puros (operacional/9R, contratual/9C,
+jurídico/9D, financeiro/9B, contábil/9G, mesmo formato `APTO/PENDENTE/SEM_EVIDENCIA`
+já validado pela 9R); resultado realizado final reaproveitando `RevenueRecognitionRun`,
+`TaxAssessment`, `AccountingProvision`, `FundingDisbursement` e a convenção
+`documentRef` de `external-obligation-port.ts` — nenhum valor fabricado, ausência
+real de fonte fica `SEM_EVIDENCIA` explícito; encerramento contábil reaproveitando
+`AccountingPeriod`/`FinancialPeriodClosure` sem reabrir esse mecanismo; checklist de
+encerramento societário reaproveitando `LegalDueDiligenceCase`/`LegalDecision` (9D);
+distribuição final simples sem movimentação bancária real; reabertura só `OWNER`,
+com nova versão vinculada (`supersedesId`) que nunca sobrescreve o snapshot `FINAL`
+anterior (protegido por trigger de imutabilidade desde a migration original, sem
+precisar de uma correção posterior como na 9R). Duas entidades novas apenas
+(`ProjectClosureResult`, `ProjectClosureDistribution`); todo o resto reaproveitado,
+confirmado por teste arquitetural. Uma migration aditiva única (já incluindo os
+triggers de imutabilidade), aplicada só após backup real verificado (dev e teste,
+ambos restaurados em banco isolado e validados antes da migration).
+
+QA: 138 arquivos, **1487 testes**, 0 falhas (suíte oficial, repetida sem recriar o
+banco); TypeScript/ESLint limpos (0 avisos); build aprovado (39 rotas, nenhuma nova —
+sem UI nesta fase); preflight inválido recusado; `git diff --check` aprovado. 81
+testes novos da 9S (49 unitários puros + 32 de integração PostgreSQL real, incluindo
+RBAC/IDOR, concorrência real na aprovação, imutabilidade via SQL bruto, e o teste
+arquitetural de ausência de domínio paralelo). Revisão adversarial própria encontrou
+e corrigiu 5 achados durante a implementação (destaque: consulta de tributos
+acumulava valores de outros projetos da mesma empresa por falta de filtro por
+`projectId` — corrigida antes deste registro).
+
+**Fase 10 (IA/agentes) não foi iniciada.** Nenhuma API externa, cloud real ou
+credencial real foi usada nesta fase. Nenhum commit, push, merge, rebase ou tag foi
+executado. Branch `codex/fase-9s` e HEAD-base
+`f339ad0f2a9f11322a906d09f40f85e8a2db5725` preservados. Zero staged; worktree aberto
+para auditoria independente.
+
+### Correção pós-reauditoria REPROVADA da 9S
+
+Uma auditoria adversarial independente reprovou a entrega acima: 1 Bloqueador (gate
+jurídico liberava com qualquer `LegalDecision`, inclusive `DO_NOT_PROCEED`, por
+checar só a existência da decisão, nunca seu valor), 2 Altos (previsto×realizado
+nunca implementado apesar de descrito acima — `financialResultId`/
+`forecastEvaluationIds` sempre `null`; distribuição `APPROVED` sobrevivia a um
+recálculo do `ProjectClosureResult` `DRAFT` que a originou) e 2 Médios
+(`LegalChecklistItem`/`LegalDocumentRequest` nunca lidos pelo gate;
+`AccountingPeriod` `CLOSED` aceito sem o `LedgerSnapshot` que o sustenta). Todos os
+seis corrigidos nesta sessão — causa, correção, testes e QA completos em
+`docs/PHASE_9S_AUDIT_RECORD.md` §8 e `docs/PHASE_9S_CONTRACT.md` §18. Nenhuma
+migration nova (os dois campos do achado de previsto×realizado já existiam no
+schema); suíte oficial após a correção: 137 arquivos, **1536 testes**, 4 skipped,
+0 falhas. Fase 10 continua não iniciada; nenhum commit/push executado.
+
+### Correção focal final após segunda reauditoria REPROVADA da 9S
+
+Uma segunda auditoria adversarial reprovou a correção acima por dois motivos: o
+guard contra recalcular um `DRAFT` com distribuição já `APPROVED` era um
+check-then-act sem transação (contagem e escrita em chamadas separadas —
+TOCTOU real, reproduzido pela auditoria); e `LegalChecklistItem`/
+`LegalDocumentRequest` `CANCELLED` continuavam liberando o gate jurídico sem
+revisor nem justificativa. Ambos corrigidos nesta sessão: o guard agora roda
+dentro de uma única transação `Serializable` (releitura + CAS +
+`ForecastEvaluation`/`AuditLog` atômicos), com retry limitado exclusivamente a
+`P2034` e erro classificado (`reasonCode` + `correlationId`) em qualquer outra
+recusa; checklist e documentos passam a ser avaliados por regras próprias de
+cada modelo, e `CANCELLED` nunca é evidência positiva para nenhum dos dois,
+com ou sem revisor. Nenhuma migration nova. A autorrevisão adversarial (corrida
+real repetida contra PostgreSQL, sem mocks) encontrou e corrigiu um bug real:
+no esgotamento do retry, um `P2034` bruto do Prisma escapava sem classificação
+— corrigido nos dois serviços envolvidos. Suíte oficial após a correção: 137
+arquivos, 1 skipped (pré-existente da 9R, sem relação com a 9S), **1556
+testes**, 4 skipped, 0 falhas. Detalhe completo em
+`docs/PHASE_9S_AUDIT_RECORD.md` §9 e `docs/PHASE_9S_CONTRACT.md` §19. Três
+organizações sintéticas (`reaudit-race-*`), resíduo da auditoria anterior,
+seguem preservadas no banco compartilhado (protegidas por trigger de
+imutabilidade genuíno) — confirmadas por leitura, não apagadas. Fase 10
+continua não iniciada; nenhum commit/push executado.
+
+### Última correção focal da 9S — determinismo do teste e validade da evidência jurídica
+
+Uma reauditoria seguinte encontrou dois pontos residuais na correção acima: um
+teste de concorrência intermitente (regex case-sensitive contra uma mensagem
+"Não..." — bug do teste, não da implementação) e a classificação do achado
+CANCELLED como "informativo" quando, na prática, `documentLinkId`/
+`evidenceDocumentIds` nunca poderiam ser tratados como evidência real, pois
+**nenhuma entidade canônica de documento existe em todo o schema** para
+`LegalDueDiligenceCase`/`LegalDocumentRequest` (o mesmo campo livre sem FK se
+repete, sem uso, em quatro modelos da 9D). Corrigido nesta sessão: o teste
+agora valida classe do erro/`reasonCode`/`correlationId` (10/10 execuções
+individuais + 5/5 da suíte focal sem intermitência); o gate jurídico passou a
+tratar `LegalDocumentRequest.RECEIVED` e `LegalChecklistItem.evidenceDocumentIds`
+como estruturalmente inverificáveis (nunca produzem `APTO`) — **sem nenhuma
+migration nova**; a lacuna estrutural para uma prova real de evidência
+documental está registrada e aguarda autorização explícita. Suíte focal:
+158 testes, verde de forma estável. Detalhe completo em
+`docs/PHASE_9S_AUDIT_RECORD.md` §10 e `docs/PHASE_9S_CONTRACT.md` §20. Fase 10
+continua não iniciada; nenhum commit/push executado; organizações sintéticas
+residuais preservadas.
+
+### Correção estrutural final — evidência jurídica canônica
+
+A lacuna estrutural registrada na correção anterior (nenhuma entidade canônica
+de documento existia para provar `LegalDocumentRequest`/`LegalChecklistItem`)
+recebeu autorização explícita para **uma única migration aditiva**. Criada
+`LegalEvidenceDocument` (design em `docs/PHASE_9S_CONTRACT.md` §21, escrito
+antes da migration): FKs `RESTRICT` para organização/projeto/caso, vínculo
+exatamente único (solicitação documental XOR item de checklist, por `CHECK`),
+trigger de validação cruzada de tenant/caso, e imutabilidade condicional
+(`PENDING_REVIEW` mutável; `VERIFIED` só permite a transição para `REVOKED`,
+preservando o snapshot original via protected-column-diff; `REJECTED`/
+`REVOKED` totalmente imutáveis; `TRUNCATE` sempre bloqueado) — mesmos padrões
+já aprovados em 9P.3A/9R. Novo serviço dedicado
+(`legal-evidence-service.ts`: registrar, verificar, recusar, revogar,
+consultar — RBAC, segregação uploader≠revisor, CAS `Serializable`,
+idempotência, `AuditLog` atômico) e o gate 9S (`gates.ts`/
+`closure-gate-service.ts`) passou a consultar evidência `VERIFIED` real em vez
+de confiar em `documentLinkId`/`evidenceDocumentIds` — `RECEIVED` com evidência
+canônica agora pode genuinamente satisfazer o gate, e itens de checklist
+`HIGH`/`CRITICAL` passam a exigir a mesma prova. Nenhum dado legado foi
+migrado automaticamente; registros existentes seguem `SEM_EVIDENCIA` até
+receberem evidência real. Dois backups reais (dev + teste) verificados antes
+da migration (`sha256` e `restoredContentMatches: true` registrados em
+`docs/PHASE_9S_AUDIT_RECORD.md` §11.4); as 37 migrations anteriores seguem
+byte-idênticas; esta é a 38ª. A autorrevisão adversarial encontrou e corrigiu
+um bug real de código: `rejectLegalEvidenceDocument` lançava sua validação de
+motivo vazio de forma síncrona antes de delegar à função `async`, escapando
+como exceção em vez de Promise rejeitada. Detalhe completo em
+`docs/PHASE_9S_AUDIT_RECORD.md` §11 e `docs/PHASE_9S_CONTRACT.md` §21. Suíte
+oficial completa após a correção: 138 arquivos (1 pulado, pré-existente e sem
+relação), **1.595 testes**, 4 skipped, 0 falhas. Fase 10 continua não
+iniciada; nenhum commit/push executado; organizações sintéticas residuais
+preservadas.
+
+### Correção final pós-auditoria da 9S — redação e idempotência estrutural
+
+Duas auditorias adversariais independentes sobre a correção acima reprovaram
+por dois achados Altos — nenhum bypass de tenant/RBAC/IDOR encontrado, a
+superfície estrutural (migration/triggers/constraints) se manteve sólida: (1)
+o `AuditLog` de evidência jurídica expunha `checksum` e `storageKey`
+completos (e, num levantamento mais fino, também o motivo de recusa/
+revogação em texto livre); (2) `registerLegalEvidenceDocument` não tinha
+garantia estrutural de idempotência — só um `findFirst` antes do `create`,
+sem constraint — e 5 chamadas concorrentes idênticas reproduzidamente
+criavam 5 linhas distintas. Ambos corrigidos nesta sessão. Redação: helper
+central único produz `evidenceRef` (SHA-256 truncado a 16 hex, determinístico
+e não reversível porque o checksum tem alta entropia) em vez do valor bruto,
+reaproveitado por register/verify/reject/revoke — nenhuma redação divergente
+entre os quatro caminhos; `storageKey` nunca mais entra no `AuditLog` em
+nenhuma forma. **Correção posterior necessária (ver "Correção crítica final"
+abaixo): esta versão também aplicou a mesma técnica de hash ao motivo livre**
+(`reasonRef`), premissa que se provou falsa por não considerar a diferença de
+entropia entre um checksum e um texto livre curto.
+Idempotência: identidade extraída do próprio contrato (organização+projeto+
+caso+vínculo jurídico+checksum, restrita a linhas `PENDING_REVIEW`/
+`VERIFIED` — `REJECTED`/`REVOKED` ficam de fora, pois reenviar após uma
+decisão terminal é uma nova operação lógica), garantida por dois índices
+únicos parciais reais (nunca um índice composto único sobre as duas colunas
+de vínculo, que deixaria escapar duplicatas via `NULL <> NULL`) — 39ª
+migration, aditiva, aplicada após dois backups reais verificados (`sha256`
+em `docs/PHASE_9S_AUDIT_RECORD.md` §12.4). O serviço trata o conflito de
+unicidade só pela constraint EXATA esperada (`error.meta.target`, nunca
+"qualquer P2002"), relendo e devolvendo o registro vencedor. Detalhe completo
+em `docs/PHASE_9S_AUDIT_RECORD.md` §12 e `docs/PHASE_9S_CONTRACT.md` §22.
+Suíte oficial completa após a correção: 138 arquivos (1 pulado, pré-existente
+e sem relação), **1.612 testes**, 4 skipped, 0 falhas, confirmado em 2
+execuções idênticas sem recriar o banco. Fase 10 continua não iniciada;
+nenhum commit/push executado; nenhum `AuditLog` histórico apagado ou
+reescrito.
+
+### Correção crítica final — remoção de fingerprint de motivo livre
+
+Uma verificação focal independente sobre a correção acima reprovou por um
+achado Crítico, confirmado por ataque de dicionário real: `reasonRef` — hash
+SHA-256 determinístico e sem chave, aplicado ao motivo livre de recusa/
+revogação sob a premissa de que teria a mesma garantia de não-reversibilidade
+do `evidenceRef` — na prática recuperava o motivo original. `evidenceRef` é
+seguro porque sua entrada (checksum, 256 bits de entropia) é inviável de
+adivinhar; `reasonRef` aplicava a mesma técnica a texto livre curto e
+previsível ("Documento ilegível.", etc.), com o algoritmo público (no próprio
+código-fonte) — um dicionário local de 15 frases recuperou, byte a byte, os
+dois motivos reais de um teste real contra PostgreSQL. Corrigido nesta
+sessão: `reasonRef` foi removido de `legal-evidence-service.ts` — nenhuma
+derivação hash/HMAC de texto livre permanece; `reject`/`revoke` gravam só um
+`reasonCode` estático e allowlisted (`LEGAL_EVIDENCE_REJECTION_REASON_PROVIDED`/
+`LEGAL_EVIDENCE_REVOCATION_REASON_PROVIDED`, tipado como união literal),
+nunca derivado do conteúdo — duas razões diferentes na mesma operação sempre
+produzem o mesmo código. `evidenceRef` não foi alterado; nenhuma regra de
+idempotência, gate, RBAC, storage ou imutabilidade foi tocada; **nenhuma
+migration nova** (39, inalteradas). Detalhe completo em
+`docs/PHASE_9S_AUDIT_RECORD.md` §13 e `docs/PHASE_9S_CONTRACT.md` §23. Suíte
+oficial completa após a correção: 138 arquivos (1 pulado, pré-existente e sem
+relação), **1.614 testes**, 4 skipped, 0 falhas, confirmado em 2 execuções
+idênticas sem recriar o banco. `AuditLog`s gravados durante a janela da
+correção anterior podem conter `reasonRef` — histórico imutável, não
+reescrito; documentado como risco residual. Fase 10 continua não iniciada;
+nenhum commit/push executado.

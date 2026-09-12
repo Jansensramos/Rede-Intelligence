@@ -21,6 +21,7 @@ enum ProjectStatus {
   APPROVED
   PAUSED
   ARCHIVED
+  CLOSED
 }
 
 enum BudgetStatus {
@@ -893,8 +894,8 @@ enum LegalFinancialEventStatus {
 }
 
 model Organization {
-  enterpriseSyncEvidence EnterpriseSyncEvidence[]
-  financialProviderEvidence FinancialProviderEvidence[]
+  enterpriseSyncEvidence          EnterpriseSyncEvidence[]
+  financialProviderEvidence       FinancialProviderEvidence[]
   id                              String                           @id @default(cuid())
   name                            String
   slug                            String                           @unique
@@ -967,6 +968,7 @@ model Organization {
   bimQuantityMappings             BimQuantityMapping[]
   costCompositionDefinitions      CostCompositionDefinition[]
   legalDueDiligenceCases          LegalDueDiligenceCase[]
+  legalEvidenceDocuments          LegalEvidenceDocument[]
   legalAssetRegistrations         LegalAssetRegistration[]
   municipalPropertyRecords        MunicipalPropertyRecord[]
   legalObligations                LegalObligation[]
@@ -988,6 +990,8 @@ model Organization {
   postSaleRequests                PostSaleRequest[]
   bankFinancingDisbursements      BankFinancingDisbursement[]
   condominiumSetups               CondominiumSetup[]
+  projectClosureResults           ProjectClosureResult[]
+  projectClosureDistributions     ProjectClosureDistribution[]
   contractTemplates               ContractTemplate[]
   contractDocuments               ContractDocument[]
   signatureRequests               SignatureRequest[]
@@ -1039,7 +1043,7 @@ model Organization {
 }
 
 model User {
-  enterpriseEvidenceReviews EnterpriseEvidenceReview[]
+  enterpriseEvidenceReviews        EnterpriseEvidenceReview[]
   id                               String                            @id @default(cuid())
   email                            String                            @unique
   name                             String
@@ -1092,13 +1096,16 @@ model User {
   engineeringOpinionsValidated     EngineeringTechnicalOpinion[]     @relation("EngineeringOpinionValidatedBy")
   engineeringOpinionAssignments    EngineeringTechnicalOpinionItem[] @relation("EngineeringOpinionResponsible")
   engineeringOpinionItemsValidated EngineeringTechnicalOpinionItem[] @relation("EngineeringOpinionItemValidatedBy")
-  macroIndicatorSeriesCreated       MacroIndicatorSeries[]             @relation("MacroIndicatorSeriesCreatedBy")
-  macroObservationsCreated          MacroIndicatorObservation[]        @relation("MacroIndicatorObservationCreatedBy")
-  launchScenariosCreated            LaunchScenario[]                   @relation("LaunchScenarioCreatedBy")
-  launchAssumptionsCreated          LaunchScenarioAssumption[]         @relation("LaunchScenarioAssumptionCreatedBy")
-  launchEvaluationsCreated          LaunchEvaluation[]                 @relation("LaunchEvaluationCreatedBy")
-  launchTriggersCreated             LaunchTrigger[]                    @relation("LaunchTriggerCreatedBy")
-  launchDecisionsMade               LaunchDecision[]                   @relation("LaunchDecisionDecidedBy")
+  macroIndicatorSeriesCreated      MacroIndicatorSeries[]            @relation("MacroIndicatorSeriesCreatedBy")
+  macroObservationsCreated         MacroIndicatorObservation[]       @relation("MacroIndicatorObservationCreatedBy")
+  launchScenariosCreated           LaunchScenario[]                  @relation("LaunchScenarioCreatedBy")
+  launchAssumptionsCreated         LaunchScenarioAssumption[]        @relation("LaunchScenarioAssumptionCreatedBy")
+  launchEvaluationsCreated         LaunchEvaluation[]                @relation("LaunchEvaluationCreatedBy")
+  launchTriggersCreated            LaunchTrigger[]                   @relation("LaunchTriggerCreatedBy")
+  launchDecisionsMade              LaunchDecision[]                  @relation("LaunchDecisionDecidedBy")
+  legalEvidenceDocumentsUploaded   LegalEvidenceDocument[]           @relation("LegalEvidenceUploadedBy")
+  legalEvidenceDocumentsReviewed   LegalEvidenceDocument[]           @relation("LegalEvidenceReviewedBy")
+  legalEvidenceDocumentsRevoked    LegalEvidenceDocument[]           @relation("LegalEvidenceRevokedBy")
 
   @@map("users")
 }
@@ -1209,6 +1216,7 @@ model Project {
   measurementCertificates      MeasurementCertificate[]
   financialIntegrationEvents   FinancialIntegrationEvent[]
   legalDueDiligenceCases       LegalDueDiligenceCase[]
+  legalEvidenceDocuments       LegalEvidenceDocument[]
   legalObligations             LegalObligation[]
   legalAlerts                  LegalAlert[]
   legalLicenses                LegalLicense[]
@@ -1249,6 +1257,8 @@ model Project {
   launchEvaluations            LaunchEvaluation[]
   launchDecisions              LaunchDecision[]
   condominiumSetup             CondominiumSetup?
+  closureResults               ProjectClosureResult[]
+  closureDistributions         ProjectClosureDistribution[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, id], map: "projects_organization_id_id_key")
@@ -4667,14 +4677,14 @@ enum ClosurePeriodStatus {
 }
 
 model FinancialInstitution {
-  id             String        @id @default(cuid())
-  organizationId String        @map("organization_id")
-  name           String
-  code           String?
-  createdById    String        @map("created_by_id")
-  createdAt      DateTime      @default(now()) @map("created_at")
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  bankAccounts   BankAccount[]
+  id                     String                      @id @default(cuid())
+  organizationId         String                      @map("organization_id")
+  name                   String
+  code                   String?
+  createdById            String                      @map("created_by_id")
+  createdAt              DateTime                    @default(now()) @map("created_at")
+  organization           Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  bankAccounts           BankAccount[]
   financingDisbursements BankFinancingDisbursement[]
 
   @@unique([organizationId, name])
@@ -6251,6 +6261,7 @@ model LegalDueDiligenceCase {
   documentRequests   LegalDocumentRequest[]
   findings           LegalFinding[]
   decisions          LegalDecision[]
+  evidenceDocuments  LegalEvidenceDocument[]
 
   @@unique([organizationId, code])
   @@index([organizationId, projectId, status])
@@ -6325,6 +6336,7 @@ model LegalChecklistItem {
   createdAt           DateTime              @default(now()) @map("created_at")
   updatedAt           DateTime              @updatedAt @map("updated_at")
   diligenceCase       LegalDueDiligenceCase @relation(fields: [diligenceCaseId], references: [id], onDelete: Cascade)
+  evidenceDocuments   LegalEvidenceDocument[]
 
   @@unique([diligenceCaseId, code])
   @@index([diligenceCaseId, status, criticality])
@@ -6351,10 +6363,66 @@ model LegalDocumentRequest {
   createdAt            DateTime              @default(now()) @map("created_at")
   updatedAt            DateTime              @updatedAt @map("updated_at")
   diligenceCase        LegalDueDiligenceCase @relation(fields: [diligenceCaseId], references: [id], onDelete: Cascade)
+  evidenceDocuments    LegalEvidenceDocument[]
 
   @@unique([diligenceCaseId, code, version])
   @@index([diligenceCaseId, status, dueAt])
   @@map("legal_document_requests")
+}
+
+/// Fase 9S — correção estrutural final ("evidência jurídica canônica"). Fonte
+/// verificável de evidência documental para o gate de encerramento — nunca as
+/// strings livres legadas (`documentLinkId`/`evidenceDocumentIds`), que
+/// continuam existindo e intocadas, mas sem papel na decisão do gate.
+enum LegalEvidenceDocumentStatus {
+  PENDING_REVIEW
+  VERIFIED
+  REJECTED
+  REVOKED
+}
+
+/// Exatamente um de `documentRequestId`/`checklistItemId` deve estar presente
+/// (imposto por CHECK — ver migration). Conteúdo binário nunca entra no
+/// Postgres — só `storageProvider`+`storageKey`+`checksum`+`sizeBytes`
+/// (metadado do `FileStorageProvider` genérico já existente). Imutável após
+/// `VERIFIED`/`REJECTED` (trigger — ver migration); `VERIFIED → REVOKED` é a
+/// única transição extra permitida, e só altera os campos de revogação.
+model LegalEvidenceDocument {
+  id                String                      @id @default(cuid())
+  organizationId    String                      @map("organization_id")
+  projectId         String                      @map("project_id")
+  diligenceCaseId   String                      @map("diligence_case_id")
+  documentRequestId String?                     @map("document_request_id")
+  checklistItemId   String?                     @map("checklist_item_id")
+  storageProvider   String                      @map("storage_provider")
+  storageKey        String                      @map("storage_key")
+  checksum          String
+  contentType       String                      @map("content_type")
+  sizeBytes         Int                         @map("size_bytes")
+  status            LegalEvidenceDocumentStatus @default(PENDING_REVIEW)
+  uploadedById      String                      @map("uploaded_by_id")
+  reviewedById      String?                     @map("reviewed_by_id")
+  reviewedAt        DateTime?                   @map("reviewed_at")
+  revokedById       String?                     @map("revoked_by_id")
+  revokedAt         DateTime?                   @map("revoked_at")
+  revokedReason     String?                     @map("revoked_reason") @db.Text
+  correlationId     String                      @map("correlation_id")
+  createdAt         DateTime                    @default(now()) @map("created_at")
+  updatedAt         DateTime                    @updatedAt @map("updated_at")
+
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project         Project                @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  diligenceCase   LegalDueDiligenceCase  @relation(fields: [diligenceCaseId], references: [id], onDelete: Restrict)
+  documentRequest LegalDocumentRequest?  @relation(fields: [documentRequestId], references: [id], onDelete: Restrict)
+  checklistItem   LegalChecklistItem?    @relation(fields: [checklistItemId], references: [id], onDelete: Restrict)
+  uploadedBy      User                   @relation("LegalEvidenceUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+  reviewedBy      User?                  @relation("LegalEvidenceReviewedBy", fields: [reviewedById], references: [id], onDelete: Restrict)
+  revokedBy       User?                  @relation("LegalEvidenceRevokedBy", fields: [revokedById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, projectId, diligenceCaseId])
+  @@index([documentRequestId, status])
+  @@index([checklistItemId, status])
+  @@map("legal_evidence_documents")
 }
 
 model LegalFinding {
@@ -7083,21 +7151,21 @@ model Sale {
   createdAt                   DateTime   @default(now()) @map("created_at")
   updatedAt                   DateTime   @updatedAt @map("updated_at")
 
-  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project            Project               @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  company            Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  salesUnit          SalesUnit             @relation(fields: [salesUnitId], references: [id], onDelete: Restrict)
-  priceTable         SalesPriceTable       @relation(fields: [priceTableId], references: [id], onDelete: Restrict)
-  proposal           SalesProposal?        @relation(fields: [proposalId], references: [id], onDelete: SetNull)
-  reservation        SalesReservation?     @relation(fields: [reservationId], references: [id], onDelete: SetNull)
-  broker             Supplier?             @relation(fields: [brokerId], references: [id], onDelete: SetNull)
-  parties            SaleParty[]
-  contract           SalesContract?
-  paymentPlans       SalesPaymentPlan[]
-  commissions        SalesCommission[]
-  inspections        SalesUnitInspection[]
-  postSaleRequests   PostSaleRequest[]
-  receivableAccounts ReceivableAccount[]
+  organization           Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project                Project                     @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  company                Company                     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  salesUnit              SalesUnit                   @relation(fields: [salesUnitId], references: [id], onDelete: Restrict)
+  priceTable             SalesPriceTable             @relation(fields: [priceTableId], references: [id], onDelete: Restrict)
+  proposal               SalesProposal?              @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  reservation            SalesReservation?           @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  broker                 Supplier?                   @relation(fields: [brokerId], references: [id], onDelete: SetNull)
+  parties                SaleParty[]
+  contract               SalesContract?
+  paymentPlans           SalesPaymentPlan[]
+  commissions            SalesCommission[]
+  inspections            SalesUnitInspection[]
+  postSaleRequests       PostSaleRequest[]
+  receivableAccounts     ReceivableAccount[]
   financingDisbursements BankFinancingDisbursement[]
 
   @@index([organizationId, status])
@@ -7280,14 +7348,14 @@ model PostSaleRequest {
   createdAt      DateTime         @default(now()) @map("created_at")
   updatedAt      DateTime         @updatedAt @map("updated_at")
 
-  organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  salesUnit     SalesUnit         @relation(fields: [salesUnitId], references: [id], onDelete: Restrict)
-  sale          Sale              @relation(fields: [saleId], references: [id], onDelete: Restrict)
-  customer      Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  supplier      Supplier?         @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  recurrenceOf  PostSaleRequest?  @relation("PostSaleRecurrence", fields: [recurrenceOfId], references: [id], onDelete: SetNull)
-  recurrences   PostSaleRequest[] @relation("PostSaleRecurrence")
-  updates       PostSaleUpdate[]
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  salesUnit    SalesUnit         @relation(fields: [salesUnitId], references: [id], onDelete: Restrict)
+  sale         Sale              @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  customer     Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  supplier     Supplier?         @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  recurrenceOf PostSaleRequest?  @relation("PostSaleRecurrence", fields: [recurrenceOfId], references: [id], onDelete: SetNull)
+  recurrences  PostSaleRequest[] @relation("PostSaleRecurrence")
+  updates      PostSaleUpdate[]
 
   @@index([organizationId, status])
   @@index([supplierId])
@@ -7296,10 +7364,10 @@ model PostSaleRequest {
 }
 
 model PostSaleUpdate {
-  id        String                @id @default(cuid())
-  requestId String                @map("request_id")
-  authorId  String                @map("author_id")
-  note      String
+  id           String                @id @default(cuid())
+  requestId    String                @map("request_id")
+  authorId     String                @map("author_id")
+  note         String
   // Fase 9R — evidência antes/depois de um reparo/chamado. Reaproveita o
   // `StorageProvider` genérico já usado por documentos de contrato/design (mesmo
   // shape: chave, checksum SHA-256, nome, tipo e tamanho) — nenhuma infraestrutura de
@@ -7310,7 +7378,7 @@ model PostSaleUpdate {
   fileName     String?               @map("file_name")
   mimeType     String?               @map("mime_type")
   fileSize     Int?                  @map("file_size")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt    DateTime              @default(now()) @map("created_at")
 
   request PostSaleRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
@@ -7353,24 +7421,24 @@ enum BankFinancingDisbursementStatus {
 /// silenciosamente — divergência de valor mantém o status DIVERGENT até decisão
 /// humana explícita (ver `src/domain/handover/repasse.ts`).
 model BankFinancingDisbursement {
-  id                      String                           @id @default(cuid())
-  organizationId          String                           @map("organization_id")
-  saleId                  String                           @map("sale_id")
-  financialInstitutionId  String                           @map("financial_institution_id")
-  disbursementType        BankFinancingDisbursementType     @map("disbursement_type")
-  expectedAmount          Decimal                          @map("expected_amount") @db.Decimal(20, 2)
-  disbursedAmount         Decimal?                         @map("disbursed_amount") @db.Decimal(20, 2)
-  bankReference           String?                          @map("bank_reference")
-  status                  BankFinancingDisbursementStatus  @default(PENDING)
-  requestedAt             DateTime?                        @map("requested_at")
-  disbursedAt             DateTime?                        @map("disbursed_at")
-  reconciledAt            DateTime?                        @map("reconciled_at")
-  reconciledInstallmentId String?                          @map("reconciled_installment_id")
-  reconciledPaymentId     String?                          @map("reconciled_payment_id")
+  id                      String                          @id @default(cuid())
+  organizationId          String                          @map("organization_id")
+  saleId                  String                          @map("sale_id")
+  financialInstitutionId  String                          @map("financial_institution_id")
+  disbursementType        BankFinancingDisbursementType   @map("disbursement_type")
+  expectedAmount          Decimal                         @map("expected_amount") @db.Decimal(20, 2)
+  disbursedAmount         Decimal?                        @map("disbursed_amount") @db.Decimal(20, 2)
+  bankReference           String?                         @map("bank_reference")
+  status                  BankFinancingDisbursementStatus @default(PENDING)
+  requestedAt             DateTime?                       @map("requested_at")
+  disbursedAt             DateTime?                       @map("disbursed_at")
+  reconciledAt            DateTime?                       @map("reconciled_at")
+  reconciledInstallmentId String?                         @map("reconciled_installment_id")
+  reconciledPaymentId     String?                         @map("reconciled_payment_id")
   notes                   String?
-  createdById             String                           @map("created_by_id")
-  createdAt               DateTime                         @default(now()) @map("created_at")
-  updatedAt               DateTime                         @updatedAt @map("updated_at")
+  createdById             String                          @map("created_by_id")
+  createdAt               DateTime                        @default(now()) @map("created_at")
+  updatedAt               DateTime                        @updatedAt @map("updated_at")
 
   organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   sale                 Sale                 @relation(fields: [saleId], references: [id], onDelete: Restrict)
@@ -7392,25 +7460,176 @@ enum CondominiumSetupStatus {
 /// responsabilidade da incorporadora para o condomínio — não é gestão contínua de
 /// condomínio (fora do escopo da 9R, ver `docs/PHASE_9R_CONTRACT.md`).
 model CondominiumSetup {
-  id                      String                  @id @default(cuid())
-  organizationId          String                  @map("organization_id")
-  projectId               String                  @unique @map("project_id")
-  status                  CondominiumSetupStatus  @default(PLANNED)
-  administratorSupplierId String?                 @map("administrator_supplier_id")
-  responsibleId           String                  @map("responsible_id")
-  constitutedAt           DateTime?               @map("constituted_at")
-  transferredAt           DateTime?               @map("transferred_at")
+  id                      String                 @id @default(cuid())
+  organizationId          String                 @map("organization_id")
+  projectId               String                 @unique @map("project_id")
+  status                  CondominiumSetupStatus @default(PLANNED)
+  administratorSupplierId String?                @map("administrator_supplier_id")
+  responsibleId           String                 @map("responsible_id")
+  constitutedAt           DateTime?              @map("constituted_at")
+  transferredAt           DateTime?              @map("transferred_at")
   notes                   String?
-  createdById             String                  @map("created_by_id")
-  createdAt               DateTime                @default(now()) @map("created_at")
-  updatedAt               DateTime                @updatedAt @map("updated_at")
+  createdById             String                 @map("created_by_id")
+  createdAt               DateTime               @default(now()) @map("created_at")
+  updatedAt               DateTime               @updatedAt @map("updated_at")
 
   organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project                Project     @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  administratorSupplier  Supplier?   @relation(fields: [administratorSupplierId], references: [id], onDelete: SetNull)
+  project               Project      @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  administratorSupplier Supplier?    @relation(fields: [administratorSupplierId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, status])
   @@map("condominium_setups")
+}
+
+// -----------------------------------------------------------------------------
+// FASE 9S — Encerramento do empreendimento, governança e resultado realizado.
+// Reaproveita obrigatoriamente: RevenueRecognitionRun (receita/custo realizados),
+// AccountingProvision (provisões), AccountingPeriod/FinancialPeriodClosure
+// (encerramento contábil), TaxAssessment (tributos), FundingDisbursement
+// (funding), LegalObligation/LegalDueDiligenceCase/LegalDecision (checklist e
+// decisão societária — nunca uma baixa real de SPE), ForecastEvaluation/
+// FinancialResult (previsto × realizado), AssumptionSnapshot/DecisionLedgerEntry/
+// CommitteeDecision/RiskFinding (memória histórica), Sale/SalesUnit/
+// PostSaleRequest/CondominiumSetup/BankFinancingDisbursement (9E/9R, insumo do
+// gate operacional). Só duas entidades são novas — nenhum domínio paralelo de
+// contabilidade, jurídico, previsto×realizado ou distribuição financeira.
+// -----------------------------------------------------------------------------
+
+enum ProjectClosureResultStatus {
+  DRAFT
+  FINAL
+}
+
+enum ProjectClosureDistributionStatus {
+  DRAFT
+  APPROVED
+}
+
+enum ProjectDistributionBeneficiaryType {
+  OWNER
+  PARTNER
+  INVESTOR
+}
+
+enum ProjectDistributionNature {
+  CAPITAL_CONTRIBUTION
+  CAPITAL_RETURN
+  REMUNERATION
+  RESULT_DISTRIBUTION
+  RETENTION
+  PROVISION
+}
+
+/// Resultado realizado final do empreendimento + memória histórica — snapshot
+/// imutável e versionado (decisão 3: reabertura nunca sobrescreve, só cria nova
+/// versão via `supersedesId`). Todo campo monetário é opcional de propósito:
+/// ausência de evidência nunca vira zero — `evidenceStatus` documenta, campo a
+/// campo, se o valor é `COM_EVIDENCIA` ou `SEM_EVIDENCIA` e de onde veio.
+model ProjectClosureResult {
+  id             String                     @id @default(cuid())
+  organizationId String                     @map("organization_id")
+  projectId      String                     @map("project_id")
+  version        Int                        @default(1)
+  supersedesId   String?                    @unique @map("supersedes_id")
+  status         ProjectClosureResultStatus @default(DRAFT)
+
+  // Resultado realizado — decisão 5: receita, custo, tributos, despesas
+  // financeiras, resultado e margem bloqueiam FINAL se SEM_EVIDENCIA.
+  realizedVgv                Decimal? @map("realized_vgv") @db.Decimal(20, 2)
+  realizedRevenue            Decimal? @map("realized_revenue") @db.Decimal(20, 2)
+  realizedCost               Decimal? @map("realized_cost") @db.Decimal(20, 2)
+  realizedExpenses           Decimal? @map("realized_expenses") @db.Decimal(20, 2)
+  realizedTaxes              Decimal? @map("realized_taxes") @db.Decimal(20, 2)
+  realizedFinancialCosts     Decimal? @map("realized_financial_costs") @db.Decimal(20, 2)
+  realizedFundingDisbursed   Decimal? @map("realized_funding_disbursed") @db.Decimal(20, 2)
+  realizedCapitalContributed Decimal? @map("realized_capital_contributed") @db.Decimal(20, 2)
+  realizedRefunds            Decimal? @map("realized_refunds") @db.Decimal(20, 2)
+  realizedRescissionsAmount  Decimal? @map("realized_rescissions_amount") @db.Decimal(20, 2)
+  realizedRescissionsCount   Int?     @map("realized_rescissions_count")
+  realizedDelinquency        Decimal? @map("realized_delinquency") @db.Decimal(20, 2)
+  realizedProvisions         Decimal? @map("realized_provisions") @db.Decimal(20, 2)
+  realizedResult             Decimal? @map("realized_result") @db.Decimal(20, 2)
+  realizedMarginOnVgv        Decimal? @map("realized_margin_on_vgv") @db.Decimal(12, 8)
+  realizedMarginOnNetRevenue Decimal? @map("realized_margin_on_net_revenue") @db.Decimal(12, 8)
+  realizedRoi                Decimal? @map("realized_roi") @db.Decimal(12, 8)
+  realizedIrr                Decimal? @map("realized_irr") @db.Decimal(12, 8)
+
+  /// Mapa campo → {status: COM_EVIDENCIA|SEM_EVIDENCIA, sourceType, sourceId, asOfDate} — nunca implícito.
+  evidenceStatus Json @map("evidence_status")
+
+  // Referências — nunca duplicação de conteúdo de outro domínio.
+  revenueRecognitionRunId String? @map("revenue_recognition_run_id")
+  financialResultId       String? @map("financial_result_id")
+  forecastEvaluationIds   Json?   @map("forecast_evaluation_ids")
+  accountingPeriodIds     Json?   @map("accounting_period_ids")
+  assumptionSnapshotId    String? @map("assumption_snapshot_id")
+  decisionRefs            Json?   @map("decision_refs")
+  materializedRiskRefs    Json?   @map("materialized_risk_refs")
+  auditLogMilestoneIds    Json?   @map("audit_log_milestone_ids")
+  legalDueDiligenceCaseId String? @map("legal_due_diligence_case_id")
+
+  /// Snapshot completo do gate de encerramento (5 subgates) no instante da preparação — auditável, referência segura.
+  gateSnapshot Json? @map("gate_snapshot")
+
+  keyDeviationsNotes String? @map("key_deviations_notes") @db.Text
+  lessonsLearned     String? @map("lessons_learned") @db.Text
+
+  correlationId String    @map("correlation_id")
+  createdById   String    @map("created_by_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  approvedById  String?   @map("approved_by_id")
+  approvedAt    DateTime? @map("approved_at")
+
+  organization  Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project       Project                      @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  supersedes    ProjectClosureResult?        @relation("ClosureResultVersions", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy  ProjectClosureResult?        @relation("ClosureResultVersions")
+  distributions ProjectClosureDistribution[]
+
+  @@unique([organizationId, projectId, version])
+  @@index([organizationId, projectId, status])
+  @@map("project_closure_results")
+}
+
+/// Distribuição final — decisão 8: simples, uma linha por beneficiário por
+/// natureza de valor (aporte/retorno/remuneração/resultado/retenção/provisão).
+/// Nenhuma transferência bancária real é disparada — só o registro da decisão e
+/// da evidência (decisão do escopo, item 5 do contrato).
+model ProjectClosureDistribution {
+  id              String                           @id @default(cuid())
+  organizationId  String                           @map("organization_id")
+  projectId       String                           @map("project_id")
+  closureResultId String                           @map("closure_result_id")
+  status          ProjectClosureDistributionStatus @default(DRAFT)
+
+  beneficiaryName  String                             @map("beneficiary_name")
+  beneficiaryTaxId String                             @map("beneficiary_tax_id")
+  beneficiaryType  ProjectDistributionBeneficiaryType @map("beneficiary_type")
+  nature           ProjectDistributionNature
+
+  amount    Decimal  @db.Decimal(20, 2)
+  eventDate DateTime @map("event_date") @db.Date
+
+  /// Origem do valor — decisão 6: nunca inferido, sempre uma referência explícita informada por quem registra.
+  sourceType String @map("source_type")
+  sourceId   String @map("source_id")
+
+  /// Referências a documentos já armazenados via o StorageProvider genérico (9K.4B/9R) — nunca um novo mecanismo de upload.
+  evidenceRefs Json @map("evidence_refs")
+
+  correlationId String    @map("correlation_id")
+  createdById   String    @map("created_by_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  approvedById  String?   @map("approved_by_id")
+  approvedAt    DateTime? @map("approved_at")
+
+  organization  Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project       Project              @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  closureResult ProjectClosureResult @relation(fields: [closureResultId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, projectId, status])
+  @@index([closureResultId])
+  @@map("project_closure_distributions")
 }
 
 // -----------------------------------------------------------------------------
@@ -7634,13 +7853,13 @@ model SignatureRequest {
   createdAt        DateTime               @default(now()) @map("created_at")
   updatedAt        DateTime               @updatedAt @map("updated_at")
 
-  organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project       Project           @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  contract      SalesContract     @relation(fields: [contractId], references: [id], onDelete: Restrict)
-  document      ContractDocument  @relation("SignatureSourceDocument", fields: [documentId], references: [id], onDelete: Restrict)
-  finalDocument ContractDocument? @relation("SignatureFinalDocument", fields: [finalDocumentId], references: [id], onDelete: Restrict)
-  parties       SignatureParty[]
-  events        SignatureEvent[]
+  organization           Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project                Project                           @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  contract               SalesContract                     @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  document               ContractDocument                  @relation("SignatureSourceDocument", fields: [documentId], references: [id], onDelete: Restrict)
+  finalDocument          ContractDocument?                 @relation("SignatureFinalDocument", fields: [finalDocumentId], references: [id], onDelete: Restrict)
+  parties                SignatureParty[]
+  events                 SignatureEvent[]
   reconciliationEvidence SignatureReconciliationEvidence[]
 
   @@unique([organizationId, provider, externalId])
@@ -7718,8 +7937,8 @@ model SignatureEvent {
   occurredAt         DateTime           @map("occurred_at")
   recordedAt         DateTime           @default(now()) @map("recorded_at")
 
-  request          SignatureRequest       @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  sourceInboxEvent IntegrationInboxEvent? @relation(fields: [sourceInboxEventId], references: [id], onDelete: SetNull)
+  request                SignatureRequest                 @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  sourceInboxEvent       IntegrationInboxEvent?           @relation(fields: [sourceInboxEventId], references: [id], onDelete: SetNull)
   reconciliationEvidence SignatureReconciliationEvidence?
 
   @@index([requestId, recordedAt])
@@ -7729,28 +7948,28 @@ model SignatureEvent {
 /// Append-only proof of authenticated provider reconciliation, independent of PDF completion.
 /// Local FKs are relational context; provider identifiers are SHA-256 digests, never raw payloads.
 model SignatureReconciliationEvidence {
-  id                 String @id @default(cuid())
-  organizationId     String @map("organization_id")
-  installationId     String @map("installation_id")
-  requestId          String @map("request_id")
-  partyId            String @unique @map("party_id")
-  signatureEventId   String @unique @map("signature_event_id")
-  sourceInboxEventId String? @map("source_inbox_event_id")
-  source             String @default("PROVIDER_RECONCILIATION")
-  kind               String @default("SIGN_EVENT")
+  id                 String                @id @default(cuid())
+  organizationId     String                @map("organization_id")
+  installationId     String                @map("installation_id")
+  requestId          String                @map("request_id")
+  partyId            String                @unique @map("party_id")
+  signatureEventId   String                @unique @map("signature_event_id")
+  sourceInboxEventId String?               @map("source_inbox_event_id")
+  source             String                @default("PROVIDER_RECONCILIATION")
+  kind               String                @default("SIGN_EVENT")
   provider           SignatureProviderCode
-  evidenceRef        String @map("evidence_ref")
-  documentRef        String @map("document_ref")
-  envelopeRef        String @map("envelope_ref")
-  signerRef          String @map("signer_ref")
-  documentChecksum   String @map("document_checksum")
-  recordedAt         DateTime @default(now()) @map("recorded_at")
+  evidenceRef        String                @map("evidence_ref")
+  documentRef        String                @map("document_ref")
+  envelopeRef        String                @map("envelope_ref")
+  signerRef          String                @map("signer_ref")
+  documentChecksum   String                @map("document_checksum")
+  recordedAt         DateTime              @default(now()) @map("recorded_at")
 
-  request SignatureRequest @relation(fields: [requestId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  party SignatureParty @relation(fields: [partyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  signatureEvent SignatureEvent @relation(fields: [signatureEventId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  request          SignatureRequest       @relation(fields: [requestId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  party            SignatureParty         @relation(fields: [partyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  signatureEvent   SignatureEvent         @relation(fields: [signatureEventId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   sourceInboxEvent IntegrationInboxEvent? @relation(fields: [sourceInboxEventId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  installation ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  installation     ConnectorInstallation  @relation(fields: [installationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([organizationId, requestId])
   @@index([sourceInboxEventId])
@@ -9649,42 +9868,42 @@ model ConnectorDefinition {
 }
 
 model ConnectorInstallation {
-  enterpriseSyncEvidence EnterpriseSyncEvidence[]
-  financialProviderEvidence FinancialProviderEvidence[]
-  id                    String                       @id @default(cuid())
-  organizationId        String                       @map("organization_id")
-  connectorDefinitionId String                       @map("connector_definition_id")
-  economicGroupId       String?                      @map("economic_group_id")
-  companyId             String?                      @map("company_id")
-  projectId             String?                      @map("project_id")
-  name                  String
-  status                ConnectorInstallationStatus  @default(DRAFT)
-  direction             IntegrationDirection
-  configuration         Json                         @default("{}")
-  healthStatus          IntegrationHealthStatus      @default(UNKNOWN) @map("health_status")
-  lastSyncAt            DateTime?                    @map("last_sync_at")
-  nextSyncAt            DateTime?                    @map("next_sync_at")
-  createdById           String                       @map("created_by_id")
-  createdAt             DateTime                     @default(now()) @map("created_at")
-  updatedAt             DateTime                     @updatedAt @map("updated_at")
-  organization          Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  connectorDefinition   ConnectorDefinition          @relation(fields: [connectorDefinitionId], references: [id], onDelete: Restrict)
-  economicGroup         EconomicGroup?               @relation(fields: [economicGroupId], references: [id], onDelete: Restrict)
-  company               Company?                     @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  project               Project?                     @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  credential            CredentialReference?
-  externalReferences    ExternalEntityReference[]
-  mappingProfiles       MappingProfile[]
-  syncRuns              IntegrationSyncRun[]
-  cursors               IntegrationCursor[]
-  inboxEvents           IntegrationInboxEvent[]
+  enterpriseSyncEvidence          EnterpriseSyncEvidence[]
+  financialProviderEvidence       FinancialProviderEvidence[]
+  id                              String                            @id @default(cuid())
+  organizationId                  String                            @map("organization_id")
+  connectorDefinitionId           String                            @map("connector_definition_id")
+  economicGroupId                 String?                           @map("economic_group_id")
+  companyId                       String?                           @map("company_id")
+  projectId                       String?                           @map("project_id")
+  name                            String
+  status                          ConnectorInstallationStatus       @default(DRAFT)
+  direction                       IntegrationDirection
+  configuration                   Json                              @default("{}")
+  healthStatus                    IntegrationHealthStatus           @default(UNKNOWN) @map("health_status")
+  lastSyncAt                      DateTime?                         @map("last_sync_at")
+  nextSyncAt                      DateTime?                         @map("next_sync_at")
+  createdById                     String                            @map("created_by_id")
+  createdAt                       DateTime                          @default(now()) @map("created_at")
+  updatedAt                       DateTime                          @updatedAt @map("updated_at")
+  organization                    Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  connectorDefinition             ConnectorDefinition               @relation(fields: [connectorDefinitionId], references: [id], onDelete: Restrict)
+  economicGroup                   EconomicGroup?                    @relation(fields: [economicGroupId], references: [id], onDelete: Restrict)
+  company                         Company?                          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  project                         Project?                          @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  credential                      CredentialReference?
+  externalReferences              ExternalEntityReference[]
+  mappingProfiles                 MappingProfile[]
+  syncRuns                        IntegrationSyncRun[]
+  cursors                         IntegrationCursor[]
+  inboxEvents                     IntegrationInboxEvent[]
   signatureReconciliationEvidence SignatureReconciliationEvidence[]
-  conflicts             IntegrationConflict[]
-  quarantineItems       IntegrationQuarantineItem[]
-  healthSnapshots       IntegrationHealthSnapshot[]
-  documentReferences    ConnectorDocumentReference[]
-  driveDocumentVersions DriveDocumentVersion[]
-  jobs                  IntegrationJob[]
+  conflicts                       IntegrationConflict[]
+  quarantineItems                 IntegrationQuarantineItem[]
+  healthSnapshots                 IntegrationHealthSnapshot[]
+  documentReferences              ConnectorDocumentReference[]
+  driveDocumentVersions           DriveDocumentVersion[]
+  jobs                            IntegrationJob[]
 
   @@index([organizationId, connectorDefinitionId])
   @@index([organizationId, status])
@@ -9762,24 +9981,24 @@ model DataOwnershipPolicy {
 }
 
 model ExternalEntityReference {
-  enterpriseSourceKey String? @map("enterprise_source_key")
+  enterpriseSourceKey    String?                      @map("enterprise_source_key")
   enterpriseSyncEvidence EnterpriseSyncEvidence[]
-  id                 String                       @id @default(cuid())
-  organizationId     String                       @map("organization_id")
-  installationId     String                       @map("installation_id")
-  entityType         String                       @map("entity_type")
-  entityId           String                       @map("entity_id")
-  externalType       String                       @map("external_type")
-  externalId         String                       @map("external_id")
-  externalVersion    String?                      @map("external_version")
-  companyId          String?                      @map("company_id")
-  projectId          String?                      @map("project_id")
-  metadata           Json?
-  createdAt          DateTime                     @default(now()) @map("created_at")
-  updatedAt          DateTime                     @updatedAt @map("updated_at")
-  organization       Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  installation       ConnectorInstallation        @relation(fields: [installationId], references: [id], onDelete: Restrict)
-  documentReferences ConnectorDocumentReference[]
+  id                     String                       @id @default(cuid())
+  organizationId         String                       @map("organization_id")
+  installationId         String                       @map("installation_id")
+  entityType             String                       @map("entity_type")
+  entityId               String                       @map("entity_id")
+  externalType           String                       @map("external_type")
+  externalId             String                       @map("external_id")
+  externalVersion        String?                      @map("external_version")
+  companyId              String?                      @map("company_id")
+  projectId              String?                      @map("project_id")
+  metadata               Json?
+  createdAt              DateTime                     @default(now()) @map("created_at")
+  updatedAt              DateTime                     @updatedAt @map("updated_at")
+  organization           Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  installation           ConnectorInstallation        @relation(fields: [installationId], references: [id], onDelete: Restrict)
+  documentReferences     ConnectorDocumentReference[]
 
   @@unique([installationId, externalType, externalId])
   @@unique([organizationId, enterpriseSourceKey, externalType, externalId], map: "enterprise_crosswalk_source_key")
@@ -9897,24 +10116,24 @@ model IntegrationCursor {
 }
 
 model IntegrationInboxEvent {
-  id              String                @id @default(cuid())
-  organizationId  String                @map("organization_id")
-  installationId  String                @map("installation_id")
-  provider        String
-  eventId         String                @map("event_id")
-  signatureValid  Boolean               @default(false) @map("signature_valid")
-  payloadChecksum String                @map("payload_checksum")
-  payload         Json?
-  receivedAt      DateTime              @default(now()) @map("received_at")
-  status          InboxEventStatus      @default(RECEIVED)
-  processedAt     DateTime?             @map("processed_at")
-  errorMessage    String?               @map("error_message") @db.Text
-  syncRunId       String?               @map("sync_run_id")
-  installation    ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict)
+  id                     String                            @id @default(cuid())
+  organizationId         String                            @map("organization_id")
+  installationId         String                            @map("installation_id")
+  provider               String
+  eventId                String                            @map("event_id")
+  signatureValid         Boolean                           @default(false) @map("signature_valid")
+  payloadChecksum        String                            @map("payload_checksum")
+  payload                Json?
+  receivedAt             DateTime                          @default(now()) @map("received_at")
+  status                 InboxEventStatus                  @default(RECEIVED)
+  processedAt            DateTime?                         @map("processed_at")
+  errorMessage           String?                           @map("error_message") @db.Text
+  syncRunId              String?                           @map("sync_run_id")
+  installation           ConnectorInstallation             @relation(fields: [installationId], references: [id], onDelete: Restrict)
   /**
    * 9K.4: projeção de domínio opcional quando este evento cru é um webhook de assinatura — ver `SignatureEvent`.
    */
-  signatureEvent  SignatureEvent?
+  signatureEvent         SignatureEvent?
   reconciliationEvidence SignatureReconciliationEvidence[]
 
   @@unique([installationId, provider, eventId])
@@ -9979,25 +10198,25 @@ model EventCatalogEntry {
 
 model IntegrationJob {
   enterpriseSyncEvidence EnterpriseSyncEvidence[]
-  id             String                 @id @default(cuid())
-  organizationId String                 @map("organization_id")
-  installationId String?                @map("installation_id")
-  jobType        String                 @map("job_type")
-  priority       JobPriority            @default(NORMAL)
-  status         IntegrationJobStatus   @default(QUEUED)
-  payload        Json
-  attemptCount   Int                    @default(0) @map("attempt_count")
-  maxAttempts    Int                    @default(5) @map("max_attempts")
-  leaseOwner     String?                @map("lease_owner")
-  leaseExpiresAt DateTime?              @map("lease_expires_at")
-  scheduledAt    DateTime               @default(now()) @map("scheduled_at")
-  startedAt      DateTime?              @map("started_at")
-  finishedAt     DateTime?              @map("finished_at")
-  lastError      String?                @map("last_error") @db.Text
-  correlationId  String                 @map("correlation_id")
-  createdAt      DateTime               @default(now()) @map("created_at")
-  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  installation   ConnectorInstallation? @relation(fields: [installationId], references: [id], onDelete: Restrict)
+  id                     String                   @id @default(cuid())
+  organizationId         String                   @map("organization_id")
+  installationId         String?                  @map("installation_id")
+  jobType                String                   @map("job_type")
+  priority               JobPriority              @default(NORMAL)
+  status                 IntegrationJobStatus     @default(QUEUED)
+  payload                Json
+  attemptCount           Int                      @default(0) @map("attempt_count")
+  maxAttempts            Int                      @default(5) @map("max_attempts")
+  leaseOwner             String?                  @map("lease_owner")
+  leaseExpiresAt         DateTime?                @map("lease_expires_at")
+  scheduledAt            DateTime                 @default(now()) @map("scheduled_at")
+  startedAt              DateTime?                @map("started_at")
+  finishedAt             DateTime?                @map("finished_at")
+  lastError              String?                  @map("last_error") @db.Text
+  correlationId          String                   @map("correlation_id")
+  createdAt              DateTime                 @default(now()) @map("created_at")
+  organization           Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  installation           ConnectorInstallation?   @relation(fields: [installationId], references: [id], onDelete: Restrict)
 
   @@index([organizationId, status, scheduledAt])
   @@map("integration_jobs")
@@ -10064,16 +10283,16 @@ model IntegrationHealthSnapshot {
 }
 
 model DriveDocumentVersion {
-  id             String @id @default(cuid())
-  organizationId String @map("organization_id")
-  installationId String @map("installation_id")
+  id             String                @id @default(cuid())
+  organizationId String                @map("organization_id")
+  installationId String                @map("installation_id")
   scope          String
-  externalFileId String @map("external_file_id")
-  revisionKey    String @map("revision_key")
+  externalFileId String                @map("external_file_id")
+  revisionKey    String                @map("revision_key")
   available      Boolean
   metadata       Json
-  recordedAt     DateTime @default(now()) @map("recorded_at")
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  recordedAt     DateTime              @default(now()) @map("recorded_at")
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   installation   ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([installationId, scope, externalFileId, revisionKey])
@@ -11563,12 +11782,12 @@ model ProductScenario {
   createdAt                    DateTime               @default(now()) @map("created_at")
   updatedAt                    DateTime               @updatedAt @map("updated_at")
 
-  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  marketArea   MarketArea               @relation(fields: [marketAreaId], references: [id], onDelete: Restrict)
-  landAsset    LandAsset?               @relation(fields: [landAssetId], references: [id], onDelete: SetNull)
-  project      Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  mixLines     ProductScenarioMixLine[]
-  decisions    ProductDecisionRecord[]
+  organization    Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  marketArea      MarketArea               @relation(fields: [marketAreaId], references: [id], onDelete: Restrict)
+  landAsset       LandAsset?               @relation(fields: [landAssetId], references: [id], onDelete: SetNull)
+  project         Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  mixLines        ProductScenarioMixLine[]
+  decisions       ProductDecisionRecord[]
   launchScenarios LaunchScenario[]
 
   @@unique([organizationId, marketAreaId, name, version])
@@ -12136,19 +12355,19 @@ enum LaunchHumanDecision {
 }
 
 model MacroIndicatorSeries {
-  id                    String                    @id @default(cuid())
-  organizationId        String?                   @map("organization_id")
+  id                    String                   @id @default(cuid())
+  organizationId        String?                  @map("organization_id")
   code                  String
   name                  String
   category              String
-  canonicalUnit         String                    @map("canonical_unit")
+  canonicalUnit         String                   @map("canonical_unit")
   frequency             MacroIndicatorFrequency
   visibility            MacroIndicatorVisibility
-  expectedFreshnessDays Int                       @map("expected_freshness_days")
-  description           String?                   @db.Text
-  isActive              Boolean                   @default(true) @map("is_active")
-  createdById           String?                   @map("created_by_id")
-  createdAt             DateTime                  @default(now()) @map("created_at")
+  expectedFreshnessDays Int                      @map("expected_freshness_days")
+  description           String?                  @db.Text
+  isActive              Boolean                  @default(true) @map("is_active")
+  createdById           String?                  @map("created_by_id")
+  createdAt             DateTime                 @default(now()) @map("created_at")
 
   organization Organization?               @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "macro_indicator_series_organization_id_fkey")
   createdBy    User?                       @relation("MacroIndicatorSeriesCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "macro_indicator_series_created_by_id_fkey")
@@ -12159,30 +12378,30 @@ model MacroIndicatorSeries {
 }
 
 model MacroIndicatorObservation {
-  id                    String                  @id @default(cuid())
-  seriesId              String                  @map("series_id")
-  previousObservationId String?                 @unique(map: "macro_observations_previous_observation_id_key") @map("previous_observation_id")
-  revision              Int                     @default(1)
-  isCorrection          Boolean                 @default(false) @map("is_correction")
-  referenceDate         DateTime                @map("reference_date") @db.Date
-  collectedAt           DateTime                @map("collected_at")
-  regionLevel           MacroRegionLevel        @map("region_level")
-  regionCode            String                  @map("region_code")
-  rawValue              Decimal                 @map("raw_value") @db.Decimal(20, 8)
-  rawUnit               String                  @map("raw_unit")
-  normalizedValue       Decimal                 @map("normalized_value") @db.Decimal(20, 8)
-  canonicalUnit         String                  @map("canonical_unit")
-  normalizationKey      String                  @map("normalization_key")
-  normalizationMetadata Json                    @map("normalization_metadata")
-  sourceProvider        String                  @map("source_provider")
-  sourceUrl             String?                 @map("source_url")
-  sourceMethod          String                  @map("source_method")
-  confidenceLevel       ConfidenceLevel         @map("confidence_level")
-  confidenceScore       Float?                  @map("confidence_score")
+  id                    String           @id @default(cuid())
+  seriesId              String           @map("series_id")
+  previousObservationId String?          @unique(map: "macro_observations_previous_observation_id_key") @map("previous_observation_id")
+  revision              Int              @default(1)
+  isCorrection          Boolean          @default(false) @map("is_correction")
+  referenceDate         DateTime         @map("reference_date") @db.Date
+  collectedAt           DateTime         @map("collected_at")
+  regionLevel           MacroRegionLevel @map("region_level")
+  regionCode            String           @map("region_code")
+  rawValue              Decimal          @map("raw_value") @db.Decimal(20, 8)
+  rawUnit               String           @map("raw_unit")
+  normalizedValue       Decimal          @map("normalized_value") @db.Decimal(20, 8)
+  canonicalUnit         String           @map("canonical_unit")
+  normalizationKey      String           @map("normalization_key")
+  normalizationMetadata Json             @map("normalization_metadata")
+  sourceProvider        String           @map("source_provider")
+  sourceUrl             String?          @map("source_url")
+  sourceMethod          String           @map("source_method")
+  confidenceLevel       ConfidenceLevel  @map("confidence_level")
+  confidenceScore       Float?           @map("confidence_score")
   provenance            Json
   checksum              String
-  createdById           String?                 @map("created_by_id")
-  createdAt             DateTime                @default(now()) @map("created_at")
+  createdById           String?          @map("created_by_id")
+  createdAt             DateTime         @default(now()) @map("created_at")
 
   series              MacroIndicatorSeries        @relation(fields: [seriesId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "macro_observations_series_id_fkey")
   previousObservation MacroIndicatorObservation?  @relation("MacroObservationRevisions", fields: [seriesId, previousObservationId], references: [seriesId, id], onDelete: Restrict, onUpdate: Cascade, map: "macro_observations_previous_lineage_fkey")
@@ -12288,31 +12507,31 @@ model LaunchEvaluation {
 }
 
 model LaunchTrigger {
-  id                    String               @id @default(cuid())
-  organizationId        String               @map("organization_id")
-  projectId             String               @map("project_id")
-  seriesKey             String               @default(cuid()) @map("series_key")
-  version               Int                  @default(1)
-  previousTriggerId     String?              @unique(map: "launch_triggers_previous_trigger_id_key") @map("previous_trigger_id")
+  id                    String                @id @default(cuid())
+  organizationId        String                @map("organization_id")
+  projectId             String                @map("project_id")
+  seriesKey             String                @default(cuid()) @map("series_key")
+  version               Int                   @default(1)
+  previousTriggerId     String?               @unique(map: "launch_triggers_previous_trigger_id_key") @map("previous_trigger_id")
   code                  String
-  status                LaunchTriggerStatus  @default(ACTIVE)
-  metricKey             String               @map("metric_key")
+  status                LaunchTriggerStatus   @default(ACTIVE)
+  metricKey             String                @map("metric_key")
   operator              LaunchTriggerOperator
-  thresholdValue        Decimal              @map("threshold_value") @db.Decimal(20, 8)
-  thresholdValueEnd     Decimal?             @map("threshold_value_end") @db.Decimal(20, 8)
+  thresholdValue        Decimal               @map("threshold_value") @db.Decimal(20, 8)
+  thresholdValueEnd     Decimal?              @map("threshold_value_end") @db.Decimal(20, 8)
   unit                  String
-  minimumConfidence     ConfidenceLevel?     @map("minimum_confidence")
+  minimumConfidence     ConfidenceLevel?      @map("minimum_confidence")
   recommendationOnMatch LaunchRecommendation? @map("recommendation_on_match")
-  rationale             String               @db.Text
-  createdById           String               @map("created_by_id")
-  createdAt             DateTime             @default(now()) @map("created_at")
-  updatedAt             DateTime             @updatedAt @map("updated_at")
+  rationale             String                @db.Text
+  createdById           String                @map("created_by_id")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
 
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "launch_triggers_organization_id_fkey")
-  project        Project          @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "launch_triggers_project_tenant_fkey")
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "launch_triggers_organization_id_fkey")
+  project         Project         @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "launch_triggers_project_tenant_fkey")
   previousTrigger LaunchTrigger?  @relation("LaunchTriggerVersions", fields: [organizationId, projectId, previousTriggerId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "launch_triggers_previous_tenant_fkey")
-  revisions      LaunchTrigger[]  @relation("LaunchTriggerVersions")
-  createdBy      User             @relation("LaunchTriggerCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "launch_triggers_created_by_id_fkey")
+  revisions       LaunchTrigger[] @relation("LaunchTriggerVersions")
+  createdBy       User            @relation("LaunchTriggerCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "launch_triggers_created_by_id_fkey")
 
   @@unique([organizationId, projectId, id], map: "launch_triggers_org_project_id_key")
   @@unique([organizationId, projectId, seriesKey, version], map: "launch_triggers_series_version_key")
@@ -12345,57 +12564,60 @@ model LaunchDecision {
 
 // 9P.5: immutable local enterprise evidence and human review.
 model EnterpriseSyncEvidence {
-  id String @id
-  organizationId String @map("organization_id")
-  installationId String @map("installation_id")
-  jobId String @map("job_id")
-  referenceId String @map("reference_id")
-  versionHash String @map("version_hash")
-  contentHash String @map("content_hash")
-  localHash String @map("local_hash")
-  encryptedPayload String @map("encrypted_payload") @db.Text
-  divergent Boolean
-  simulated Boolean @default(true)
-  recordedAt DateTime @default(now()) @map("recorded_at")
-  expiresAt DateTime @map("expires_at")
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  installation ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  job IntegrationJob @relation(fields: [jobId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  reference ExternalEntityReference @relation(fields: [referenceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  review EnterpriseEvidenceReview?
+  id               String                    @id
+  organizationId   String                    @map("organization_id")
+  installationId   String                    @map("installation_id")
+  jobId            String                    @map("job_id")
+  referenceId      String                    @map("reference_id")
+  versionHash      String                    @map("version_hash")
+  contentHash      String                    @map("content_hash")
+  localHash        String                    @map("local_hash")
+  encryptedPayload String                    @map("encrypted_payload") @db.Text
+  divergent        Boolean
+  simulated        Boolean                   @default(true)
+  recordedAt       DateTime                  @default(now()) @map("recorded_at")
+  expiresAt        DateTime                  @map("expires_at")
+  organization     Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  installation     ConnectorInstallation     @relation(fields: [installationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  job              IntegrationJob            @relation(fields: [jobId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reference        ExternalEntityReference   @relation(fields: [referenceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  review           EnterpriseEvidenceReview?
+
   @@unique([installationId, referenceId, versionHash], map: "enterprise_evidence_version_key")
   @@index([organizationId, installationId, expiresAt], map: "enterprise_evidence_retention_idx")
   @@map("enterprise_sync_evidence")
 }
 
 model EnterpriseEvidenceReview {
-  id String @id
-  organizationId String @map("organization_id")
-  evidenceId String @unique @map("evidence_id")
-  userId String @map("user_id")
-  decision String
-  recordedAt DateTime @default(now()) @map("recorded_at")
-  evidence EnterpriseSyncEvidence @relation(fields: [evidenceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  id             String                 @id
+  organizationId String                 @map("organization_id")
+  evidenceId     String                 @unique @map("evidence_id")
+  userId         String                 @map("user_id")
+  decision       String
+  recordedAt     DateTime               @default(now()) @map("recorded_at")
+  evidence       EnterpriseSyncEvidence @relation(fields: [evidenceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
   @@map("enterprise_evidence_reviews")
 }
 
 // 9P.4: immutable local evidence, removable only after retention expires.
 model FinancialProviderEvidence {
-  id String @id
-  organizationId String @map("organization_id")
-  installationId String @map("installation_id")
-  jobId String @map("job_id")
-  operation String
-  targetId String @map("target_id")
-  externalKeyHash String @map("external_key_hash")
-  contentHash String @map("content_hash")
-  encryptedPayload String @map("encrypted_payload") @db.Text
-  simulated Boolean @default(true)
-  recordedAt DateTime @default(now()) @map("recorded_at")
-  expiresAt DateTime @map("expires_at")
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  installation ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  id               String                @id
+  organizationId   String                @map("organization_id")
+  installationId   String                @map("installation_id")
+  jobId            String                @map("job_id")
+  operation        String
+  targetId         String                @map("target_id")
+  externalKeyHash  String                @map("external_key_hash")
+  contentHash      String                @map("content_hash")
+  encryptedPayload String                @map("encrypted_payload") @db.Text
+  simulated        Boolean               @default(true)
+  recordedAt       DateTime              @default(now()) @map("recorded_at")
+  expiresAt        DateTime              @map("expires_at")
+  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  installation     ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
   @@unique([installationId, operation, targetId, externalKeyHash], map: "financial_provider_evidence_installation_id_operation_target__k")
   @@index([organizationId, installationId, expiresAt], map: "financial_provider_evidence_organization_id_installation_id_e_i")
   @@map("financial_provider_evidence")

@@ -178,5 +178,20 @@
     "name": "20260910151500_phase_9r_structural_immutability",
     "checksum": "bbc3c586dd0f359601326051699c5ff10a9dcb276be7f6a99b5127018a87a2b5",
     "windowsChecksum": "f6884164063b42744668091b4692fc828e9f6cb3116120b1bc343759a5ff626b"
+  },
+  {
+    "name": "20260911011100_phase_9s_closure_result_distribution",
+    "checksum": "ff4e61e4f39480b0b9aa596ba001c2f9a1d23a7646bb4ce9430e3e9412ca33f7",
+    "windowsChecksum": "83c8701d962576b28c06e56bf2dd2e220c06abb57ac4275e9baa68ffdbb4e96c"
+  },
+  {
+    "name": "20260911220000_phase_9s_legal_evidence_document",
+    "checksum": "c03ee149f5e126dea1eff51cdd55f327862f45ada272ee1a2ac36aae2df72408",
+    "windowsChecksum": "4ccdebcc847977a19d2965ec68fcfc8e8843de99721e9c269f00dbeb6c37a10a"
+  },
+  {
+    "name": "20260911235000_phase_9s_legal_evidence_idempotency",
+    "checksum": "3b1b357861a8c5425dda77de96b6616a87a0998cfe94bc8265ce4e31359d3771",
+    "windowsChecksum": "d3e3d3523861772a16f4baeff9898137f889050ac8031b73e24b1c915465443f"
   }
 ]
