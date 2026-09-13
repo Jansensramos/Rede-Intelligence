@@ -1,7 +1,7 @@
 [
   {
     "path": "src/app/actions/ai.ts",
-    "sha256": "50ab4dcbbc964b727bdc9cd1525524dc47972645c80b0d9fd882ee4fca54ff4e"
+    "sha256": "3089c02963a187dc6b49fb44065a94290625a5c650c15b0cc1c7c24e99df9df5"
   },
   {
     "path": "src/app/actions/auth.ts",
@@ -89,7 +89,7 @@
   },
   {
     "path": "src/app/api/ai/chat/route.ts",
-    "sha256": "c14558802e9178256b29836d8b254576382e4f6b079a5689d4ed32e6a527c6cf"
+    "sha256": "4fe6638dc4cdef5afd8e8f95d0295e6c592598a954081360be0b8b08913a36a1"
   },
   {
     "path": "src/app/api/budgets/[id]/items/[itemId]/route.ts",

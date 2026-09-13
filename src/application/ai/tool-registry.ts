@@ -25,7 +25,8 @@ import { getAccountingWorkspace } from "@/application/accounting/accounting-serv
 import { getIntegrationsWorkspace } from "@/application/integrations/integrations-service";
 import { getDataIntelligenceWorkspace } from "@/application/data-intelligence/data-intelligence-service";
 import { getMarketProductWorkspace } from "@/application/market-product";
-import { assertProtectedReadCapability, type ProtectedReadCapability } from "@/domain/auth/read-capabilities";
+import type { ProtectedReadCapability } from "@/domain/auth/read-capabilities";
+import { assertAiUse } from "@/application/ai-gateway/rbac";
 
 const roleRank: Record<MembershipRole, number> = { VIEWER: 0, REVIEWER: 1, ANALYST: 2, ADMIN: 3, OWNER: 4 };
 const jsonClone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -128,8 +129,10 @@ export class AIToolRegistry {
   async execute(context: RelevantContextPackage, name: string, rawArguments: Record<string, unknown>): Promise<AIToolCallResult> {
     const tool = this.tools.get(name);
     if (!tool) throw new Error(`Ferramenta não autorizada: ${name}`);
-    assertProtectedReadCapability(context.role, "AI_READ");
-    assertProtectedReadCapability(context.role, toolCapabilities.get(name)!);
+    // Correcao critica pos-reauditoria (achado MEDIO "choke point de RBAC"): choke point
+    // unico (AI_READ + AI_USE + capacidade de leitura do dominio da ferramenta,
+    // cumulativos - nenhum substitui o outro), nunca mais montado manualmente aqui.
+    assertAiUse(context, toolCapabilities.get(name)!);
     if (roleRank[context.role] < roleRank[tool.minimumRole]) throw new Error("Seu perfil não possui permissão para esta ferramenta.");
     if (tool.mode === "SIMULATION" && !context.permissions.canSimulate) throw new Error("Seu perfil não pode executar simulações.");
     if (tool.mode === "MUTATION" && !context.permissions.canMutate) throw new Error("Seu perfil não pode executar esta ação.");

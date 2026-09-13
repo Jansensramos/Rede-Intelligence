@@ -2,15 +2,19 @@
 
 import { requireAuthContext } from "@/application/auth/session";
 import { confirmAIAction, createAIConversation, exportAIConversationPdf, getAIBootstrap, requestMessagePromotion, saveAIFeedback, saveAIInsight, updateAIConversationResponseMode } from "@/application/ai/ai-service";
-import { assertProtectedReadCapability, isReadAccessDeniedError } from "@/domain/auth/read-capabilities";
+import { isReadAccessDeniedError } from "@/domain/auth/read-capabilities";
+import { assertAiUse, isAiAccessDeniedError } from "@/application/ai-gateway/rbac";
 
-const errorMessage = (error: unknown) => isReadAccessDeniedError(error)
+const errorMessage = (error: unknown) => (isReadAccessDeniedError(error) || isAiAccessDeniedError(error))
   ? "Seu perfil não possui acesso aos recursos da REDE AI."
   : error instanceof Error ? error.message : "Não foi possível concluir esta ação.";
 
+// Correcao critica pos-reauditoria (achado MEDIO "choke point de RBAC"): choke point unico
+// (`assertAiUse`, AI_READ + AI_USE), sempre, nas duas entradas de IA (esta Server Action e
+// a rota /api/ai/chat) - nenhuma superficie monta a combinacao manualmente.
 async function authorizedAIContext() {
   const context = await requireAuthContext();
-  assertProtectedReadCapability(context.role, "AI_READ");
+  assertAiUse(context);
   return context;
 }
 

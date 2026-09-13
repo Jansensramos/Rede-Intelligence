@@ -28,7 +28,7 @@ QA, auditoria, commit e CI continuam separados por fase; nenhuma evidência exte
 | 9Q — restante | Gates de release e operação | Aguardando |
 | 9R | Repasse bancário, chaves (gates de entrega + condomínio) e assistência técnica | Contrato aprovado e implementado nesta sessão — ver seção dedicada ao final deste documento |
 | 9S | Encerramento do empreendimento/SPE, governança, resultado realizado | Contrato aprovado e implementado nesta sessão — ver seção dedicada ao final deste documento |
-| 10A | AI Gateway | Aguardando |
+| 10A | AI Gateway | Contrato aprovado e implementado nesta sessão (local, provider-neutral, provider disabled ativo) — ver seção dedicada ao final deste documento |
 | 10B | Context Engine | Aguardando |
 | 10C | Tool Layer | Aguardando |
 | 10D | Agent Framework | Aguardando |
@@ -957,3 +957,208 @@ idênticas sem recriar o banco. `AuditLog`s gravados durante a janela da
 correção anterior podem conter `reasonRef` — histórico imutável, não
 reescrito; documentado como risco residual. Fase 10 continua não iniciada;
 nenhum commit/push executado.
+
+## 10A — AI Gateway (implementação local provider-neutral)
+
+Contrato aprovado em `docs/PHASE_10A_AI_GATEWAY_CONTRACT.md` (15 decisões definitivas
+do aprovador) e implementado nesta sessão, na mesma branch `codex/fase-10a-ai-gateway`
+(HEAD-base `457aa75c874a673d51e0f72e4bbfc31417e8fb79`, 9S aprovada). Registro completo
+em `docs/PHASE_10A_AUDIT_RECORD.md`. Resumo: contratos provider-neutral
+(`AiGateway`/`AiRequest`/`AiResponse`/`AiGatewayError`) tornam-se o único caminho
+autorizado para executar uma chamada de IA; o único provider realmente ativo em
+qualquer ambiente é `disabled` (nenhum comercial autorizado nesta rodada); um segundo
+adapter (`compatible_http`) existe só para prova de conceito/teste com transporte
+injetado, atrás de allowlist exata de host + resolução DNS validada + conexão fixada
+(reaproveitando as validações já auditadas de `alert-dispatcher.ts`, 9Q.2B); produção
+recusa incondicionalmente qualquer modo diferente de `disabled`. Orçamento,
+idempotência e auditoria reaproveitam somente `AIUsageBudget`/`AIExecutionLog`/
+`AIPendingAction` já existentes — **nenhuma migration foi criada**: a ceremônia de
+backup+restauração isolada exigida antes de qualquer migration precisa de um
+privilégio de banco (`CREATEDB`) indisponível para o usuário `rede_app` neste
+ambiente, e solicitar essa credencial é proibido pela autorização desta rodada;
+verificado diretamente (`rolcreatedb=false`) antes de desistir da migration, não
+presumido. Consequência documentada: o ledger persistido do Gateway só funciona para
+chamadores associados a uma `AIConversation` (hoje: `askRedeAI`); o Red Team
+(`LLMProvider`) permanece exatamente como estava, não conectado ao Gateway nesta
+rodada. Dois bugs reais foram encontrados e corrigidos na autorrevisão adversarial:
+uma regressão em `parseRuntimeConfig` que derrubava qualquer chamador (não só IA)
+quando as chaves `AI_*` estão presentes-porém-vazias no `.env`; e um vazamento das
+linhas internas do ledger do Gateway na lista de "ações pendentes" exibida ao usuário.
+Ambos corrigidos e cobertos por teste. RBAC de IA
+(`AI_USE`/`AI_ADMIN`/`AI_BUDGET_READ`/`AI_BUDGET_MANAGE`/`AI_AUDIT_READ`) implementado
+exatamente como a decisão 11; `AI_USE` sempre acumula a capacidade de leitura do
+domínio de origem. Suíte oficial completa: 151 arquivos (1 pulado, pré-existente e sem
+relação), **1.759 testes passando + 4 skipped = 1.763**, 0 falhas — 13 arquivos novos
+desta fase somando 145 testes (contados um a um), incluindo corrida real de orçamento com
+`Promise.all` contra PostgreSQL. Fases 10B–10I continuam não iniciadas; nenhum commit/push
+executado;
+nenhuma credencial solicitada; nenhum dado real ou chamada externa em qualquer teste.
+
+**Correção registrada abaixo (10A — correção focal pós-auditoria):** a alegação de RBAC
+acima ("implementado exatamente como a decisão 11") foi confirmada, por auditoria
+independente, como **descrevendo uma função pura testada isoladamente, nunca chamada por
+nenhum call site de produção** — `askRedeAI` continuava protegido só pelo `AI_READ`
+pré-existente. Corrigido; ver seção dedicada abaixo.
+
+## 10A — correção focal pós-auditoria com ressalvas
+
+Uma auditoria adversarial independente sobre a implementação da 10A (registrada acima)
+reprovou com ressalvas (`APROVADO COM RESSALVAS`), confirmando por reprodução real três
+achados Altos e quatro Médios; nenhum era explorável hoje (provider sempre `disabled`),
+mas todos eram bugs/lacunas reais. Corrigidos nesta sessão, mesma branch, sem migration,
+sem commit/push, sem provider comercial habilitado. Registro completo em
+`docs/PHASE_10A_AUDIT_RECORD.md` §9.
+
+Resumo dos sete achados e correções: (1) **gate arquitetural bypassável** — um arquivo
+novo com `fetch()` direto para um provedor de IA real, sem mencionar as palavras-chave
+que o filtro antigo exigia, passava sem ser analisado; reescrito para analisar a AST real
+(TypeScript compiler API) de todo arquivo produtivo, sem nenhuma pré-filtragem — bypass
+original reproduzido e confirmado corrigido. (2) **RBAC da 10A morto** — `AI_USE` agora é
+exigido como a primeira linha de `askRedeAI`, antes de orçamento/ledger/Gateway, e nas
+duas entradas (Server Action e rota `/api/ai/chat`) de forma idêntica; `AI_ADMIN`/
+`AI_BUDGET_READ`/`AI_BUDGET_MANAGE`/`AI_AUDIT_READ` continuam sem nenhuma superfície ativa
+— documentado honestamente como "definidas para uso futuro", não como "em uso". (3)
+**provider/model não confiáveis no ledger** — a identidade agora vem exclusivamente do
+roteamento do servidor (`AiModelProfile.modelRef`, novo campo), fixada antes de chamar o
+adapter; a resposta do adapter só é comparada para detectar divergência
+(`PROVIDER_IDENTITY_MISMATCH`, novo código permanente), nunca persistida diretamente. (4)
+**idempotencyKey hostil** — validada por um charset fechado antes de qualquer acesso ao
+Prisma; os dois bugs reais confirmados pela auditoria (chave vazia colidindo com erro
+bruto de constraint; byte NUL crashando com erro bruto de encoding) não reproduzem mais.
+(5) **custo negativo/não finito** — validado (inteiro, finito, não-negativo, com teto)
+antes de qualquer persistência; nunca pode gerar crédito. (6) **reserva órfã `RUNNING`**
+— mapeamento confirmou que o schema já tinha os valores de enum necessários (`QUEUED`,
+`RUNNING`, `EXPIRED`) só nunca usados com esse propósito; reservas `QUEUED` vencidas
+(transporte comprovadamente nunca iniciado) agora expiram com segurança via um reaper com
+CAS transacional real (testado com dois reapers concorrentes na mesma linha); reservas
+`RUNNING` vencidas (ambíguas) nunca são liberadas automaticamente — **nenhuma migration
+foi necessária**. (7) **header validation implícita** — a chave/token agora é validada
+explicitamente antes do DNS/transporte, não depende mais só do `https.request` nativo do
+Node para rejeitar CR/LF/NUL.
+
+QA da correção: TypeScript e ESLint limpos (0 erros, 1 warning pré-existente aceito);
+`prisma validate`/`migrate status` sem alteração de schema (39 migrations, inalteradas);
+suíte oficial completa executada duas vezes após a correção (repetição sem recriar o
+banco, para confirmar determinismo) — **155 arquivos de teste passaram | 1 ignorado (156)**
+e **1843 testes passaram | 4 ignorados (1847)** nas duas execuções, 0 falhas; build de
+produção (`next build`) com sucesso; `git diff --check` e varredura de padrões de segredo
+sem ocorrências. Uma falha real de processo apareceu na primeira tentativa da suíte — não
+nos 7 itens em si, mas no gate de superfície revisada da Fase 9Q.2A, cujo hash baseline
+para `src/app/api/ai/chat/route.ts` e `src/app/actions/ai.ts` ficou desatualizado porque o
+Item 2 (RBAC) alterou esses dois arquivos intencionalmente; corrigido recalculando e
+gravando os dois hashes revisados em `docs/PHASE_9Q2A_SURFACE_MANIFEST.json` (comportamento
+esperado do gate, não uma falha de segurança). Fases 10B–10I continuam não iniciadas;
+nenhum commit/push executado; nenhuma credencial solicitada; nenhuma API/DNS externa em
+qualquer teste (adapters hostis usam só resolver/requester injetados).
+
+## 10A — correção crítica pós-reauditoria final (máquina de estados, custo, gate AST)
+
+Uma reauditoria focal final ("REAUDITORIA FOCAL FINAL — FASE 10A — PÓS-CORREÇÃO INTEGRAL"),
+independente e read-only, avaliou a correção acima e **reprovou** — encontrando, com testes
+reais contra PostgreSQL (nunca mocks), bugs concretos que a declaração final da correção
+anterior ("nenhum bug adicional foi encontrado") afirmava incorretamente não existir. Ver
+`docs/PHASE_10A_AUDIT_RECORD.md` §11 para o detalhamento completo. Resumo dos achados e das
+correções, sem apagar o histórico anterior:
+
+1. **CRÍTICO — reserva expirada ressuscitava**: `markGatewayExecutionTransportStarted`
+   ignorava se a promoção QUEUED→RUNNING realmente aconteceu, e `gateway.ts` chamava o
+   adapter mesmo assim; `confirmGatewayExecution`/`releaseGatewayExecution` faziam
+   `update` incondicional, então um `confirm` tardio conseguia ressuscitar uma reserva já
+   `FAILED` (liberada pelo reaper) de volta para `COMPLETED`, recobrando custo já
+   liberado. Corrigido com CAS transacional verificado em todas as transições
+   (`markGatewayExecutionTransportStarted` agora devolve `{transitioned: boolean}` e
+   `gateway.ts` só chama o adapter se `transitioned === true`); estado terminal nunca mais
+   é sobrescrito. 18 testes novos com concorrência real (`Promise.all`).
+2. **ALTO — custo observado hostil na confirmação**: o custo/unidades reportados pelo
+   adapter na confirmação (diferente do custo *estimado* na reserva, que já era validado)
+   não passavam por nenhuma validação — um adapter hostil conseguia gravar custo negativo
+   (reduzindo o gasto agregado) ou `NaN` (erro bruto do Prisma). Corrigido: mesma
+   validação fechada do custo estimado, mais revalidação atômica de orçamento quando o
+   custo observado excede a reserva (fail-closed, nunca trunca, nunca gera crédito).
+3. **ALTO — gate AST ainda bypassável**: três bypasses triviais comprovados (não
+   metaprogramação exótica) — acesso computado/colchete a `globalThis["fetch"]`/
+   `Reflect.get(globalThis,"fetch")`; extensões `.js`/`.mjs`/`.cjs` nunca escaneadas;
+   `scripts/` (incluindo `scripts/worker.ts`, entrypoint real) fora do escopo. Todos
+   fechados.
+4. **MÉDIO — reaper sem call site produtivo**: a função existia e era bem testada
+   isoladamente, mas nada a chamava em produção. Corrigido com a estratégia mínima
+   exigida: recuperação oportunística tenant-scoped antes de cada nova reserva. Nenhum
+   job periódico foi adicionado — avaliado e registrado como não viável sem inventar um
+   mecanismo de agendamento novo, fora do escopo desta correção.
+5. **MÉDIO — choke point de RBAC**: `assertAiUse` (o único ponto de composição
+   AI_READ+AI_USE+domínio) nunca era chamado pelas 4 superfícies reais, que duplicavam a
+   combinação manualmente. Corrigido: as 4 superfícies usam exclusivamente `assertAiUse`;
+   teste arquitetural novo detecta qualquer superfície futura que importe o Gateway/
+   ferramentas de IA sem passar por ele.
+6. **BAIXO — header Unicode**: `isSafeHeaderValue` não fechava o charset (Unicode
+   bidi/zero-width passavam). Corrigido para ASCII imprimível fechado.
+7. **Manifesto tocado mecanicamente pelo auditor**: registrado com transparência; os
+   hashes de `src/app/actions/ai.ts`/`src/app/api/ai/chat/route.ts` foram recalculados
+   pelo implementador, pelo algoritmo canônico, depois de todas as correções acima
+   estarem finalizadas (ambos os arquivos foram alterados de novo nesta rodada, pelo
+   item 5).
+
+QA da correção crítica: TypeScript e ESLint limpos (0 erros, 1 warning pré-existente
+aceito); `prisma validate`/`migrate status` sem alteração de schema (39 migrations,
+inalteradas); suíte oficial completa executada duas vezes (repetição sem recriar o banco)
+— **158 arquivos de teste passaram | 1 ignorado (159)** e **1893 testes passaram | 4
+ignorados (1897)** nas duas execuções, 0 falhas, números idênticos (determinismo
+confirmado); build de produção com sucesso; `git diff --check` e varredura de padrões de
+segredo sem ocorrências. 57 testes novos somados aos 238 já existentes na subárvore
+`ai-gateway`. Fases 10B–10I continuam não iniciadas; nenhum commit/push executado; nenhuma
+credencial solicitada; nenhuma API/DNS externa em qualquer teste.
+
+## 10A — correção crítica DEFINITIVA pós-reauditoria (falha pós-transporte)
+
+A "REAUDITORIA FINAL DE ENCERRAMENTO — FASE 10A", independente e read-only, avaliou a
+correção acima e **reprovou** — encontrando ao vivo, com Postgres real e um adapter
+injetado (nunca mocks), que `gateway.ts` retentava `adapter.execute()` automaticamente
+(1 tentativa inicial + até 3 retries) e liberava a reserva (custo zerado) para qualquer
+falha pós-transporte que não fosse `RECONCILIATION_REQUIRED` — incluindo
+`TIMEOUT`/`PROVIDER_UNAVAILABLE`/`UNEXPECTED`, sem nenhuma garantia de não-cobrança do
+provedor. A declaração "nenhum bug adicional" da correção anterior estava, de novo,
+incorreta. Ver `docs/PHASE_10A_AUDIT_RECORD.md` §13 para o detalhamento completo, e a
+correção em-linha da declaração original em §9.8 (marcada "CORRIGIDO/RETIFICADO").
+
+**Regra adotada, sem exceção por classe de erro**: antes de `adapter.execute` ser
+invocado, uma falha é pré-transporte e pode liberar a reserva. Depois de invocado, a
+execução é potencialmente cobrável — nenhum erro libera automaticamente ou gera uma
+segunda chamada ao adapter; a reserva permanece `RUNNING`/`RECONCILIATION_REQUIRED` até
+reconciliação manual.
+
+**Alterações**: `gateway.ts` perdeu o laço de retry em torno de `adapter.execute`
+(exatamente uma invocação por execução lógica agora) e passou a rastrear um marcador
+interno `adapterInvoked` que decide, sozinho, se uma falha pode liberar a reserva.
+`releaseGatewayExecution` agora só aceita `QUEUED` como origem (nunca mais `RUNNING`) — uma
+tentativa de liberar `RUNNING` é sempre um no-op seguro. Identidade/uso hostil detectados
+depois da resposta do adapter também passaram a deixar a execução `RUNNING` em vez de
+liberada (mudança deliberada: o adapter respondeu, logo é potencialmente cobrável mesmo
+com uma resposta hostil).
+
+**37 testes novos** provando, com PostgreSQL real e `adapter.execute` espionado: cada uma
+das principais classes de erro pós-invocação (AUTHENTICATION, AUTHORIZATION, RATE_LIMIT,
+TIMEOUT, PROVIDER_UNAVAILABLE, conexão encerrada, resposta truncada, INVALID_RESPONSE,
+PROVIDER_USAGE_INVALID, UNEXPECTED, aborto, erro síncrono/assíncrono) resulta em exatamente
+1 chamada ao adapter, zero liberação, `RUNNING` preservado; falha de confirmação (via spy)
+após resposta válida não rechama o adapter; duas execuções reais concorrentes com a mesma
+`idempotencyKey` nunca chamam o adapter duas vezes; replay do cliente após falha de
+confirmação é rejeitado sem rechamar o adapter; o reaper nunca toca uma execução com
+transporte genuinamente em voo.
+
+**Ajustes baixos**: warning do ESLint (`_signal` não usado) eliminado sem desativar
+nenhuma regra global — `npx eslint src` agora relata **0 erros, 0 warnings**; `eval`/`new
+Function` bloqueados diretamente no scanner AST (não mais só um teste de regressão
+textual), com fixtures provando a detecção; manifesto 9Q.2A confirmado coerente (nenhum
+arquivo do seu escopo foi tocado por esta correção, 35/35 hashes batem).
+
+QA final: TypeScript e ESLint limpos (**0 erros, 0 warnings** — warning eliminado, não
+apenas aceito); `prisma validate`/`migrate status` sem alteração de schema (39 migrations,
+inalteradas); suíte oficial completa executada duas vezes (repetição sem recriar o banco)
+— **159 arquivos de teste passaram | 1 ignorado (160)** e **1909 testes passaram | 4
+ignorados (1913)** nas duas execuções, 0 falhas, números idênticos (determinismo
+confirmado); build de produção com sucesso; `git diff --check` e varredura de padrões de
+segredo sem ocorrências; manifesto 9Q.2A confirmado coerente (35/35 hashes batem, nenhum
+arquivo do seu escopo tocado). 37 testes novos desta correção, subárvore `ai-gateway` agora
+com 24 arquivos e 309 testes. Fases 10B–10I continuam não iniciadas; nenhum commit/push
+executado; nenhuma credencial solicitada; nenhuma API/DNS externa em qualquer teste;
+provider comercial continua bloqueado (`disabled` obrigatório).

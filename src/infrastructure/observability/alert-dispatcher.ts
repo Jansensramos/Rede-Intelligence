@@ -19,7 +19,7 @@ export interface AlertTransport {
 // e o literal do host se ele já for um IP). Não depende de rede.
 // ---------------------------------------------------------------------------
 
-function isUnsafeIPv4Parts(a: number, b: number, c: number, d: number): boolean {
+export function isUnsafeIPv4Parts(a: number, b: number, c: number, d: number): boolean {
   void c; void d;
   if (a === 0) return true; // "this network" / unspecified
   if (a === 127) return true; // loopback
@@ -33,7 +33,7 @@ function isUnsafeIPv4Parts(a: number, b: number, c: number, d: number): boolean 
   return false;
 }
 
-function isUnsafeIPv4(host: string): boolean | undefined {
+export function isUnsafeIPv4(host: string): boolean | undefined {
   const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
   if (!match) return undefined;
   const [a, b, c, d] = match.slice(1).map(Number);
@@ -47,7 +47,7 @@ function isUnsafeIPv4(host: string): boolean | undefined {
  * canônicas (dotted-quad embutido, zeros redundantes) porque `assertSafeAlertEndpoint`
  * sempre lê o host já normalizado pelo parser de URL antes de chamar isto.
  */
-function expandIPv6Groups(bare: string): number[] | null {
+export function expandIPv6Groups(bare: string): number[] | null {
   const parts = bare.split("::");
   if (parts.length > 2) return null;
   const parseSide = (side: string) => (side ? side.split(":").filter((segment) => segment.length > 0) : []);
@@ -69,7 +69,7 @@ function expandIPv6Groups(bare: string): number[] | null {
  * NAT64 64:ff9b::/96, 6to4 2002::/16) — extraindo e revalidando o IPv4 embutido com a
  * mesma política do IPv4 direto, em vez de só checar o prefixo textual.
  */
-function isUnsafeIPv6(bare: string): boolean {
+export function isUnsafeIPv6(bare: string): boolean {
   const groups = expandIPv6Groups(bare.toLowerCase());
   if (!groups) return true; // não parseou como IPv6 canônico — falha fechado
   if (groups.every((value) => value === 0)) return true; // :: (unspecified)
@@ -137,7 +137,7 @@ export function assertSafeAlertEndpoint(rawUrl: string) {
 export interface DnsRecord { address: string; family: 4 | 6; }
 export type DnsResolver = (hostname: string) => Promise<DnsRecord[]>;
 
-async function defaultDnsResolver(hostname: string): Promise<DnsRecord[]> {
+export async function defaultDnsResolver(hostname: string): Promise<DnsRecord[]> {
   const records = await dnsLookup(hostname, { all: true, verbatim: true });
   return records.map((record) => ({ address: record.address, family: record.family as 4 | 6 }));
 }
@@ -152,7 +152,7 @@ async function defaultDnsResolver(hostname: string): Promise<DnsRecord[]> {
  */
 const CANONICAL_IPV4 = /^(0|[1-9]\d{0,2})\.(0|[1-9]\d{0,2})\.(0|[1-9]\d{0,2})\.(0|[1-9]\d{0,2})$/;
 
-function parseCanonicalIPv4(address: unknown): [number, number, number, number] | null {
+export function parseCanonicalIPv4(address: unknown): [number, number, number, number] | null {
   if (typeof address !== "string") return null;
   const match = CANONICAL_IPV4.exec(address);
   if (!match) return null;

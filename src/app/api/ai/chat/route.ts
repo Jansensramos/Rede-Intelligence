@@ -2,7 +2,8 @@ import { getAuthContext } from "@/application/auth/session";
 import { askRedeAI } from "@/application/ai/ai-service";
 import { aiQuestionSchema } from "@/domain/ai";
 import { reportInternalError, safeOperatorError } from "@/infrastructure/http/safe-error";
-import { assertProtectedReadCapability, isReadAccessDeniedError } from "@/domain/auth/read-capabilities";
+import { isReadAccessDeniedError } from "@/domain/auth/read-capabilities";
+import { assertAiUse, isAiAccessDeniedError } from "@/application/ai-gateway/rbac";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,8 +14,16 @@ const event = (type: string, data: unknown) => encoder.encode(`${JSON.stringify(
 export async function POST(request: Request) {
   const context = await getAuthContext();
   if (!context) return Response.json({ error: "Sessão expirada." }, { status: 401 });
-  try { assertProtectedReadCapability(context.role, "AI_READ"); }
-  catch (error) { if (isReadAccessDeniedError(error)) return Response.json({ error: error.message }, { status: 403 }); throw error; }
+  // Correcao critica pos-reauditoria (achado MEDIO "choke point de RBAC"): choke point
+  // unico (`assertAiUse`, AI_READ + AI_USE), na mesma regra aplicada pela Server Action
+  // correspondente (src/app/actions/ai.ts) - nenhuma superficie monta a combinacao
+  // manualmente.
+  try {
+    assertAiUse(context);
+  } catch (error) {
+    if (isReadAccessDeniedError(error) || isAiAccessDeniedError(error)) return Response.json({ error: error.message }, { status: 403 });
+    throw error;
+  }
   let input: ReturnType<typeof aiQuestionSchema.parse>;
   try { input = aiQuestionSchema.parse(await request.json()); }
   catch { return Response.json({ error: "Pergunta inválida." }, { status: 400 }); }

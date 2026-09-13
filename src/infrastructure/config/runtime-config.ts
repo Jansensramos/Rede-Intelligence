@@ -3,6 +3,20 @@ import { assertNotArchivedDatabase } from "../../../scripts/database-url-safety.
 
 const environmentSchema = z.enum(["development", "test", "production"]);
 
+/**
+ * `.env`/`.env.example` costumam declarar chaves opcionais como presentes-porém-vazias
+ * (ex.: `AI_PROVIDER_BASE_URL=`) em vez de omiti-las — `process.env` entrega `""`, não
+ * `undefined`. Um `.optional()` puro (usado pelas demais chaves de provider externo desta
+ * config) só trata ausência real como ausência; combinado com `.url()`/`.min(1)`, uma
+ * string vazia falha a validação e derruba `parseRuntimeConfig` para QUALQUER chamador,
+ * mesmo sem nenhuma relação com IA — bug real encontrado ao rodar a suíte existente da
+ * REDE AI após adicionar os campos AI_* desta fase. Corrigido tratando string vazia como
+ * ausente antes do validador de forma, só para os campos novos desta fase.
+ */
+function optionalEnvString(schema: z.ZodString = z.string()) {
+  return z.preprocess((value) => (typeof value === "string" && value.trim() === "" ? undefined : value), schema.optional());
+}
+
 const baseSchema = z.object({
   NODE_ENV: environmentSchema.default("development"),
   DATABASE_URL: z.string().min(1),
@@ -33,6 +47,18 @@ const baseSchema = z.object({
   WORKER_POLL_MS: z.coerce.number().int().min(100).max(60_000).default(1000),
   WORKER_LEASE_MS: z.coerce.number().int().min(5_000).max(900_000).default(30_000),
   WORKER_JOB_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(3_600_000).default(120_000),
+  // Fase 10A (AI Gateway): "disabled" e o unico modo autorizado nesta rodada (decisao 1/2).
+  // "compatible_http" so existe para permitir testes com transporte injetado (decisao 14) -
+  // em producao e sempre recusado, independente do valor configurado (ver productionIssues).
+  AI_GATEWAY_PROVIDER_MODE: z.enum(["disabled", "compatible_http"]).default("disabled"),
+  AI_PROVIDER_ALLOWED_HOSTS: optionalEnvString(),
+  AI_PROVIDER_BASE_URL: optionalEnvString(z.string().url()),
+  AI_PROVIDER_API_KEY: optionalEnvString(),
+  AI_PROVIDER_NAME: optionalEnvString(),
+  AI_DEFAULT_MODEL: optionalEnvString(),
+  AI_INPUT_COST_PER_MILLION_USD_MICROS: z.preprocess((value) => (typeof value === "string" && value.trim() === "" ? undefined : value), z.coerce.number().int().min(0).optional()),
+  AI_OUTPUT_COST_PER_MILLION_USD_MICROS: z.preprocess((value) => (typeof value === "string" && value.trim() === "" ? undefined : value), z.coerce.number().int().min(0).optional()),
+  AI_PRICE_CATALOG_VERSION: optionalEnvString(),
 });
 
 export type RuntimeConfig = z.infer<typeof baseSchema>;
@@ -70,6 +96,12 @@ export function parseRuntimeConfig(environment: Record<string, string | undefine
   if (result.data.NODE_ENV === "production") {
     const missing = productionIssues(result.data);
     if (missing.length) throw new Error(`Configuração de produção incompleta: ${missing.join(", ")}. Valores não foram exibidos.`);
+    // Fase 10A decisão 4: nenhum provider HTTP de IA é autorizado em produção nesta rodada,
+    // mesmo que AI_GATEWAY_PROVIDER_MODE esteja configurado — bloqueio incondicional, não
+    // uma checagem de "campo ausente" (a intenção aqui é proibir, não apenas exigir mais config).
+    if (result.data.AI_GATEWAY_PROVIDER_MODE !== "disabled") {
+      throw new Error("Configuração de produção proibida: nenhum provider HTTP de IA está autorizado nesta fase (AI_GATEWAY_PROVIDER_MODE deve ser 'disabled').");
+    }
   }
   return result.data;
 }

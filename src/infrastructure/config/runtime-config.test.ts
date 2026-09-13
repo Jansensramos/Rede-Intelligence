@@ -63,6 +63,34 @@ describe("contrato de ambiente", () => {
     expect(parseRuntimeConfig({ ...environment, ALERTING_PROVIDER: "external", ALERTING_EXTERNAL_ENDPOINT: "https://alerts.example.invalid/webhook" }).ALERTING_PROVIDER).toBe("external");
   });
 
+  // Fase 10A decisão 4: nenhum provider HTTP de IA é autorizado em produção nesta rodada —
+  // bloqueio incondicional, mesmo com o resto do contrato de produção completo.
+  it("bloqueia produção com AI_GATEWAY_PROVIDER_MODE != disabled, mesmo com o restante do contrato completo", () => {
+    const completeProductionEnvironment = {
+      NODE_ENV: "production",
+      DATABASE_URL: "postgresql://usuario:valor-nao-publico@db/producao",
+      APP_PUBLIC_URL: "https://app.example.invalid",
+      WEBHOOK_BASE_URL: "https://app.example.invalid/api/webhooks",
+      SESSION_SECRET: "x".repeat(32),
+      STORAGE_PROVIDER: "s3",
+      STORAGE_BUCKET: "bucket",
+      STORAGE_REGION: "regiao",
+      STORAGE_ACCESS_KEY_ID: "identificador",
+      STORAGE_SECRET_ACCESS_KEY: "valor-nao-publico",
+      MALWARE_SCANNER_PROVIDER: "external",
+      SECRET_PROVIDER: "external",
+      KMS_PROVIDER: "external",
+      AWS_REGION: "regiao-seguranca",
+      SECRETS_MANAGER_PREFIX: "rede/producao",
+      SECRETS_MANAGER_PREFLIGHT_SECRET_ID: "referencia-preflight",
+      KMS_KEY_ID: "referencia-kms",
+      ALERTING_PROVIDER: "external",
+      ALERTING_EXTERNAL_ENDPOINT: "https://alerts.example.invalid/webhook",
+    };
+    expect(parseRuntimeConfig(completeProductionEnvironment).AI_GATEWAY_PROVIDER_MODE).toBe("disabled");
+    expect(() => parseRuntimeConfig({ ...completeProductionEnvironment, AI_GATEWAY_PROVIDER_MODE: "compatible_http" })).toThrow(/AI_GATEWAY_PROVIDER_MODE/);
+  });
+
   // Achado Bloqueador da reauditoria 9Q.2B: DATABASE_URL do runtime (web/worker/Prisma)
   // não tinha nenhuma proteção contra banco arquivado — só TEST_DATABASE_URL era
   // coberta, por um caminho totalmente separado. Este é o ponto central de config

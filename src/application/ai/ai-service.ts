@@ -3,8 +3,10 @@ import { Prisma, type MembershipRole } from "@prisma/client";
 import type { AuthContext } from "@/application/auth/session";
 import { addInvestmentCondition, createDecisionSandbox, getInvestmentCaseForOrganization, getInvestmentCaseForProject, promoteDecisionSandbox } from "@/application/investment/investment-service";
 import { generateMasterReport, generateStudioArtifact, preflightMasterReport } from "@/application/investment/studio-service";
-import { AI_CONTEXT_BUILDER_VERSION, AI_PROMPT_VERSION, AI_TOOLS_VERSION, AIModelRouter, DEFAULT_AI_SUGGESTIONS, REDE_AI_SYSTEM_PROMPT, aiQuestionSchema, confirmationSchema, feedbackSchema, insightSchema, planAIIntent, responseModeSchema, type AIAnswer, type AIBootstrapView, type AIConversationView, type AIMessageView, type AIModelPolicy, type AIResponseEvidenceInput, type AIStructuredBlock, type AITask, type AIToolCallResult } from "@/domain/ai";
-import { createAIProvider } from "@/infrastructure/ai/provider-factory";
+import { AI_CONTEXT_BUILDER_VERSION, AI_PROMPT_VERSION, AI_TOOLS_VERSION, DEFAULT_AI_SUGGESTIONS, REDE_AI_SYSTEM_PROMPT, aiQuestionSchema, confirmationSchema, feedbackSchema, insightSchema, planAIIntent, responseModeSchema, type AIAnswer, type AIBootstrapView, type AIConversationView, type AIMessageView, type AIResponseEvidenceInput, type AIStructuredBlock, type AIToolCallResult } from "@/domain/ai";
+import { aiGatewayProviderStatus } from "@/infrastructure/ai-gateway/config";
+import { assertAiUse, createOrganizationAiGateway } from "@/application/ai-gateway";
+import type { AiRequest } from "@/domain/ai-gateway";
 import { renderDocumentPdf, type IntermediateDocumentModel } from "@/domain/investment";
 import { prisma } from "@/infrastructure/database/prisma";
 import { buildAIContext, contextSelectionFromWorkspace } from "./context-builder";
@@ -35,7 +37,11 @@ function conversationView(row: {
   return { id: row.id, title: row.title, scope: row.scope, responseMode: row.responseMode as AIConversationView["responseMode"], audience: row.audience, context: row.contextSnapshot as AIConversationView["context"], stale: row.sourceStudyVersionNumber !== null && row.sourceStudyVersionNumber !== latestVersion, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), messages: row.messages.map((message): AIMessageView => ({ id: message.id, role: message.role as AIMessageView["role"], content: message.content, structuredContent: (message.structuredContent ?? []) as unknown as AIStructuredBlock[], toolCalls: (message.toolCalls ?? []) as unknown as AIToolCallResult[], evidence: message.evidence.map((item) => ({ statementId: item.statementId, sourceType: item.sourceType as AIResponseEvidenceInput["sourceType"], entityType: item.entityType, entityId: item.entityId, field: item.field ?? undefined, version: item.version ?? undefined, scenario: item.scenario ?? undefined, documentId: item.documentId ?? undefined, evidenceRef: item.evidenceRef, confidence: item.confidence as AIResponseEvidenceInput["confidence"], label: item.label, value: item.value ?? undefined, location: item.location ?? undefined, metadata: (item.metadata ?? undefined) as Record<string, unknown> | undefined })), createdAt: message.createdAt.toISOString() })), pendingActions: row.pendingActions.map((item) => ({ id: item.id, actionType: item.actionType, status: item.status, preview: item.preview as Record<string, unknown>, createdAt: item.createdAt.toISOString() })) };
 }
 
-const conversationInclude = { messages: { orderBy: { createdAt: "asc" as const }, include: { evidence: { orderBy: { createdAt: "asc" as const } } } }, pendingActions: { orderBy: { createdAt: "desc" as const }, take: 20 } };
+// Fase 10A: linhas de reserva do AI Gateway (actionType "AI_GATEWAY_EXECUTION", ver
+// application/ai-gateway/ledger-service.ts) reaproveitam a tabela AIPendingAction só como
+// ledger interno de orçamento/idempotência — nunca devem aparecer na lista de ações
+// pendentes de confirmação exibida ao usuário.
+const conversationInclude = { messages: { orderBy: { createdAt: "asc" as const }, include: { evidence: { orderBy: { createdAt: "asc" as const } } } }, pendingActions: { where: { actionType: { not: "AI_GATEWAY_EXECUTION" } }, orderBy: { createdAt: "desc" as const }, take: 20 } };
 
 /**
  * Fase 9K.0 (fechamento, gate 3 "Unificar REDE AI ao mesmo contexto"): `projectId` agora é
@@ -57,8 +63,7 @@ export async function getAIBootstrap(context: AuthContext, projectId: string, cu
   if (!rows.length) rows = [await createAIConversation(context, projectId, currentModule)];
   const month = new Date(); month.setUTCDate(1); month.setUTCHours(0, 0, 0, 0);
   const usage = await prisma.aIExecutionLog.aggregate({ where: { organizationId: context.organizationId, createdAt: { gte: month } }, _count: { id: true }, _sum: { inputTokens: true, outputTokens: true, estimatedCost: true } });
-  const provider = createAIProvider();
-  return { status: provider.status, conversations: rows.map((row) => conversationView(row, workspace.bundle.studyVersionNumber)), activeConversation: conversationView(rows[0], workspace.bundle.studyVersionNumber), suggestions: DEFAULT_AI_SUGGESTIONS, usage: { calls: usage._count.id, inputTokens: usage._sum.inputTokens ?? 0, outputTokens: usage._sum.outputTokens ?? 0, estimatedCost: Number(usage._sum.estimatedCost ?? 0) }, contextLabels: { projectName: workspace.bundle.project.name, investmentCaseTitle: workspace.title } };
+  return { status: aiGatewayProviderStatus(), conversations: rows.map((row) => conversationView(row, workspace.bundle.studyVersionNumber)), activeConversation: conversationView(rows[0], workspace.bundle.studyVersionNumber), suggestions: DEFAULT_AI_SUGGESTIONS, usage: { calls: usage._count.id, inputTokens: usage._sum.inputTokens ?? 0, outputTokens: usage._sum.outputTokens ?? 0, estimatedCost: Number(usage._sum.estimatedCost ?? 0) }, contextLabels: { projectName: workspace.bundle.project.name, investmentCaseTitle: workspace.title } };
 }
 
 export async function updateAIConversationResponseMode(context: Pick<AuthContext, "organizationId" | "userId">, conversationId: string, mode: "EXECUTIVE" | "DETAILED" | "TECHNICAL") {
@@ -80,11 +85,6 @@ async function enforceUsageLimits(context: AuthContext) {
   return budget?.maxToolSteps ?? 8;
 }
 
-async function policiesForOrganization(organizationId: string): Promise<AIModelPolicy[]> {
-  const rows = await prisma.aITaskPolicy.findMany({ where: { organizationId, enabled: true } });
-  return rows.map((item) => ({ task: item.task as AITask, provider: item.provider, model: item.model, maxTokens: item.maxTokens, temperature: Number(item.temperature), enabled: item.enabled }));
-}
-
 function compactToolCalls(tools: AIToolCallResult[]): AIToolCallResult[] {
   return tools.map((item) => { const serialized = JSON.stringify(item.data ?? null); return serialized.length <= 16_000 ? item : { ...item, data: { summary: truncate(serialized, 4000), truncated: true } }; });
 }
@@ -103,15 +103,25 @@ function actionPreview(actionType: string, args: Record<string, unknown>, answer
 }
 
 export async function askRedeAI(context: AuthContext, input: { conversationId: string; question: string; currentModule: string }): Promise<{ answer: AIAnswer; message: AIMessageView }> {
+  // Correcao critica pos-reauditoria (achado MEDIO "choke point de RBAC"): passa pelo
+  // choke point unico (`assertAiUse`, AI_READ + AI_USE) aqui, antes de QUALQUER outra
+  // coisa - antes de tocar orcamento (enforceUsageLimits), contexto/ledger
+  // (buildAIContext, AIExecutionLog), ferramentas ou o AiGateway. Independente do que a
+  // Server Action/rota chamadora ja checou - este boundary nunca confia soh no chamador.
+  assertAiUse(context);
   const parsed = aiQuestionSchema.parse(input);
   const maxToolSteps = await enforceUsageLimits(context);
   const relevant = await buildAIContext(context, parsed.conversationId, parsed.question, parsed.currentModule);
   const userMessage = await prisma.aIMessage.create({ data: { conversationId: parsed.conversationId, role: "USER", content: parsed.question, contextSnapshot: json(relevant.selection) } });
-  const provider = createAIProvider();
   const plan = planAIIntent(parsed.question);
-  const router = new AIModelRouter(provider, await policiesForOrganization(context.organizationId));
-  const routed = router.route(plan.task);
-  const execution = await prisma.aIExecutionLog.create({ data: { organizationId: context.organizationId, userId: context.userId, conversationId: parsed.conversationId, messageId: userMessage.id, task: plan.task, model: routed.policy.model, provider: provider.name, status: "RUNNING", promptVersion: AI_PROMPT_VERSION, toolsVersion: AI_TOOLS_VERSION, contextBuilderVersion: AI_CONTEXT_BUILDER_VERSION, startedAt: new Date() } });
+  // Fase 10A: esta linha e o ledger da ORQUESTRACAO da pergunta (ferramentas + resposta),
+  // nao da chamada de geracao em si — a chamada real de IA (quando houver) passa pelo
+  // AiGateway, que grava sua propria linha de reserva/custo (ledger-service.ts, unico
+  // caminho autorizado a chamar um provider). Por isso `provider`/`model` aqui sao
+  // rotulos fixos de orquestracao (atualizados no fim com o que o Gateway realmente
+  // usou), e o custo/tokens desta linha permanecem 0 - o custo real fica só na linha do
+  // Gateway, para nao contar o mesmo gasto duas vezes no orcamento da organizacao.
+  const execution = await prisma.aIExecutionLog.create({ data: { organizationId: context.organizationId, userId: context.userId, conversationId: parsed.conversationId, messageId: userMessage.id, task: plan.task, model: "pending", provider: "rede-orchestrator", status: "RUNNING", promptVersion: AI_PROMPT_VERSION, toolsVersion: AI_TOOLS_VERSION, contextBuilderVersion: AI_CONTEXT_BUILDER_VERSION, startedAt: new Date() } });
   const started = Date.now();
   const results: AIToolCallResult[] = [];
   try {
@@ -124,13 +134,27 @@ export async function askRedeAI(context: AuthContext, input: { conversationId: s
       await prisma.aIToolCallLog.create({ data: { executionId: execution.id, organizationId: context.organizationId, userId: context.userId, tool: call.name, mode: item.mode, arguments: json(call.arguments), resultSummary: json(compactToolCalls([item])[0]), durationMs: item.durationMs, status: item.status === "FAILED" ? "FAILED" : "COMPLETED", errorCode: item.status === "FAILED" ? "TOOL_FAILED" : null } });
     }
     const answer = composeGroundedAnswer(relevant, results, plan.task);
-    answer.providerStatus = provider.status;
-    let providerUsage = { inputTokens: Math.ceil(parsed.question.length / 4), outputTokens: Math.ceil(answer.content.length / 4), estimatedCost: 0, model: routed.policy.model, provider: provider.name };
-    if (provider.status === "AVAILABLE") {
+    answer.providerStatus = aiGatewayProviderStatus();
+    let providerUsage = { inputTokens: Math.ceil(parsed.question.length / 4), outputTokens: Math.ceil(answer.content.length / 4), estimatedCost: 0, model: "rede-grounded-v1", provider: "rede-deterministic" };
+    if (answer.providerStatus === "AVAILABLE") {
       try {
-        const generated = await provider.generateText({ task: plan.task, model: routed.policy.model, systemPrompt: REDE_AI_SYSTEM_PROMPT, userPrompt: parsed.question, groundedContext: answer.content, maxTokens: routed.policy.maxTokens, temperature: routed.policy.temperature });
-        if (numericGroundingSafe(generated.text, answer.content)) answer.content = generated.text;
-        providerUsage = generated;
+        const gateway = createOrganizationAiGateway(context.organizationId, plan.task, { organizationId: context.organizationId, userId: context.userId, conversationId: parsed.conversationId, messageId: userMessage.id });
+        const gatewayRequest: AiRequest = {
+          correlationId: execution.id,
+          organizationId: context.organizationId,
+          projectId: relevant.selection.projectId,
+          actorRef: context.userId,
+          task: plan.task,
+          requiredCapabilities: ["TEXT_GENERATION"],
+          dataClassification: "CONFIDENTIAL",
+          criticality: "STANDARD",
+          content: { systemInstructions: REDE_AI_SYSTEM_PROMPT, trustedContext: answer.content, untrustedUserContent: parsed.question },
+          idempotencyKey: `${userMessage.id}:generate`,
+        };
+        const generated = await gateway.execute(gatewayRequest);
+        const text = typeof generated.content === "string" ? generated.content : undefined;
+        if (text && numericGroundingSafe(text, answer.content)) answer.content = text;
+        providerUsage = { inputTokens: generated.usage.inputUnits, outputTokens: generated.usage.outputUnits, estimatedCost: (generated.usage.observedCostUsdMicros ?? generated.usage.estimatedCostUsdMicros) / 1_000_000, model: generated.routing.model, provider: generated.routing.provider };
       } catch { answer.providerStatus = "LIMITED"; }
     }
     const mutation = plan.mutationIntent ?? (results.some((item) => item.name === "runEngineSimulation" && item.status === "COMPLETED") ? { actionType: "PROMOTE_SIMULATION", arguments: (plan.calls.find((item) => item.name === "runEngineSimulation")?.arguments ?? {}) as Record<string, unknown> } : undefined);
@@ -145,7 +169,7 @@ export async function askRedeAI(context: AuthContext, input: { conversationId: s
     await prisma.aIExecutionLog.update({ where: { id: execution.id }, data: { messageId: assistant.id, model: providerUsage.model, provider: providerUsage.provider, status: answer.providerStatus === "LIMITED" ? "LIMITED" : "COMPLETED", durationMs: Date.now() - started, inputTokens: providerUsage.inputTokens, outputTokens: providerUsage.outputTokens, estimatedCost: providerUsage.estimatedCost, completedAt: new Date() } });
     return { answer, message: { id: assistant.id, role: "ASSISTANT", content: assistant.content, structuredContent: assistant.structuredContent as unknown as AIStructuredBlock[], toolCalls: storedTools, evidence: assistant.evidence.map((item) => ({ statementId: item.statementId, sourceType: item.sourceType, entityType: item.entityType, entityId: item.entityId, field: item.field ?? undefined, version: item.version ?? undefined, scenario: item.scenario ?? undefined, documentId: item.documentId ?? undefined, evidenceRef: item.evidenceRef, confidence: item.confidence, label: item.label, value: item.value ?? undefined, location: item.location ?? undefined, metadata: item.metadata as Record<string, unknown> | undefined })), createdAt: assistant.createdAt.toISOString() } };
   } catch (error) {
-    await prisma.aIExecutionLog.update({ where: { id: execution.id }, data: { status: "FAILED", durationMs: Date.now() - started, errorCode: "EXECUTION_FAILED", errorMessage: safeError(error), completedAt: new Date() } });
+    await prisma.aIExecutionLog.update({ where: { id: execution.id }, data: { model: "n/a", status: "FAILED", durationMs: Date.now() - started, errorCode: "EXECUTION_FAILED", errorMessage: safeError(error), completedAt: new Date() } });
     throw new Error(safeError(error));
   }
 }
