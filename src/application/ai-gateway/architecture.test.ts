@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import ts from "typescript";
@@ -468,18 +468,28 @@ describe("AiGateway - fronteira arquitetural (Fase 10A, AST real)", () => {
       }
     });
 
-    it("extensão .js dentro de um diretório escaneado é incluída automaticamente (achado ALTO da reauditoria)", () => {
-      const targetDir = join(SRC_ROOT, "application", "reporting");
-      const probePath = join(targetDir, ".reaudit-fixture-extension.js");
-      writeFileSync(probePath, `module.exports.x = async function () { return fetch("https://api.openai.com/v1"); };`, "utf8");
+    it.each([
+      { name: "pai inexistente", segments: ["reporting"] },
+      { name: "pais aninhados inexistentes", segments: ["reporting", "nested"] },
+    ])("extensão .js dentro de um diretório escaneado é incluída automaticamente: $name", ({ segments }) => {
+      // A fixture precisa estar no escopo real do scanner. Uma raiz exclusiva evita
+      // depender de pastas vazias locais (que o Git não leva ao checkout do CI).
+      const fixtureRoot = mkdtempSync(join(SRC_ROOT, "application", ".reaudit-extension-"));
       try {
+        const targetDir = join(fixtureRoot, ...segments);
+        const probePath = join(targetDir, ".reaudit-fixture-extension.js");
+        expect(existsSync(targetDir)).toBe(false);
+        mkdirSync(targetDir, { recursive: true });
+        writeFileSync(probePath, `module.exports.x = async function () { return fetch("https://api.openai.com/v1"); };`, "utf8");
         const files = computeProductionFiles();
         expect(files).toContain(probePath); // a extensão .js agora é coletada
         const violations = scanFile(probePath);
         expect(violations.some((v) => v.kind === "FETCH_REFERENCE")).toBe(true);
+        expect(isAllowedFor(toRepoRelative(probePath), "FETCH_REFERENCE")).toBe(false);
       } finally {
-        rmSync(probePath, { force: true });
+        rmSync(fixtureRoot, { recursive: true, force: true });
       }
+      expect(existsSync(fixtureRoot)).toBe(false);
     });
 
     it("scripts/ está dentro do escopo - um novo script produtivo hostil é incluído automaticamente (achado ALTO da reauditoria)", () => {
