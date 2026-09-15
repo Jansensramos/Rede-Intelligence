@@ -7,6 +7,8 @@ import { AI_CONTEXT_BUILDER_VERSION, AI_PROMPT_VERSION, AI_TOOLS_VERSION, DEFAUL
 import { aiGatewayProviderStatus } from "@/infrastructure/ai-gateway/config";
 import { assertAiUse, createOrganizationAiGateway } from "@/application/ai-gateway";
 import type { AiRequest } from "@/domain/ai-gateway";
+import { contextPurposeFor, prepareContextBundle } from "@/application/context-engine";
+import { renderContextBundleForTransport } from "@/domain/context-engine";
 import { renderDocumentPdf, type IntermediateDocumentModel } from "@/domain/investment";
 import { prisma } from "@/infrastructure/database/prisma";
 import { buildAIContext, contextSelectionFromWorkspace } from "./context-builder";
@@ -110,10 +112,12 @@ export async function askRedeAI(context: AuthContext, input: { conversationId: s
   // Server Action/rota chamadora ja checou - este boundary nunca confia soh no chamador.
   assertAiUse(context);
   const parsed = aiQuestionSchema.parse(input);
+  const plan = planAIIntent(parsed.question);
+  const preparedContext = await prepareContextBundle(context, { conversationId: parsed.conversationId, purpose: contextPurposeFor(plan.task, plan.calls.map((call) => call.name)) });
+  const contextBundle = preparedContext.bundle;
   const maxToolSteps = await enforceUsageLimits(context);
   const relevant = await buildAIContext(context, parsed.conversationId, parsed.question, parsed.currentModule);
   const userMessage = await prisma.aIMessage.create({ data: { conversationId: parsed.conversationId, role: "USER", content: parsed.question, contextSnapshot: json(relevant.selection) } });
-  const plan = planAIIntent(parsed.question);
   // Fase 10A: esta linha e o ledger da ORQUESTRACAO da pergunta (ferramentas + resposta),
   // nao da chamada de geracao em si — a chamada real de IA (quando houver) passa pelo
   // AiGateway, que grava sua propria linha de reserva/custo (ledger-service.ts, unico
@@ -140,20 +144,21 @@ export async function askRedeAI(context: AuthContext, input: { conversationId: s
       try {
         const gateway = createOrganizationAiGateway(context.organizationId, plan.task, { organizationId: context.organizationId, userId: context.userId, conversationId: parsed.conversationId, messageId: userMessage.id });
         const gatewayRequest: AiRequest = {
-          correlationId: execution.id,
+          correlationId: preparedContext.correlationId,
           organizationId: context.organizationId,
           projectId: relevant.selection.projectId,
           actorRef: context.userId,
           task: plan.task,
           requiredCapabilities: ["TEXT_GENERATION"],
-          dataClassification: "CONFIDENTIAL",
+          dataClassification: contextBundle.classification,
           criticality: "STANDARD",
-          content: { systemInstructions: REDE_AI_SYSTEM_PROMPT, trustedContext: answer.content, untrustedUserContent: parsed.question },
-          idempotencyKey: `${userMessage.id}:generate`,
+          content: { systemInstructions: REDE_AI_SYSTEM_PROMPT, trustedContext: "", untrustedUserContent: parsed.question },
+          contextBundle,
+          idempotencyKey: contextBundle.requestRef,
         };
         const generated = await gateway.execute(gatewayRequest);
         const text = typeof generated.content === "string" ? generated.content : undefined;
-        if (text && numericGroundingSafe(text, answer.content)) answer.content = text;
+        if (text && numericGroundingSafe(text, renderContextBundleForTransport(contextBundle))) answer.content = text;
         providerUsage = { inputTokens: generated.usage.inputUnits, outputTokens: generated.usage.outputUnits, estimatedCost: (generated.usage.observedCostUsdMicros ?? generated.usage.estimatedCostUsdMicros) / 1_000_000, model: generated.routing.model, provider: generated.routing.provider };
       } catch { answer.providerStatus = "LIMITED"; }
     }
@@ -166,7 +171,7 @@ export async function askRedeAI(context: AuthContext, input: { conversationId: s
     const assistant = await prisma.aIMessage.create({ data: { conversationId: parsed.conversationId, role: "ASSISTANT", content: answer.content, structuredContent: json(answer.structuredContent), evidenceRefs: json(answer.evidence.map((item) => item.evidenceRef)), toolCalls: json(storedTools), model: providerUsage.model, provider: providerUsage.provider, promptVersion: AI_PROMPT_VERSION, contextSnapshot: json(relevant.selection), evidence: { create: answer.evidence.map((item) => ({ statementId: item.statementId, sourceType: item.sourceType, entityType: item.entityType, entityId: item.entityId, field: item.field, version: item.version, scenario: item.scenario, documentId: item.documentId, evidenceRef: item.evidenceRef, confidence: item.confidence, label: item.label, value: item.value, location: item.location, metadata: item.metadata ? json(item.metadata) : undefined })) } }, include: { evidence: true } });
     const priorCount = await prisma.aIMessage.count({ where: { conversationId: parsed.conversationId, role: "USER" } });
     await prisma.aIConversation.update({ where: { id: parsed.conversationId }, data: { ...(priorCount === 1 ? { title: automaticTitle(parsed.question) } : {}), responseMode: plan.responseMode ?? relevant.responseMode, summary: truncate(answer.content, 900) } });
-    await prisma.aIExecutionLog.update({ where: { id: execution.id }, data: { messageId: assistant.id, model: providerUsage.model, provider: providerUsage.provider, status: answer.providerStatus === "LIMITED" ? "LIMITED" : "COMPLETED", durationMs: Date.now() - started, inputTokens: providerUsage.inputTokens, outputTokens: providerUsage.outputTokens, estimatedCost: providerUsage.estimatedCost, completedAt: new Date() } });
+    await prisma.aIExecutionLog.update({ where: { id: execution.id }, data: { messageId: assistant.id, model: providerUsage.model, provider: providerUsage.provider, status: answer.providerStatus === "LIMITED" ? "LIMITED" : "COMPLETED", durationMs: Date.now() - started, inputTokens: 0, outputTokens: 0, estimatedCost: 0, completedAt: new Date() } });
     return { answer, message: { id: assistant.id, role: "ASSISTANT", content: assistant.content, structuredContent: assistant.structuredContent as unknown as AIStructuredBlock[], toolCalls: storedTools, evidence: assistant.evidence.map((item) => ({ statementId: item.statementId, sourceType: item.sourceType, entityType: item.entityType, entityId: item.entityId, field: item.field ?? undefined, version: item.version ?? undefined, scenario: item.scenario ?? undefined, documentId: item.documentId ?? undefined, evidenceRef: item.evidenceRef, confidence: item.confidence, label: item.label, value: item.value ?? undefined, location: item.location ?? undefined, metadata: item.metadata as Record<string, unknown> | undefined })), createdAt: assistant.createdAt.toISOString() } };
   } catch (error) {
     await prisma.aIExecutionLog.update({ where: { id: execution.id }, data: { model: "n/a", status: "FAILED", durationMs: Date.now() - started, errorCode: "EXECUTION_FAILED", errorMessage: safeError(error), completedAt: new Date() } });

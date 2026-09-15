@@ -1,9 +1,15 @@
 import { afterAll, describe, expect, it } from "vitest";
+import { spawn } from "node:child_process";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/infrastructure/database/prisma";
 import { createAiGateway } from "./gateway";
-import type { GatewayLedgerContext } from "./ledger-service";
+import { contextTransportRetryDisposition, markGatewayExecutionTransportStarted, releaseGatewayExecution, reserveGatewayExecution, type GatewayLedgerContext } from "./ledger-service";
 import { AiGatewayError, type AiModelProfile, type AiProviderAdapter, type AiRequest, type AiResponse, type AiRoutingPolicy } from "@/domain/ai-gateway";
 import { DisabledAiProviderAdapter } from "@/infrastructure/ai-gateway/disabled-provider-adapter";
+import { prepareContextBundle } from "@/application/context-engine";
+import { canonicalContextJson, estimateContextTokens, type ContextBundle } from "@/domain/context-engine";
+import { createStudy } from "@/application/studies/study-service";
+import { DEMO_PROJECT } from "@/domain/financial/demo";
 
 /**
  * Testes de integração do AiGateway (docs Fase 10A §4/§8/§9, endurecidos na correção
@@ -20,10 +26,12 @@ async function isolatedOrg(label: string) {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const organization = await prisma.organization.create({ data: { name: `10A gw ${label} ${suffix}`, slug: `10a-gw-${label}-${suffix}` } });
   const user = await prisma.user.create({ data: { name: `10A gw ${label}`, email: `10a-gw-${label}-${suffix}@test.local`, passwordHash: "integration-test" } });
-  const conversation = await prisma.aIConversation.create({ data: { organizationId: organization.id, title: "10A gateway test", scope: "ORGANIZATION", contextSnapshot: {}, createdById: user.id } });
+  await prisma.organizationMembership.create({ data: { organizationId: organization.id, userId: user.id, role: "OWNER" } });
+  const project = await prisma.project.create({ data: { organizationId: organization.id, name: `Gateway ${label}`, city: "São Paulo", state: "SP", createdById: user.id, updatedById: user.id } });
+  const conversation = await prisma.aIConversation.create({ data: { organizationId: organization.id, projectId: project.id, title: "10A gateway test", scope: "GLOBAL_PROJECT_CONTEXT", contextSnapshot: {}, createdById: user.id } });
   await prisma.aIUsageBudget.create({ data: { organizationId: organization.id, monthlyLimit: 1000, createdById: user.id } });
   const ledger: GatewayLedgerContext = { organizationId: organization.id, userId: user.id, conversationId: conversation.id };
-  return { organization, user, conversation, ledger };
+  return { organization, user, project, conversation, ledger };
 }
 
 function request(organizationId: string, overrides: Partial<AiRequest> = {}): AiRequest {
@@ -50,9 +58,91 @@ function fakePolicy(): AiRoutingPolicy {
 class AlwaysSucceedsAdapter implements AiProviderAdapter {
   readonly ref = "fake";
   readonly profile = FAKE_PROFILE;
+  calls = 0;
   async execute(request: AiRequest): Promise<AiResponse> {
+    this.calls += 1;
     return { correlationId: request.correlationId, status: "OK", content: "resposta", evidenceRefs: [], usage: { inputUnits: 10, outputUnits: 5, estimatedCostUsdMicros: 1000, latencyMs: 5 }, routing: { provider: "fake", model: "fake-model", fallbackCount: 0, retryCount: 0 }, policyVersion: "", promptVersion: "" };
   }
+}
+
+async function preparedGatewayFixture(label: string, times?: { validatedAt: Date; preparedAt: Date }) {
+  const data = await isolatedOrg(label);
+  const opinion = await prisma.engineeringTechnicalOpinion.create({ data: { organizationId: data.organization.id, projectId: data.project.id, code: "ENG-001", title: "Gateway fixture", status: "VALIDATED", checksum: "b".repeat(64), createdById: data.user.id, validatedById: data.user.id, validatedAt: times?.validatedAt ?? new Date() } });
+  const auth = { sessionId: "test", userId: data.user.id, userName: data.user.name, userEmail: data.user.email, organizationId: data.organization.id, organizationName: data.organization.name, organizationSlug: data.organization.slug, role: "OWNER" as const };
+  const prepared = await prepareContextBundle(auth, { conversationId: data.conversation.id, purpose: "ENGINEERING_PROGRESS_REVIEW" }, times ? { now: () => times.preparedAt } : undefined);
+  const aiRequest = request(data.organization.id, { correlationId: prepared.correlationId, actorRef: data.user.id, projectId: data.project.id, dataClassification: "CONFIDENTIAL", contextBundle: prepared.bundle, idempotencyKey: prepared.bundle.requestRef });
+  return { ...data, opinion, auth, prepared, aiRequest };
+}
+
+function remeasureBundle(bundle: ContextBundle): ContextBundle {
+  const { measurements: _old, ...base } = bundle;
+  void _old;
+  const byteCount = Buffer.byteLength(canonicalContextJson(base), "utf8");
+  return { ...bundle, measurements: { itemCount: bundle.items.length, byteCount, estimatedTokens: estimateContextTokens(byteCount) } };
+}
+
+async function consumeReservationInSubprocess(payload: {
+  executionLogId: string;
+  pendingActionId: string;
+  authorization: { ledger: GatewayLedgerContext; request: AiRequest };
+}) {
+  const source = `
+    import { markGatewayExecutionTransportStarted } from "./src/application/ai-gateway/ledger-service.ts";
+    import { prisma } from "./src/infrastructure/database/prisma.ts";
+    const payload = JSON.parse(process.env.CONTEXT_CAS_PAYLOAD);
+    try {
+      const outcome = await markGatewayExecutionTransportStarted(payload.executionLogId, payload.pendingActionId, payload.authorization);
+      process.stdout.write(JSON.stringify({ outcome }));
+    } catch (error) {
+      process.stdout.write(JSON.stringify({ errorCode: error?.code ?? "UNEXPECTED" }));
+    } finally {
+      await prisma.$disconnect();
+    }
+  `;
+  return new Promise<{ outcome?: { transitioned: boolean }; errorCode?: string }>((resolve, reject) => {
+    const child = spawn(process.execPath, ["--import", "./scripts/patch-node-os.mjs", "--import", "tsx", "--input-type=module", "--eval", source], {
+      cwd: process.cwd(),
+      env: { ...process.env, CONTEXT_CAS_PAYLOAD: JSON.stringify(payload) },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8"); child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding("utf8"); child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (code !== 0) reject(new Error(`context CAS subprocess failed (${code}): ${stderr.slice(0, 500)}`));
+      else {
+        try { resolve(JSON.parse(stdout)); }
+        catch { reject(new Error(`context CAS subprocess returned invalid JSON: ${stdout.slice(0, 500)}`)); }
+      }
+    });
+  });
+}
+
+async function preparedLegalGatewayFixture(label: string) {
+  const data = await isolatedOrg(label);
+  const auth = { sessionId: "test", userId: data.user.id, userName: data.user.name, userEmail: data.user.email, organizationId: data.organization.id, organizationName: data.organization.name, organizationSlug: data.organization.slug, role: "OWNER" as const };
+  const diligence = await prisma.legalDueDiligenceCase.create({ data: { organizationId: data.organization.id, projectId: data.project.id, code: `LEGAL-${label}`.slice(0, 64), title: "Legal fixture", scope: "Context", responsibleId: data.user.id, createdById: data.user.id, updatedById: data.user.id } });
+  const documentRequest = await prisma.legalDocumentRequest.create({ data: { diligenceCaseId: diligence.id, code: "DOC-001", documentType: "CERTIFICATE", title: "Certificate", requestedAt: new Date(), responsibleId: data.user.id, createdById: data.user.id, updatedById: data.user.id } });
+  const document = await prisma.legalEvidenceDocument.create({ data: { organizationId: data.organization.id, projectId: data.project.id, diligenceCaseId: diligence.id, documentRequestId: documentRequest.id, storageProvider: "LOCAL_PRIVATE_FILE_STORAGE", storageKey: `context/${label}`, checksum: "f".repeat(64), contentType: "application/pdf", sizeBytes: 10, status: "VERIFIED", uploadedById: data.user.id, reviewedById: data.user.id, reviewedAt: new Date(), correlationId: `legal-${label}` } });
+  const prepared = await prepareContextBundle(auth, { conversationId: data.conversation.id, purpose: "LEGAL_EVIDENCE_SUMMARY" });
+  const aiRequest = request(data.organization.id, { correlationId: prepared.correlationId, actorRef: data.user.id, projectId: data.project.id, dataClassification: "LEGAL", contextBundle: prepared.bundle, idempotencyKey: prepared.bundle.requestRef });
+  return { ...data, auth, document, prepared, aiRequest };
+}
+
+async function preparedRiskGatewayFixture(label: string) {
+  const base = await isolatedOrg(label);
+  const auth = { sessionId: "test", userId: base.user.id, userName: base.user.name, userEmail: base.user.email, organizationId: base.organization.id, organizationName: base.organization.name, organizationSlug: base.organization.slug, role: "OWNER" as const };
+  const study = await createStudy(auth, { ...DEMO_PROJECT, projectName: `Risk ${label}` });
+  const conversation = await prisma.aIConversation.create({ data: { organizationId: base.organization.id, projectId: study.projectId, title: "Risk context", scope: "GLOBAL_PROJECT_CONTEXT", contextSnapshot: {}, createdById: base.user.id } });
+  const run = await prisma.calculationRun.findFirstOrThrow({ where: { organizationId: base.organization.id, projectId: study.projectId, studyVersionId: study.studyVersionId }, orderBy: [{ calculatedAt: "desc" }, { id: "asc" }], select: { id: true, scenarioId: true } });
+  const risk = await prisma.riskFinding.findFirst({ where: { calculationRunId: run.id }, orderBy: [{ code: "asc" }, { id: "asc" }] }) ?? await prisma.riskFinding.create({ data: { calculationRunId: run.id, scenarioId: run.scenarioId, severity: "WARNING", category: "FINANCIAL", title: "Context risk", evidence: "coded", action: "REVIEW", classification: "INTERNAL", code: "CTX_RISK", description: "coded", actualValue: 1, thresholdValue: 2, createdById: base.user.id } });
+  const prepared = await prepareContextBundle(auth, { conversationId: conversation.id, purpose: "RISK_REVIEW" });
+  const ledger = { organizationId: base.organization.id, userId: base.user.id, conversationId: conversation.id };
+  const aiRequest = request(base.organization.id, { correlationId: prepared.correlationId, actorRef: base.user.id, projectId: study.projectId, dataClassification: "CONFIDENTIAL", contextBundle: prepared.bundle, idempotencyKey: prepared.bundle.requestRef });
+  return { ...base, auth, study, conversation, run, risk, prepared, ledger, aiRequest };
 }
 
 class AlwaysFailsPermanentlyAdapter implements AiProviderAdapter {
@@ -91,6 +181,299 @@ class AlwaysThrowsGenericErrorAdapter implements AiProviderAdapter {
 
 describe.skipIf(!process.env.DATABASE_URL).sequential("AiGateway — integração ponta a ponta (Fase 10A)", () => {
   afterAll(async () => prisma.$disconnect());
+
+  it("ContextBundle recusado gera zero chamadas; bundle válido gera exatamente uma e não chega ao adapter como objeto interno", async () => {
+    const { organization, user, project, conversation, ledger } = await isolatedOrg("context-bundle");
+    await prisma.engineeringTechnicalOpinion.create({ data: { organizationId: organization.id, projectId: project.id, code: "ENG-001", title: "Gateway fixture", status: "VALIDATED", checksum: "a".repeat(64), createdById: user.id, validatedById: user.id, validatedAt: new Date() } });
+    const adapter = new AlwaysSucceedsAdapter();
+    const execute = adapter.execute.bind(adapter); let calls = 0; let sawInternalBundle = false;
+    adapter.execute = async (received) => { calls += 1; sawInternalBundle = Object.prototype.hasOwnProperty.call(received, "contextBundle"); return execute(received); };
+    const gateway = createAiGateway({ adapter, routingPolicy: fakePolicy(), ledger, requireContextBundle: true });
+    await expect(gateway.execute(request(organization.id, { projectId: "project-1" }))).rejects.toMatchObject({ code: "POLICY_BLOCKED" });
+    expect(calls).toBe(0);
+    const prepared = await prepareContextBundle({ sessionId: "test", userId: user.id, userName: user.name, userEmail: user.email, organizationId: organization.id, organizationName: organization.name, organizationSlug: organization.slug, role: "OWNER" }, { conversationId: conversation.id, purpose: "ENGINEERING_PROGRESS_REVIEW" });
+    await gateway.execute(request(organization.id, { correlationId: prepared.correlationId, actorRef: user.id, projectId: project.id, dataClassification: "CONFIDENTIAL", contextBundle: prepared.bundle, idempotencyKey: prepared.bundle.requestRef }));
+    expect(calls).toBe(1); expect(sawInternalBundle).toBe(false);
+  });
+
+  it.each([
+    ["membership revogada", async (data: Awaited<ReturnType<typeof preparedGatewayFixture>>) => { await prisma.organizationMembership.update({ where: { organizationId_userId: { organizationId: data.organization.id, userId: data.user.id } }, data: { isActive: false } }); }],
+    ["capability removida pelo papel atual", async (data: Awaited<ReturnType<typeof preparedGatewayFixture>>) => { await prisma.organizationMembership.update({ where: { organizationId_userId: { organizationId: data.organization.id, userId: data.user.id } }, data: { role: "VIEWER" } }); }],
+    ["fonte superseded", async (data: Awaited<ReturnType<typeof preparedGatewayFixture>>) => { await prisma.engineeringTechnicalOpinion.update({ where: { id: data.opinion.id }, data: { status: "SUPERSEDED" } }); }],
+    ["nova versão da fonte", async (data: Awaited<ReturnType<typeof preparedGatewayFixture>>) => { await prisma.engineeringTechnicalOpinion.create({ data: { organizationId: data.organization.id, projectId: data.project.id, seriesKey: data.opinion.seriesKey, version: 2, previousOpinionId: data.opinion.id, code: "ENG-001", title: "Gateway fixture v2", status: "VALIDATED", checksum: "c".repeat(64), createdById: data.user.id, validatedById: data.user.id, validatedAt: new Date() } }); }],
+    ["autoria da conversa alterada", async (data: Awaited<ReturnType<typeof preparedGatewayFixture>>) => { const other = await prisma.user.create({ data: { name: "Other owner", email: `other-${Date.now()}-${Math.random()}@test.local`, passwordHash: "test" } }); await prisma.aIConversation.update({ where: { id: data.conversation.id }, data: { createdById: other.id } }); }],
+    ["projeto da conversa alterado", async (data: Awaited<ReturnType<typeof preparedGatewayFixture>>) => { const other = await prisma.project.create({ data: { organizationId: data.organization.id, name: "Other project", city: "São Paulo", state: "SP", createdById: data.user.id, updatedById: data.user.id } }); await prisma.aIConversation.update({ where: { id: data.conversation.id }, data: { projectId: other.id } }); }],
+    ["projeto alterado para PAUSED", async (data: Awaited<ReturnType<typeof preparedGatewayFixture>>) => { await prisma.project.update({ where: { id: data.project.id }, data: { status: "PAUSED" } }); }],
+    ["projeto alterado para ARCHIVED", async (data: Awaited<ReturnType<typeof preparedGatewayFixture>>) => { await prisma.project.update({ where: { id: data.project.id }, data: { status: "ARCHIVED" } }); }],
+    ["projeto alterado para CLOSED", async (data: Awaited<ReturnType<typeof preparedGatewayFixture>>) => { await prisma.project.update({ where: { id: data.project.id }, data: { status: "CLOSED" } }); }],
+  ] as const)("revalidação transacional bloqueia %s confirmada após preparo, sem adapter nem reserva ativa", async (_label, mutate) => {
+    const data = await preparedGatewayFixture(`consume-${Math.random().toString(36).slice(2, 8)}`);
+    await mutate(data);
+    const adapter = new AlwaysSucceedsAdapter();
+    const gateway = createAiGateway({ adapter, routingPolicy: fakePolicy(), ledger: data.ledger, requireContextBundle: true });
+    await expect(gateway.execute(structuredClone(data.aiRequest))).rejects.toMatchObject({ code: "POLICY_BLOCKED" });
+    expect(adapter.calls).toBe(0);
+    const log = await prisma.aIExecutionLog.findFirstOrThrow({ where: { organizationId: data.organization.id, provider: "fake" } });
+    const pending = await prisma.aIPendingAction.findFirstOrThrow({ where: { organizationId: data.organization.id, actionType: "AI_GATEWAY_EXECUTION" } });
+    expect(log).toMatchObject({ status: "FAILED", errorCode: "POLICY_BLOCKED" });
+    expect(Number(log.estimatedCost)).toBe(0);
+    expect(pending.status).toBe("FAILED");
+    expect(await prisma.auditLog.count({ where: { organizationId: data.organization.id, action: "CONTEXT_CONSUMED" } })).toBe(0);
+  });
+
+  it.each([2, 5, 10])("bundle por JSON round-trip em %i instâncias lógicas tem um transporte e uma contabilização", async (concurrency) => {
+    const data = await preparedGatewayFixture(`multi-instance-${concurrency}`);
+    const adapters = Array.from({ length: concurrency }, () => new AlwaysSucceedsAdapter());
+    const gateways = adapters.map((adapter) => createAiGateway({ adapter, routingPolicy: fakePolicy(), ledger: data.ledger, requireContextBundle: true }));
+    const outcomes = await Promise.allSettled(gateways.map((gateway) => gateway.execute(JSON.parse(JSON.stringify(data.aiRequest)))));
+    expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
+    expect(adapters.reduce((sum, adapter) => sum + adapter.calls, 0)).toBe(1);
+    expect(await prisma.aIExecutionLog.count({ where: { organizationId: data.organization.id, provider: "fake" } })).toBe(1);
+    expect(await prisma.auditLog.count({ where: { organizationId: data.organization.id, action: "CONTEXT_CONSUMED" } })).toBe(1);
+    const log = await prisma.aIExecutionLog.findFirstOrThrow({ where: { organizationId: data.organization.id, provider: "fake" } });
+    expect(log.status).toBe("COMPLETED");
+  });
+
+  it.each([2, 5, 10])("%i processos Node com PrismaClients independentes promovem uma única reserva", async (concurrency) => {
+    const data = await preparedGatewayFixture(`multi-process-${concurrency}`);
+    const reservation = await reserveGatewayExecution(data.ledger, data.aiRequest, 0, null, "fake", "fake-model");
+    expect(reservation.kind).toBe("RESERVED");
+    if (reservation.kind !== "RESERVED") throw new Error("expected reservation");
+    const payload = { executionLogId: reservation.executionLogId, pendingActionId: reservation.pendingActionId, authorization: { ledger: data.ledger, request: JSON.parse(JSON.stringify(data.aiRequest)) } };
+    const outcomes = await Promise.all(Array.from({ length: concurrency }, () => consumeReservationInSubprocess(payload)));
+    expect(outcomes.filter((entry) => entry.outcome?.transitioned === true)).toHaveLength(1);
+    expect(outcomes.filter((entry) => entry.outcome?.transitioned === false)).toHaveLength(concurrency - 1);
+    expect(await prisma.auditLog.count({ where: { organizationId: data.organization.id, action: "CONTEXT_CONSUMED" } })).toBe(1);
+    expect(await prisma.aIExecutionLog.count({ where: { organizationId: data.organization.id, status: "RUNNING" } })).toBe(1);
+  }, 60_000);
+
+  it("revogação em outro PrismaClient, iniciada antes da autorização, vence a corrida e bloqueia o transporte", async () => {
+    const data = await preparedGatewayFixture("two-clients-race");
+    const secondClient = new PrismaClient();
+    try {
+      let mutationStarted!: () => void;
+      let allowCommit!: () => void;
+      const started = new Promise<void>((resolve) => { mutationStarted = resolve; });
+      const release = new Promise<void>((resolve) => { allowCommit = resolve; });
+      const mutation = secondClient.$transaction(async (tx) => {
+        await tx.organizationMembership.update({ where: { organizationId_userId: { organizationId: data.organization.id, userId: data.user.id } }, data: { isActive: false } });
+        mutationStarted();
+        await release;
+      });
+      await started;
+      const adapter = new AlwaysSucceedsAdapter();
+      const gateway = createAiGateway({ adapter, routingPolicy: fakePolicy(), ledger: data.ledger, requireContextBundle: true });
+      const consumption = gateway.execute(structuredClone(data.aiRequest));
+      allowCommit();
+      await mutation;
+      await expect(consumption).rejects.toMatchObject({ code: "POLICY_BLOCKED" });
+      expect(adapter.calls).toBe(0);
+    } finally { await secondClient.$disconnect(); }
+  });
+
+  it("mudança do projeto para PAUSED em outro PrismaClient confirma antes da autorização e bloqueia o transporte", async () => {
+    const data = await preparedGatewayFixture("project-status-race");
+    const secondClient = new PrismaClient();
+    try {
+      let mutationStarted!: () => void;
+      let allowCommit!: () => void;
+      const started = new Promise<void>((resolve) => { mutationStarted = resolve; });
+      const release = new Promise<void>((resolve) => { allowCommit = resolve; });
+      const mutation = secondClient.$transaction(async (tx) => {
+        await tx.project.update({ where: { id: data.project.id }, data: { status: "PAUSED" } });
+        mutationStarted();
+        await release;
+      });
+      await started;
+      const adapter = new AlwaysSucceedsAdapter();
+      const gateway = createAiGateway({ adapter, routingPolicy: fakePolicy(), ledger: data.ledger, requireContextBundle: true });
+      const consumption = gateway.execute(structuredClone(data.aiRequest));
+      allowCommit();
+      await mutation;
+      await expect(consumption).rejects.toMatchObject({ code: "POLICY_BLOCKED" });
+      expect(adapter.calls).toBe(0);
+      expect(await prisma.auditLog.count({ where: { organizationId: data.organization.id, action: "CONTEXT_CONSUMED" } })).toBe(0);
+    } finally { await secondClient.$disconnect(); }
+  });
+
+  it("bundle que vence aguardando a barreira é recusado sem consumo, RUNNING ou adapter", async () => {
+    const preparedAt = new Date(Date.now() - 50_000);
+    const data = await preparedGatewayFixture("expiry-waiting-lock", { preparedAt, validatedAt: new Date(preparedAt.getTime() - 60_000) });
+    const secondClient = new PrismaClient();
+    try {
+      let lockHeld!: () => void;
+      let releaseLock!: () => void;
+      const held = new Promise<void>((resolve) => { lockHeld = resolve; });
+      const release = new Promise<void>((resolve) => { releaseLock = resolve; });
+      const blocker = secondClient.$transaction(async (tx) => {
+        await tx.project.update({ where: { id: data.project.id }, data: { status: "DRAFT" } });
+        lockHeld();
+        await release;
+      }, { timeout: 20_000 });
+      await held;
+      const adapter = new AlwaysSucceedsAdapter();
+      const gateway = createAiGateway({ adapter, routingPolicy: fakePolicy(), ledger: data.ledger, requireContextBundle: true });
+      const consumption = gateway.execute(structuredClone(data.aiRequest));
+      const waitMs = Math.max(0, new Date(data.prepared.bundle.validUntil).getTime() - Date.now() + 100);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      releaseLock();
+      await blocker;
+      await expect(consumption).rejects.toMatchObject({ code: "POLICY_BLOCKED" });
+      expect(adapter.calls).toBe(0);
+      expect(await prisma.auditLog.count({ where: { organizationId: data.organization.id, action: "CONTEXT_CONSUMED" } })).toBe(0);
+      expect(await prisma.aIExecutionLog.findFirstOrThrow({ where: { organizationId: data.organization.id, provider: "fake" } })).toMatchObject({ status: "FAILED" });
+    } finally { await secondClient.$disconnect(); }
+  }, 30_000);
+
+  it("o mesmo fingerprint não autoriza ator diferente e falha antes de reservar", async () => {
+    const data = await preparedGatewayFixture("actor-binding");
+    const other = await prisma.user.create({ data: { name: "Other actor", email: `other-actor-${Date.now()}@test.local`, passwordHash: "test" } });
+    await prisma.organizationMembership.create({ data: { organizationId: data.organization.id, userId: other.id, role: "OWNER" } });
+    const adapter = new AlwaysSucceedsAdapter();
+    const gateway = createAiGateway({ adapter, routingPolicy: fakePolicy(), ledger: { ...data.ledger, userId: other.id }, requireContextBundle: true });
+    await expect(gateway.execute({ ...structuredClone(data.aiRequest), actorRef: other.id })).rejects.toMatchObject({ code: "POLICY_BLOCKED" });
+    expect(adapter.calls).toBe(0);
+    expect(await prisma.aIExecutionLog.count({ where: { organizationId: data.organization.id, provider: "fake" } })).toBe(0);
+  });
+
+  it("bundle vencido é bloqueado antes de criar reserva", async () => {
+    const preparedAt = new Date(Date.now() - 2 * 60_000);
+    const data = await preparedGatewayFixture("expired-bundle", { preparedAt, validatedAt: new Date(preparedAt.getTime() - 60_000) });
+    const adapter = new AlwaysSucceedsAdapter();
+    const gateway = createAiGateway({ adapter, routingPolicy: fakePolicy(), ledger: data.ledger, requireContextBundle: true });
+    await expect(gateway.execute(structuredClone(data.aiRequest))).rejects.toMatchObject({ code: "POLICY_BLOCKED" });
+    expect(adapter.calls).toBe(0);
+    expect(await prisma.aIExecutionLog.count({ where: { organizationId: data.organization.id, provider: "fake" } })).toBe(0);
+  });
+
+  it("validUntil ampliado para 2027, com métricas recalculadas, falha no binding temporal antes do adapter", async () => {
+    const preparedAt = new Date(Date.now() - 2 * 60_000);
+    const data = await preparedGatewayFixture("tampered-expiry", { preparedAt, validatedAt: new Date(preparedAt.getTime() - 60_000) });
+    const tampered = remeasureBundle({ ...data.prepared.bundle, validUntil: "2027-09-13T12:00:00.000Z" });
+    const adapter = new AlwaysSucceedsAdapter();
+    const gateway = createAiGateway({ adapter, routingPolicy: fakePolicy(), ledger: data.ledger, requireContextBundle: true });
+    await expect(gateway.execute({ ...structuredClone(data.aiRequest), contextBundle: tampered })).rejects.toMatchObject({ code: "POLICY_BLOCKED" });
+    expect(adapter.calls).toBe(0);
+    expect(await prisma.auditLog.count({ where: { organizationId: data.organization.id, action: "CONTEXT_CONSUMED" } })).toBe(0);
+  });
+
+  it("revogação jurídica confirmada depois do preparo é relida no consumo e bloqueia o adapter", async () => {
+    const data = await preparedLegalGatewayFixture("legal-revocation");
+    await prisma.legalEvidenceDocument.update({ where: { id: data.document.id }, data: { status: "REVOKED", revokedById: data.user.id, revokedAt: new Date(), revokedReason: "revoked by focal test" } });
+    const adapter = new AlwaysSucceedsAdapter();
+    const gateway = createAiGateway({ adapter, routingPolicy: fakePolicy(), ledger: data.ledger, requireContextBundle: true });
+    await expect(gateway.execute(structuredClone(data.aiRequest))).rejects.toMatchObject({ code: "POLICY_BLOCKED" });
+    expect(adapter.calls).toBe(0);
+    const log = await prisma.aIExecutionLog.findFirstOrThrow({ where: { organizationId: data.organization.id, provider: "fake" } });
+    expect(log).toMatchObject({ status: "FAILED", errorCode: "POLICY_BLOCKED" });
+    expect(await prisma.auditLog.count({ where: { organizationId: data.organization.id, action: "CONTEXT_CONSUMED" } })).toBe(0);
+  });
+
+  it.each([
+    ["alteração do conjunto de riscos", async (data: Awaited<ReturnType<typeof preparedRiskGatewayFixture>>) => { await prisma.riskFinding.create({ data: { calculationRunId: data.run.id, scenarioId: data.run.scenarioId, severity: "CRITICAL", category: "GOVERNANCE", title: "New context risk", evidence: "coded new risk", action: "REVIEW", classification: "INTERNAL", code: `CTX_NEW_${Math.random().toString(36).slice(2, 8).toUpperCase()}`, description: "coded new risk", actualValue: 3, thresholdValue: 2, createdById: data.user.id } }); }],
+    ["novo conflito de risco", async (data: Awaited<ReturnType<typeof preparedRiskGatewayFixture>>) => { await prisma.riskFinding.create({ data: { calculationRunId: data.run.id, scenarioId: data.run.scenarioId, severity: data.risk.severity, category: data.risk.category, title: "Conflicting context risk", evidence: "coded conflict", action: "REVIEW", classification: "INTERNAL", code: data.risk.code, description: "coded conflict", actualValue: 999, thresholdValue: data.risk.thresholdValue, createdById: data.user.id } }); }],
+  ] as const)("%s confirmada depois do preparo invalida o fingerprint reconstruído", async (_label, mutate) => {
+    const data = await preparedRiskGatewayFixture(`risk-${Math.random().toString(36).slice(2, 8)}`);
+    await mutate(data);
+    const adapter = new AlwaysSucceedsAdapter();
+    const gateway = createAiGateway({ adapter, routingPolicy: fakePolicy(), ledger: data.ledger, requireContextBundle: true });
+    await expect(gateway.execute(structuredClone(data.aiRequest))).rejects.toMatchObject({ code: "POLICY_BLOCKED" });
+    expect(adapter.calls).toBe(0);
+    expect(await prisma.auditLog.count({ where: { organizationId: data.organization.id, action: "CONTEXT_CONSUMED" } })).toBe(0);
+  }, 60_000);
+
+  it("retry transacional é exclusivo de P2034, limitado a três; P2002 não é repetido", () => {
+    const p2034 = new Prisma.PrismaClientKnownRequestError("serialization conflict", { code: "P2034", clientVersion: "test" });
+    const p2002 = new Prisma.PrismaClientKnownRequestError("unrelated unique collision", { code: "P2002", clientVersion: "test" });
+    expect(contextTransportRetryDisposition(p2034, 1)).toBe("RETRY");
+    expect(contextTransportRetryDisposition(p2034, 2)).toBe("RETRY");
+    expect(contextTransportRetryDisposition(p2034, 3)).toBe("EXHAUSTED");
+    expect(contextTransportRetryDisposition(p2002, 1)).toBe("NOT_RETRYABLE");
+  });
+
+  it("binding persistido inválido faz rollback integral do consumo antes de RUNNING", async () => {
+    const data = await preparedGatewayFixture("invalid-persisted-binding");
+    const reservation = await reserveGatewayExecution(data.ledger, data.aiRequest, 0, null, "fake", "fake-model");
+    expect(reservation.kind).toBe("RESERVED");
+    if (reservation.kind !== "RESERVED") throw new Error("expected reservation");
+    const fingerprint = (await prisma.aIPendingAction.findUniqueOrThrow({ where: { id: reservation.pendingActionId } })).arguments as { fingerprint: string };
+    await prisma.aIPendingAction.update({ where: { id: reservation.pendingActionId }, data: { arguments: { fingerprint: fingerprint.fingerprint, context: { forged: true } } } });
+    await expect(markGatewayExecutionTransportStarted(reservation.executionLogId, reservation.pendingActionId, { ledger: data.ledger, request: data.aiRequest })).rejects.toMatchObject({ code: "CONTEXT_INTEGRITY_FAILED" });
+    expect(await prisma.aIExecutionLog.findUniqueOrThrow({ where: { id: reservation.executionLogId } })).toMatchObject({ status: "QUEUED" });
+    expect(await prisma.auditLog.count({ where: { organizationId: data.organization.id, action: "CONTEXT_CONSUMED" } })).toBe(0);
+    expect(await releaseGatewayExecution(reservation.executionLogId, reservation.pendingActionId, "POLICY_BLOCKED")).toEqual({ released: true });
+  });
+
+  it("binding persistido contém tempo e identidades reais e recusa alteração temporal posterior à reserva", async () => {
+    const data = await preparedGatewayFixture("strict-temporal-ledger-binding");
+    const reservation = await reserveGatewayExecution(data.ledger, data.aiRequest, 0, null, "fake", "fake-model");
+    expect(reservation.kind).toBe("RESERVED");
+    if (reservation.kind !== "RESERVED") throw new Error("expected reservation");
+    const pending = await prisma.aIPendingAction.findUniqueOrThrow({ where: { id: reservation.pendingActionId } });
+    const argumentsJson = pending.arguments as { fingerprint: string; context: Record<string, unknown> };
+    expect(argumentsJson.context).toMatchObject({
+      actorUserId: data.user.id, conversationId: data.conversation.id, organizationId: data.organization.id,
+      projectId: data.project.id, idempotencyKey: data.aiRequest.idempotencyKey,
+      executionLogId: reservation.executionLogId, pendingActionId: reservation.pendingActionId,
+      correlationId: data.aiRequest.correlationId, preparedAt: data.prepared.bundle.preparedAt,
+      validUntil: data.prepared.bundle.validUntil, fingerprint: data.prepared.bundle.fingerprint,
+    });
+    const alteredContext = { ...argumentsJson.context, validUntil: "2027-09-13T12:00:00.000Z" };
+    await prisma.aIPendingAction.update({ where: { id: reservation.pendingActionId }, data: { arguments: { fingerprint: argumentsJson.fingerprint, context: alteredContext } } });
+    await expect(markGatewayExecutionTransportStarted(reservation.executionLogId, reservation.pendingActionId, { ledger: data.ledger, request: data.aiRequest })).rejects.toMatchObject({ code: "CONTEXT_INTEGRITY_FAILED" });
+    expect(await prisma.aIExecutionLog.findUniqueOrThrow({ where: { id: reservation.executionLogId } })).toMatchObject({ status: "QUEUED" });
+    expect(await prisma.auditLog.count({ where: { organizationId: data.organization.id, action: "CONTEXT_CONSUMED" } })).toBe(0);
+    expect(await releaseGatewayExecution(reservation.executionLogId, reservation.pendingActionId, "POLICY_BLOCKED")).toEqual({ released: true });
+  });
+
+  it("revogação confirmada depois de TRANSPORT_AUTHORIZED não recolhe uma chamada já iniciada", async () => {
+    const data = await preparedGatewayFixture("post-authorization-revocation");
+    let signalInvoked!: () => void;
+    let finishAdapter!: () => void;
+    const invoked = new Promise<void>((resolve) => { signalInvoked = resolve; });
+    const finish = new Promise<void>((resolve) => { finishAdapter = resolve; });
+    const adapter = new AlwaysSucceedsAdapter();
+    adapter.execute = async (received) => {
+      adapter.calls += 1;
+      signalInvoked();
+      await finish;
+      return { correlationId: received.correlationId, status: "OK", content: "authorized", evidenceRefs: [], usage: { inputUnits: 1, outputUnits: 1, estimatedCostUsdMicros: 0, latencyMs: 1 }, routing: { provider: "fake", model: "fake-model", fallbackCount: 0, retryCount: 0 }, policyVersion: "", promptVersion: "" };
+    };
+    const gateway = createAiGateway({ adapter, routingPolicy: fakePolicy(), ledger: data.ledger, requireContextBundle: true });
+    const execution = gateway.execute(structuredClone(data.aiRequest));
+    await invoked;
+    await prisma.organizationMembership.update({ where: { organizationId_userId: { organizationId: data.organization.id, userId: data.user.id } }, data: { isActive: false } });
+    finishAdapter();
+    await expect(execution).resolves.toMatchObject({ status: "OK", content: "authorized" });
+    expect(adapter.calls).toBe(1);
+    expect(await prisma.auditLog.count({ where: { organizationId: data.organization.id, action: "CONTEXT_CONSUMED" } })).toBe(1);
+  });
+
+  it("mudança de status do projeto posterior a TRANSPORT_AUTHORIZED não recolhe o transporte já iniciado", async () => {
+    const data = await preparedGatewayFixture("post-authorization-project-status");
+    let signalInvoked!: () => void;
+    let finishAdapter!: () => void;
+    const invoked = new Promise<void>((resolve) => { signalInvoked = resolve; });
+    const finish = new Promise<void>((resolve) => { finishAdapter = resolve; });
+    const adapter = new AlwaysSucceedsAdapter();
+    adapter.execute = async (received) => {
+      adapter.calls += 1;
+      signalInvoked();
+      await finish;
+      return { correlationId: received.correlationId, status: "OK", content: "authorized", evidenceRefs: [], usage: { inputUnits: 1, outputUnits: 1, estimatedCostUsdMicros: 0, latencyMs: 1 }, routing: { provider: "fake", model: "fake-model", fallbackCount: 0, retryCount: 0 }, policyVersion: "", promptVersion: "" };
+    };
+    const gateway = createAiGateway({ adapter, routingPolicy: fakePolicy(), ledger: data.ledger, requireContextBundle: true });
+    const execution = gateway.execute(structuredClone(data.aiRequest));
+    await invoked;
+    const secondClient = new PrismaClient();
+    try {
+      await secondClient.project.update({ where: { id: data.project.id }, data: { status: "PAUSED" } });
+    } finally { await secondClient.$disconnect(); }
+    finishAdapter();
+    await expect(execution).resolves.toMatchObject({ status: "OK", content: "authorized" });
+    expect(adapter.calls).toBe(1);
+    expect(await prisma.auditLog.count({ where: { organizationId: data.organization.id, action: "CONTEXT_CONSUMED" } })).toBe(1);
+  });
 
   it("provider disabled: bloqueia com PROVIDER_UNAVAILABLE e libera a reserva (custo final zero)", async () => {
     const { organization, ledger } = await isolatedOrg("disabled");

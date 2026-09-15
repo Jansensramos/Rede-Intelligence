@@ -17,6 +17,7 @@ import {
   type AiSafetyPolicy,
 } from "@/domain/ai-gateway";
 import { AI_PRICE_CATALOG_VERSION_SYNTHETIC, SYNTHETIC_PRICE_TABLE } from "@/infrastructure/ai-gateway/model-catalog";
+import { assertBundleScope, ContextEngineError, renderContextBundleForTransport } from "@/domain/context-engine";
 import { AI_GATEWAY_PROMPT_VERSION, confirmGatewayExecution, markGatewayExecutionTransportStarted, releaseGatewayExecution, reserveGatewayExecution, type GatewayLedgerContext } from "./ledger-service";
 
 /**
@@ -63,16 +64,36 @@ export interface AiGatewayDependencies {
   routingPolicy: AiRoutingPolicy;
   ledger: GatewayLedgerContext;
   safetyPolicy?: AiSafetyPolicy;
+  requireContextBundle?: true;
 }
 
 export function createAiGateway(deps: AiGatewayDependencies): AiGateway {
   const catalog = new Map([[deps.adapter.ref, deps.adapter.profile]]);
   return {
     async execute(request: AiRequest): Promise<AiResponse> {
-      const envelopeIssue = validateEnvelope(request.content);
+      let providerRequest = request;
+      if (request.contextBundle) {
+        try {
+          if (request.organizationId !== deps.ledger.organizationId || request.actorRef !== deps.ledger.userId) throw new Error("ledger scope mismatch");
+          const bundle = assertBundleScope(request.contextBundle, {
+            organizationId: request.organizationId, projectId: request.projectId,
+            userId: deps.ledger.userId, conversationId: deps.ledger.conversationId,
+            correlationId: request.correlationId, idempotencyKey: request.idempotencyKey,
+          });
+          if (bundle.classification !== request.dataClassification) throw new Error("classification mismatch");
+          const withoutInternalBundle = { ...request };
+          delete withoutInternalBundle.contextBundle;
+          providerRequest = { ...withoutInternalBundle, content: { ...request.content, trustedContext: renderContextBundleForTransport(bundle) } };
+        } catch {
+          throw new AiGatewayError("ContextBundle inválido, vencido ou fora do escopo.", "POLICY_BLOCKED", false, request.correlationId);
+        }
+      } else if (deps.requireContextBundle) {
+        throw new AiGatewayError("ContextBundle obrigatório para esta chamada.", "POLICY_BLOCKED", false, request.correlationId);
+      }
+      const envelopeIssue = validateEnvelope(providerRequest.content);
       if (envelopeIssue) throw new AiGatewayError(`Envelope de prompt invalido (${envelopeIssue}).`, "CONFIGURATION", false, request.correlationId);
 
-      const safety = evaluateSafety(request.dataClassification, request.content, deps.safetyPolicy);
+      const safety = evaluateSafety(request.dataClassification, providerRequest.content, deps.safetyPolicy);
       if (!safety.allowed) throw new AiGatewayError(`Bloqueado por politica de seguranca (${safety.reason}).`, "SAFETY_BLOCKED", false, request.correlationId);
 
       if (requiresHumanApproval(deps.routingPolicy, request)) {
@@ -91,7 +112,7 @@ export function createAiGateway(deps: AiGatewayDependencies): AiGateway {
 
       const price = SYNTHETIC_PRICE_TABLE[routed.candidate.providerRef];
       const priceVersion = price && (price.inputUsdMicrosPerMillion > 0 || price.outputUsdMicrosPerMillion > 0) ? AI_PRICE_CATALOG_VERSION_SYNTHETIC : null;
-      const estimatedInputUnits = estimateInputUnits(request);
+      const estimatedInputUnits = estimateInputUnits(providerRequest);
       const estimatedCostUsdMicros = price ? Math.round((estimatedInputUnits * price.inputUsdMicrosPerMillion) / 1_000_000) : 0;
       if (request.maxCostUsdMicros != null && estimatedCostUsdMicros > request.maxCostUsdMicros) {
         throw new AiGatewayError("Custo estimado excede o limite maximo informado pelo chamador.", "BUDGET_EXCEEDED", false, request.correlationId);
@@ -146,7 +167,11 @@ export function createAiGateway(deps: AiGatewayDependencies): AiGateway {
         // perdido), o adapter NUNCA e chamado - nenhuma excecao a esta regra. Isto
         // acontece com `adapterInvoked` ainda `false`, entao uma falha aqui e sempre
         // pre-transporte.
-        const transportStart = await markGatewayExecutionTransportStarted(reservation.executionLogId, reservation.pendingActionId);
+        const transportStart = await markGatewayExecutionTransportStarted(
+          reservation.executionLogId,
+          reservation.pendingActionId,
+          request.contextBundle ? { ledger: deps.ledger, request } : undefined,
+        );
         if (!transportStart.transitioned) {
           throw new AiGatewayError("Reserva nao pode ser promovida para execucao (ja finalizada por expiracao ou outro caminho concorrente).", "RESERVATION_EXPIRED", false, request.correlationId);
         }
@@ -156,7 +181,7 @@ export function createAiGateway(deps: AiGatewayDependencies): AiGateway {
         // assincrono, lancado pelo adapter ou pela validacao da resposta) e tratado como
         // pos-invocacao: nunca libera a reserva, nunca chama o adapter de novo.
         adapterInvoked = true;
-        const response = await deps.adapter.execute(request, controller.signal); // retorno = providerResponseReceived
+        const response = await deps.adapter.execute(providerRequest, controller.signal); // retorno = providerResponseReceived
 
         // Correcao focal pos-auditoria: a identidade que o adapter "observa" na propria
         // resposta e comparada contra a rota esperada, mas NUNCA e persistida - so serve
@@ -186,10 +211,14 @@ export function createAiGateway(deps: AiGatewayDependencies): AiGateway {
         await confirmGatewayExecution(reservation.executionLogId, reservation.pendingActionId, { inputUnits: response.usage.inputUnits, outputUnits: response.usage.outputUnits, observedCostUsdMicros, latencyMs: response.usage.latencyMs }, request.correlationId);
         return { ...response, policyVersion: AI_GATEWAY_POLICY_VERSION, promptVersion: AI_GATEWAY_PROMPT_VERSION, routing: { provider: providerRef, model: modelRef, fallbackCount: response.routing.fallbackCount, retryCount: 0 } };
       } catch (error) {
-        const gatewayFailure = error instanceof AiGatewayError ? error : classifyTransportFailureAsGatewayError(error, request.correlationId);
+        const gatewayFailure = error instanceof AiGatewayError
+          ? error
+          : error instanceof ContextEngineError
+            ? new AiGatewayError("Contexto não pôde ser autorizado para transporte.", "POLICY_BLOCKED", false, request.correlationId)
+            : classifyTransportFailureAsGatewayError(error, request.correlationId);
         // Bookkeeping de saude do circuito - nunca afeta orcamento/liberacao, so a decisao
         // de abrir/fechar o circuito para chamadas futuras a este provider.
-        await recordCircuitBreakerOutcome(request.organizationId, scopeKey, false, CIRCUIT_BREAKER_POLICY).catch(() => undefined);
+        if (adapterInvoked) await recordCircuitBreakerOutcome(request.organizationId, scopeKey, false, CIRCUIT_BREAKER_POLICY).catch(() => undefined);
         if (!adapterInvoked) {
           // Falha comprovadamente PRE-transporte (ex.: `markGatewayExecutionTransportStarted`
           // lancou de forma inesperada, ou devolveu `transitioned:false`) - o adapter nunca

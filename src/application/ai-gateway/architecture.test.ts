@@ -384,8 +384,8 @@ describe("AiGateway - fronteira arquitetural (Fase 10A, AST real)", () => {
     expect(content).not.toMatch(/new CompatibleHTTP|new CompatibleHttpAiProviderAdapter|new DisabledAiProviderAdapter/);
   });
 
-  it("nenhum arquivo do AI Gateway (10A) menciona conceitos de fases futuras (10B-10I) nao autorizadas nesta rodada", () => {
-    const FUTURE_PHASE_TOKENS = /autopilot|agent-framework|cognitive-tool|context-engine|red-team-2|autonomous-decision/i;
+  it("nenhum arquivo do AI Gateway menciona conceitos das fases 10C-10I", () => {
+    const FUTURE_PHASE_TOKENS = /autopilot|agent-framework|cognitive-tool|red-team-2|autonomous-decision/i;
     const dirs = [join(SRC_ROOT, "domain", "ai-gateway"), join(SRC_ROOT, "application", "ai-gateway"), join(SRC_ROOT, "infrastructure", "ai-gateway")];
     const selfPath = join(SRC_ROOT, "application", "ai-gateway", "architecture.test.ts");
     for (const dir of dirs) {

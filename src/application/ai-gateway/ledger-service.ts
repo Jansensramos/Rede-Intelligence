@@ -2,6 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/infrastructure/database/prisma";
 import { evaluateBudget, isSafeCostUsdMicros, isSafeIdempotencyKey, isSafeUsageUnits, type AiBudgetPolicy, type AiGatewayErrorCode, type AiRequest, AiGatewayError } from "@/domain/ai-gateway";
+import { ContextConsumptionBindingSchema, ContextEngineError, contextConsumptionBinding, isPlainContextData } from "@/domain/context-engine";
+import { consumeContextBundleInTransaction } from "@/application/context-engine/service";
 import { reapExpiredGatewayReservations } from "./reaper";
 
 // Correcao critica pos-reauditoria (achado MEDIO "reaper sem call site produtivo"): limite
@@ -42,6 +44,10 @@ export const AI_GATEWAY_PROMPT_VERSION = "AI_GATEWAY_V1.0.0";
 function isTransientWriteConflict(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
 }
+export function contextTransportRetryDisposition(error: unknown, attempt: number): "RETRY" | "EXHAUSTED" | "NOT_RETRYABLE" {
+  if (!isTransientWriteConflict(error)) return "NOT_RETRYABLE";
+  return attempt < MAX_SERIALIZABLE_RETRY_ATTEMPTS ? "RETRY" : "EXHAUSTED";
+}
 function jitterDelay(attempt: number) {
   return new Promise((resolve) => setTimeout(resolve, 30 * attempt + Math.floor(Math.random() * 40)));
 }
@@ -56,6 +62,7 @@ export function requestFingerprint(request: AiRequest): string {
     maxCostUsdMicros: request.maxCostUsdMicros ?? null,
     outputSchema: request.outputSchema ?? null,
     projectId: request.projectId ?? null,
+    contextFingerprint: request.contextBundle?.fingerprint ?? null,
   });
   return createHash("sha256").update(canonical).digest("hex");
 }
@@ -143,8 +150,12 @@ export async function reserveGatewayExecution(
         // enum `AIExecutionStatus`, e o que permite ao reaper (`reaper.ts`) liberar com
         // seguranca reservas QUEUED vencidas (transporte comprovadamente nunca iniciado) sem
         // jamais tocar reservas RUNNING vencidas (ambiguas - podem ter sido enviadas/cobradas).
+        const executionLogId = randomUUID();
+        const pendingActionId = randomUUID();
+        const idempotencyKey = request.idempotencyKey ?? `auto-${randomUUID()}`;
         const executionLog = await tx.aIExecutionLog.create({
           data: {
+            id: executionLogId,
             organizationId: ledger.organizationId,
             userId: ledger.userId,
             conversationId: ledger.conversationId,
@@ -160,16 +171,28 @@ export async function reserveGatewayExecution(
             startedAt: now,
           },
         });
-        const idempotencyKey = request.idempotencyKey ?? `auto-${randomUUID()}`;
         const pendingAction = await tx.aIPendingAction.create({
           data: {
+            id: pendingActionId,
             organizationId: ledger.organizationId,
             userId: ledger.userId,
             conversationId: ledger.conversationId,
             sourceMessageId: ledger.messageId,
             actionType: "AI_GATEWAY_EXECUTION",
             preview: { correlationId: request.correlationId, task: request.task },
-            arguments: { fingerprint },
+            arguments: {
+              fingerprint,
+              context: request.contextBundle ? contextConsumptionBinding(request.contextBundle, {
+                actorUserId: ledger.userId,
+                conversationId: ledger.conversationId,
+                organizationId: ledger.organizationId,
+                projectId: request.projectId!,
+                idempotencyKey,
+                executionLogId,
+                pendingActionId,
+                correlationId: request.correlationId,
+              }) : null,
+            },
             idempotencyKey,
             status: "EXECUTING",
             confirmedAt: now,
@@ -207,24 +230,85 @@ export type TransportStartOutcome =
  * `transitioned: false`. O CONTRATO com o chamador e absoluto: `transitioned !== true`
  * significa que o adapter NUNCA pode ser chamado para esta reserva.
  */
-export async function markGatewayExecutionTransportStarted(executionLogId: string, pendingActionId: string): Promise<TransportStartOutcome> {
-  try {
-    await prisma.$transaction(async (tx) => {
-      const logCas = await tx.aIExecutionLog.updateMany({ where: { id: executionLogId, status: { in: ["QUEUED", "RUNNING"] } }, data: { status: "RUNNING" } });
-      if (logCas.count !== 1) throw new LedgerCasConflict();
-      // AIActionStatus (schema pre-existente, nenhuma migration) nao tem um valor distinto
-      // para "transporte iniciado" - EXECUTING cobre reservado+em-transporte. Este e um
-      // self-CAS (EXECUTING -> EXECUTING): nao muda o valor, so confirma atomicamente,
-      // na MESMA transacao do CAS acima, que ninguem moveu a pending action para um estado
-      // terminal enquanto isto rodava (ex.: o reaper marcando EXPIRED).
-      const pendingCas = await tx.aIPendingAction.updateMany({ where: { id: pendingActionId, status: "EXECUTING" }, data: { status: "EXECUTING" } });
-      if (pendingCas.count !== 1) throw new LedgerCasConflict();
-    });
-    return { transitioned: true };
-  } catch (error) {
-    if (error instanceof LedgerCasConflict) return { transitioned: false, reasonCode: "RESERVATION_NOT_ACTIVE" };
-    throw error;
+export interface ContextTransportAuthorization {
+  ledger: GatewayLedgerContext;
+  request: AiRequest;
+}
+
+// SHARE conflicts with every productive INSERT/UPDATE/DELETE (ROW EXCLUSIVE). A mutation
+// that committed first is visible to the reconstruction below; one that loses this lock
+// race can only commit after TRANSPORT_AUTHORIZED/RUNNING commits and is therefore later.
+// The statement is static and contains no user-controlled identifier.
+const CONTEXT_MUTATION_BARRIER_SQL = `LOCK TABLE
+  organization_memberships, users, ai_conversations, projects,
+  viability_studies, study_versions, assumption_snapshots, calculation_runs,
+  financial_results, risk_findings, legal_evidence_documents,
+  engineering_technical_opinions, engineering_technical_opinion_items
+  IN SHARE MODE`;
+
+function sameJson(left: unknown, right: unknown): boolean { return JSON.stringify(left) === JSON.stringify(right); }
+function storedContextBinding(argumentsJson: unknown) {
+  if (!isPlainContextData(argumentsJson) || !argumentsJson || typeof argumentsJson !== "object" || Array.isArray(argumentsJson)) return null;
+  const record = argumentsJson as Record<string, unknown>;
+  if (Object.keys(record).sort().join(",") !== "context,fingerprint" || typeof record.fingerprint !== "string" || !/^[a-f0-9]{64}$/.test(record.fingerprint)) return null;
+  const parsed = ContextConsumptionBindingSchema.safeParse(record.context);
+  return parsed.success ? { fingerprint: record.fingerprint, context: parsed.data } : null;
+}
+
+export async function markGatewayExecutionTransportStarted(
+  executionLogId: string,
+  pendingActionId: string,
+  authorization?: ContextTransportAuthorization,
+): Promise<TransportStartOutcome> {
+  for (let attempt = 1; attempt <= MAX_SERIALIZABLE_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        if (authorization) {
+          if (!authorization.request.contextBundle) throw new ContextEngineError("CONTEXT_INTEGRITY_FAILED", authorization.request.correlationId);
+          await tx.$executeRawUnsafe(CONTEXT_MUTATION_BARRIER_SQL);
+          const execution = await tx.aIExecutionLog.findUnique({ where: { id: executionLogId }, select: { organizationId: true, userId: true, conversationId: true, status: true } });
+          const pending = await tx.aIPendingAction.findUnique({ where: { id: pendingActionId }, select: { organizationId: true, userId: true, conversationId: true, status: true, affectedEntityId: true, idempotencyKey: true, arguments: true } });
+          if (!execution || !pending || execution.status !== "QUEUED" || pending.status !== "EXECUTING"
+            || pending.affectedEntityId !== executionLogId || execution.organizationId !== authorization.ledger.organizationId
+            || execution.userId !== authorization.ledger.userId || execution.conversationId !== authorization.ledger.conversationId
+            || pending.organizationId !== authorization.ledger.organizationId || pending.userId !== authorization.ledger.userId
+            || pending.conversationId !== authorization.ledger.conversationId || pending.idempotencyKey !== authorization.request.idempotencyKey) throw new LedgerCasConflict();
+          const stored = storedContextBinding(pending.arguments);
+          const expected = contextConsumptionBinding(authorization.request.contextBundle, {
+            actorUserId: authorization.ledger.userId,
+            conversationId: authorization.ledger.conversationId,
+            organizationId: authorization.ledger.organizationId,
+            projectId: authorization.request.projectId!,
+            idempotencyKey: authorization.request.idempotencyKey!,
+            executionLogId,
+            pendingActionId,
+            correlationId: authorization.request.correlationId,
+          });
+          if (!stored || stored.fingerprint !== requestFingerprint(authorization.request) || !sameJson(stored.context, expected)) throw new ContextEngineError("CONTEXT_INTEGRITY_FAILED", authorization.request.correlationId);
+          await consumeContextBundleInTransaction(tx, {
+            bundle: authorization.request.contextBundle, correlationId: authorization.request.correlationId,
+            organizationId: authorization.ledger.organizationId, projectId: authorization.request.projectId,
+            userId: authorization.ledger.userId, conversationId: authorization.ledger.conversationId,
+            idempotencyKey: authorization.request.idempotencyKey, executionLogId,
+          });
+        }
+        const logCas = await tx.aIExecutionLog.updateMany({ where: { id: executionLogId, status: authorization ? "QUEUED" : { in: ["QUEUED", "RUNNING"] } }, data: { status: "RUNNING" } });
+        if (logCas.count !== 1) throw new LedgerCasConflict();
+        const pendingCas = await tx.aIPendingAction.updateMany({ where: { id: pendingActionId, status: "EXECUTING" }, data: { status: "EXECUTING" } });
+        if (pendingCas.count !== 1) throw new LedgerCasConflict();
+      }, { isolationLevel: authorization ? Prisma.TransactionIsolationLevel.Serializable : undefined, timeout: TRANSACTION_TIMEOUT_MS });
+      return { transitioned: true };
+    } catch (error) {
+      if (error instanceof LedgerCasConflict) return { transitioned: false, reasonCode: "RESERVATION_NOT_ACTIVE" };
+      if (error instanceof ContextEngineError) throw error;
+      if (!authorization) throw error;
+      const disposition = contextTransportRetryDisposition(error, attempt);
+      if (disposition === "NOT_RETRYABLE") throw error;
+      if (disposition === "EXHAUSTED") throw new ContextEngineError("CONTEXT_CONCURRENT_CHANGE", authorization.request.correlationId, { cause: error });
+      await jitterDelay(attempt);
+    }
   }
+  throw new ContextEngineError("CONTEXT_CONCURRENT_CHANGE", authorization?.request.correlationId ?? "correlation-unavailable");
 }
 
 export type ConfirmOutcome = { outcome: "CONFIRMED" } | { outcome: "ALREADY_CONFIRMED_IDENTICAL" };

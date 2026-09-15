@@ -5,6 +5,8 @@
  * negócio e a intenção (task/capabilities/classificação/critérios).
  */
 
+import type { ContextBundle } from "@/domain/context-engine";
+
 export type AiModelCapability = "TEXT_GENERATION" | "STRUCTURED_OUTPUT" | "EMBEDDINGS" | "VISION" | "TOOL_USE" | "STREAMING";
 
 /** Reaproveita as categorias já usadas pela REDE AI (src/domain/ai/types.ts) e pelo Red Team. */
@@ -65,6 +67,8 @@ export interface AiRequest {
   maxLatencyMs?: number;
   maxCostUsdMicros?: number;
   content: AiContentEnvelope;
+  /** Bundle criado e validado no servidor. Obrigatório na composição produtiva da 10B. */
+  contextBundle?: ContextBundle;
   outputSchema?: AiOutputSchemaRef;
   idempotencyKey?: string;
 }

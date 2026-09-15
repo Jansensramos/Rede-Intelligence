@@ -1,10 +1,8 @@
 import type { AiContentEnvelope } from "./types";
 
 /**
- * Envelope de prompt seguro (docs Fase 10A / decisao "sem Context Engine"). Este modulo
- * so estrutura e valida limites de tamanho/profundidade do conteudo ja recebido pelo
- * AiGateway - nao seleciona, busca ou enriquece contexto (isso e Context Engine, fora de
- * escopo da 10A / reservado para fases futuras nao autorizadas aqui).
+ * Envelope de prompt seguro. A partir da 10B, o Gateway substitui `trustedContext` pela
+ * projeção validada do ContextBundle antes de chamar o adapter.
  */
 
 export const ENVELOPE_LIMITS = {

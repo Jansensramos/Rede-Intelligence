@@ -24,5 +24,5 @@ export function createOrganizationAiGateway(organizationId: string, task: AiTask
     fallbackChain: [],
     maxFallbackAttempts: 0,
   };
-  return createAiGateway({ adapter, routingPolicy, ledger });
+  return createAiGateway({ adapter, routingPolicy, ledger, requireContextBundle: true });
 }

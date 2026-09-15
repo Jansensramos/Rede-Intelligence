@@ -1162,3 +1162,80 @@ arquivo do seu escopo tocado). 37 testes novos desta correção, subárvore `ai-
 com 24 arquivos e 309 testes. Fases 10B–10I continuam não iniciadas; nenhum commit/push
 executado; nenhuma credencial solicitada; nenhuma API/DNS externa em qualquer teste;
 provider comercial continua bloqueado (`disabled` obrigatório).
+
+## 10B — Context Engine (implementação integral local)
+
+Implementação iniciada sobre `codex/fase-10b-context-engine`, HEAD-base
+`54c9c905e08d505d1d994c929bee03c76d674018`, após a correção focal da 10A. Foram criados
+os sete contratos strict do Context Engine, cinco finalidades server-side, políticas
+versionadas, readers específicos e escopados, proveniência opaca, freshness, conflitos,
+minimização, orçamento determinístico e envelope de evidência
+`DATA_NOT_INSTRUCTION`.
+
+O coordenador revalida membership ativa, papel, conversa, organização e projeto antes
+das fontes e lê sob uma única transação `RepeatableRead`. A primeira allowlist reutiliza
+`StudyVersion`/`AssumptionSnapshot`, `FinancialResult`, `RiskFinding`,
+`LegalEvidenceDocument` e `EngineeringTechnicalOpinion`, sem getters com escrita, texto
+livre, PII, storageKey, payload ou checksum integral. O Gateway produtivo exige e valida
+o bundle, cria a projeção para o provider e remove o objeto interno antes do adapter.
+O fingerprint de idempotência da 10A inclui o fingerprint de contexto. O log externo de
+orquestração mantém custo/tokens zero, deixando a contabilização exclusivamente no
+ledger do Gateway.
+
+Nenhuma migration ou alteração de schema foi necessária. Providers comerciais, rede
+externa e credenciais reais continuam bloqueados. A implementação não produz conclusão,
+recomendação, ferramenta, decisão ou ação e não iniciou 10C–10I. O registro completo,
+incluindo autorrevisão e QA observado, está em `docs/PHASE_10B_AUDIT_RECORD.md`.
+
+### Correção focal pós-auditoria da 10B
+
+A auditoria adversarial reprovou a primeira implementação por TOCTOU: o bundle emitido
+em memória permanecia aceito por até 60 segundos, mesmo após membership ou fonte ser
+revogada. Essa alegação anterior foi superada. O ponto sem retorno agora é o commit
+`TRANSPORT_AUTHORIZED/RUNNING`: sob `Serializable` e uma barreira relacional, a mesma
+transação relê membership/papel/capabilities, conversa, organização/projeto, política e
+as seis fontes, reconstrói o fingerprint, grava `CONTEXT_CONSUMED` e faz o CAS
+`QUEUED → RUNNING`. O adapter só é chamado depois desse commit.
+
+O `WeakSet` process-local foi removido como autoridade. O binding strict fica no ledger
+existente e liga ator, conversa, tenant, projeto, finalidade, política, fingerprint,
+request/idempotencyKey e tentativa. Bundle reidratado funciona entre instâncias, mas só
+após consumo no PostgreSQL; o mesmo requestRef não obtém segundo transporte nem nova
+contabilização. TTL é explícito para toda fonte, timestamp futuro falha fechado e grupos
+obrigatórios são indivisíveis. A projeção para transporte passou a JSON canônico, e o gate
+do Context Engine inclui `.cjs`. Nenhuma migration foi necessária ou criada; 10C–10I
+continuam não iniciadas.
+
+### Correção focal final da 10B — binding temporal e ciclo do projeto
+
+A alegação anterior de que o fingerprint completo e o binding já impediam qualquer
+adulteração temporal foi superada. `preparedAt` e `validUntil` agora pertencem ao núcleo
+canônico do fingerprint e ao binding persistido, junto com as identidades reais da
+tentativa. O consumo reconstrói política e fontes sob a barreira e exige exatamente
+`validUntil = min(preparedAt + 60_000 ms, recordedAt + TTL explícito de cada fonte)`;
+ambos os timestamps usam apenas UTC ISO 8601 com milissegundos. A verificação final
+`now < validUntil` ocorre imediatamente antes de `CONTEXT_CONSUMED` e do CAS.
+
+O projeto passou a ser revalidado pelo mesmo helper no preparo e no consumo. Como o enum
+`ProjectStatus` vigente não possui `ACTIVE` e schema/migration estavam proibidos, os
+estados representáveis `DRAFT`, `UNDER_REVIEW` e `APPROVED` formam a equivalência ativa
+desta versão; `PAUSED`, `ARCHIVED`, `CLOSED` e valores desconhecidos falham fechados. A
+introdução de um literal único `ACTIVE` requer migration futura autorizada. Uso histórico
+de `CLOSED` ficou fora do escopo.
+
+A guarda de plain data agora rejeita propriedades próprias não enumeráveis, Symbols,
+accessors e Proxies hostis sem executar getter/setter, preservando arrays comuns e dados
+legítimos congelados/selados. A concorrência foi ampliada para 2, 5 e 10 instâncias: a
+camada completa prova uma chamada ao adapter, uma contabilização e um consumo; subprocessos
+Node com `PrismaClient`s independentes provam exatamente um consumo/CAS durável. O teste
+multiprocesso não afirma compartilhar adapter entre processos. Os locks `SHARE` globais
+permanecem como risco residual de throughput. Nenhuma migration foi criada e nenhuma
+parte das fases 10C–10I foi iniciada.
+
+QA observado nesta correção final: foco com 4 arquivos/122 testes; subárvores completas
+com 24 arquivos/381 testes; TypeScript e ESLint completos sem erros ou avisos; Prisma
+válido, client gerado, 39 migrations e banco atualizado; suíte oficial duas vezes no
+mesmo banco, com números idênticos de 162 arquivos aprovados + 1 ignorado e 1.996 testes
+aprovados + 4 skips (407,54 s e 501,35 s); build produtivo com 28/28 páginas, com
+`next-env.d.ts` restaurado; preflight inválido recusado com exit code 2 antes de qualquer
+dependência externa.
