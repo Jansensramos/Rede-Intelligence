@@ -30,7 +30,7 @@ QA, auditoria, commit e CI continuam separados por fase; nenhuma evidência exte
 | 9S | Encerramento do empreendimento/SPE, governança, resultado realizado | Contrato aprovado e implementado nesta sessão — ver seção dedicada ao final deste documento |
 | 10A | AI Gateway | Contrato aprovado e implementado nesta sessão (local, provider-neutral, provider disabled ativo) — ver seção dedicada ao final deste documento |
 | 10B | Context Engine | Aguardando |
-| 10C | Tool Layer | Aguardando |
+| 10C | Tool Layer | Diagnóstico e implementação local concluídos (branch `codex/fase-10c-tool-layer`); correção focal pós-auditoria (16/09/2026) e correção BLOQUEADORA final pós-reauditoria (ALTO-2, 16/09/2026) aplicadas — ver seção dedicada ao final deste documento; aguardando uma última reauditoria focal antes de commit/push |
 | 10D | Agent Framework | Aguardando |
 | 10E | Red Team 2.0 | Aguardando |
 | 10F | Decision Engine | Aguardando |
@@ -1239,3 +1239,68 @@ mesmo banco, com números idênticos de 162 arquivos aprovados + 1 ignorado e 1.
 aprovados + 4 skips (407,54 s e 501,35 s); build produtivo com 28/28 páginas, com
 `next-env.d.ts` restaurado; preflight inválido recusado com exit code 2 antes de qualquer
 dependência externa.
+
+## 10C — Tool Layer (diagnóstico, implementação local e correção focal pós-auditoria)
+
+Diagnóstico e contrato aprovados sobre `codex/fase-10c-tool-layer`, base
+`f4586dcf2c005f32d02d47a202ed17d13502f0db` (fase 10B). O piloto expõe exatamente 4
+ferramentas `READ_ONLY` (`getApprovedViabilitySummary`, `getActiveRisks`,
+`getEngineeringProgress`, `getVerifiedLegalEvidence`), cada uma mapeada 1:1 a um
+`ContextPurpose` já auditado pela 10B, sob o protocolo transacional completo de preparo e
+consumo (barreira `SHARE`, CAS, `consumeContextBundleInTransaction`), RBAC cumulativo
+(`AI_READ`+`AI_USE`+capability de domínio+`minimumRole=REVIEWER`) e rate limit dedicado.
+Nenhuma migration, nenhuma ferramenta de escrita, nenhuma rota nova, nenhuma integração
+com o fluxo legado (`planAIIntent`) e nenhuma parte das fases 10D–10I.
+
+Uma auditoria adversarial independente encontrou 6 achados reais (nenhum critério de
+reprovação automática atingido): estado terminal do ledger de auditoria podia ser
+sobrescrito por um perdedor tardio de uma corrida de replay (ALTO-1); as duas fases
+internas de execução eram publicamente reexportáveis, permitindo obter evidência sem
+passar pelo protocolo completo de consumo (ALTO-2); 13 ferramentas legadas `READ_ONLY`
+(fora do piloto) gravam via getters de workspace impuros já documentados pela 10B, sem
+cobertura da regressão original (ALTO-3); rate limit sem isolamento por ator (MÉDIO-4);
+nome de ferramenta inválido persistido bruto em auditoria (MÉDIO-5); cobertura de teste
+insuficiente para o estado final do ledger sob replay (MÉDIO-6).
+
+Uma correção focal (16/09/2026) resolveu os 6 achados sem ampliar o escopo da 10C, sem
+migration e sem alterar o comportamento funcional das quatro ferramentas aprovadas:
+transições do ledger passaram a ser CAS monotônico atômico com a auditoria; o barril
+público (`index.ts`) passou a exportar nomeadamente só `executeAiTool`, com gate
+arquitetural e prova em runtime de que as fases internas nunca são alcançáveis de fora do
+pacote; rate limit passou a incluir uma referência segura do ator na chave; nomes de
+ferramenta inválidos passaram a gravar só um sentinel estático; o catálogo legado ganhou
+um manifesto fixo e nomeado das 13 exceções conhecidas, com gate preventivo contra novas
+exceções silenciosas, sem reclassificar nenhuma delas. Suíte oficial completa (duas
+passagens, mesmo banco): 166 arquivos aprovados + 1 ignorado (167), 2.049 testes aprovados
++ 4 skips oficiais (2.053), zero falhas, 527,97 s — 53 testes novos/incrementais desde a
+linha de base pré-10C. TypeScript, ESLint, Prisma (validate/generate/status nos dois
+bancos), build produtivo (28/28 páginas) e preflight inválido (exit 2) aprovados. Registro
+completo em `docs/PHASE_10C_TOOL_LAYER_CONTRACT.md` e `docs/PHASE_10C_AUDIT_RECORD.md`.
+Nenhum commit, push, merge, rebase ou tag foi executado; aguardando reauditoria focal
+independente.
+
+Uma reauditoria focal independente reproduziu um bypass FUNCIONAL do achado ALTO-2: as duas
+fases internas continuavam `export`adas de `service.ts` (só não reexportadas por `index.ts`),
+e o gate arquitetural dependia de varredura textual do identificador literal — um arquivo
+fora do pacote montou o nome em runtime (`["prepare","Ai","Tool","Invocation"].join("")`),
+fez `import()` dinâmico e acessou a função por colchete, sem nunca escrever o identificador
+literalmente; o gate não detectou e a função interna foi de fato invocada de fora do pacote.
+Classificado ALTO/BLOQUEADOR, impedindo o veredito de aceite pleno.
+
+Uma correção BLOQUEADORA final (16/09/2026), escopo estritamente limitado a este achado,
+fechou-o estruturalmente: `prepareAiToolInvocation`/`consumeAiToolInvocation` deixaram de ter
+`export` em `service.ts` (funções privadas de escopo de módulo — nenhuma técnica de import,
+estática ou dinâmica, com ou sem ofuscação, alcança um binding não exportado). O gate
+arquitetural foi reescrito de substring para AST real (TypeScript Compiler API, mesmo padrão
+da 10A), como defesa em profundidade. Os testes de corrida do pacote passaram a usar um
+harness dedicado que nunca devolve o `ContextBundle`/evidência, preservando a mesma cobertura
+de corrida (inclusive entre processos Node/PrismaClient independentes) de antes. ALTO-1, o
+reaper, o manifesto das 13 exceções legadas, o rate limit por ator e a sanitização de
+`toolName` não foram tocados. Testes focais do Tool Layer: 63 (era 57) — 29 integração + 13
+arquitetura + 9 regressão/manifesto legado + 7 domínio + 5 choke point, zero falhas.
+TypeScript, ESLint, Prisma (validate/status nos dois bancos), suíte oficial completa (duas
+passagens, mesmo banco, sem recriação) e build produtivo aprovados. Registro completo em
+`docs/PHASE_10C_TOOL_LAYER_CONTRACT.md` (seção 26) e `docs/PHASE_10C_AUDIT_RECORD.md` (seção
+"Correção BLOQUEADORA final pós-reauditoria"). Nenhum commit, push, merge, rebase ou tag foi
+executado; HEAD permanece `f4586dcf2c005f32d02d47a202ed17d13502f0db`; parando para uma última
+reauditoria independente, conforme solicitado.

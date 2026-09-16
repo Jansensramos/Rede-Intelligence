@@ -113,7 +113,7 @@ async function changeContext(context: RelevantContextPackage, args: Record<strin
     selection.urbanScenarioType = urban.type;
   }
   await persistContextSelection(context.organizationId, context.userId, context.conversationId, selection);
-  return { name: "changeContext", mode: "READ_ONLY", status: "COMPLETED", data: selection };
+  return { name: "changeContext", mode: "MUTATION", status: "COMPLETED", data: selection };
 }
 
 export class AIToolRegistry {
@@ -246,7 +246,16 @@ function createTools(): AIToolDefinition[] {
     makeTool({ name: "preflightMasterReport", description: "Executa preflight sem gerar relatório.", mode: "READ_ONLY", minimumRole: read, async execute(c) { const result = await preflightMasterReport({ organizationId: c.organizationId }, c.workspace.id, "FULL_DOSSIER", "INTERNAL"); return { name: "preflightMasterReport", mode: "READ_ONLY", status: "COMPLETED", data: result.preflight }; } }),
     makeTool({ name: "getStudioArtifacts", description: "Consulta artefatos e versões Studio.", mode: "READ_ONLY", minimumRole: read, async execute(c) { return { name: "getStudioArtifacts", mode: "READ_ONLY", status: "COMPLETED", data: c.workspace.artifacts }; } }),
     makeTool({ name: "prepareCommitteeBrief", description: "Monta briefing a partir de módulos persistidos.", mode: "READ_ONLY", minimumRole: read, async execute(c) { return { name: "prepareCommitteeBrief", mode: "READ_ONLY", status: "COMPLETED", data: { previousDecision: c.workspace.decisions.at(-1) ?? null, changes: c.workspace.changeReport, metrics: c.workspace.bundle.engineResults[c.selection.financialScenario].metrics, score: c.workspace.bundle.scores[c.selection.financialScenario], redTeam: c.workspace.bundle.redTeam?.conclusion ?? null, blockers: c.workspace.approvalPath.filter((item) => item.blocker && !item.resolved), conditions: c.workspace.conditions.filter((item) => item.status !== "VERIFIED"), risks: c.workspace.issues, missingDocuments: c.workspace.checklist.filter((item) => !["RECEIVED", "UNDER_REVIEW", "VERIFIED"].includes(item.status)), recordedGates: c.workspace.urbanTransformation.stageGates } }; } }),
-    makeTool({ name: "changeContext", description: "Troca contexto explicitamente.", mode: "READ_ONLY", minimumRole: read, schema: contextChangeSchema, execute: changeContext }),
+    // Fase 10C (decisao 9, docs/PHASE_10C_TOOL_LAYER_CONTRACT.md): reclassificada de
+    // READ_ONLY para MUTATION - `changeContext` sempre gravou (persistContextSelection ->
+    // prisma.aIConversation.updateMany), so o rotulo estava incorreto. Correcao de rotulo
+    // apenas; a logica funcional da funcao `changeContext` acima nao foi alterada. Efeito
+    // colateral necessario e de seguranca (nao uma nova funcionalidade): AIToolRegistry.execute
+    // so permite MUTATION quando `context.permissions.canMutate` (OWNER/ADMIN); antes disso,
+    // REVIEWER/ANALYST podiam chamar esta ferramenta sem essa checagem porque READ_ONLY nao e
+    // gated por nenhuma flag de permissao. O rotulo agora finalmente corresponde ao que a
+    // ferramenta sempre fez.
+    makeTool({ name: "changeContext", description: "Troca contexto explicitamente.", mode: "MUTATION", minimumRole: read, schema: contextChangeSchema, execute: changeContext }),
     makeTool({ name: "getIntegrationHealth", description: "Consulta saúde decomposta das integrações: disponibilidade, sucesso, latência, freshness e backlog.", mode: "READ_ONLY", minimumRole: read, async execute(c) { const integrations = await getIntegrationsWorkspace({ organizationId: c.organizationId, role: c.role }, c.workspace.bundle.projectId); return { name: "getIntegrationHealth", mode: "READ_ONLY", status: "COMPLETED", data: { installations: integrations.installations, healthSnapshots: integrations.healthSnapshots }, evidence: integrations.healthSnapshots.map((item) => evidence({ sourceType: "OTHER", entityType: "IntegrationHealthSnapshot", entityId: item.id, evidenceRef: `integrations:health:${item.id}`, label: `Saúde da integração · ${item.installationId}`, value: String(item.healthScore) })) }; } }),
     makeTool({ name: "getStaleDataSources", description: "Lista instalações sem sincronização recente conforme a política de freshness.", mode: "READ_ONLY", minimumRole: read, async execute(c) { const integrations = await getIntegrationsWorkspace({ organizationId: c.organizationId, role: c.role }, c.workspace.bundle.projectId); return { name: "getStaleDataSources", mode: "READ_ONLY", status: "COMPLETED", data: integrations.installations.filter((item) => item.stale) }; } }),
     makeTool({ name: "getFailedSyncRuns", description: "Lista execuções de sincronização com falha ou parciais nas últimas rodadas.", mode: "READ_ONLY", minimumRole: read, async execute(c) { const integrations = await getIntegrationsWorkspace({ organizationId: c.organizationId, role: c.role }, c.workspace.bundle.projectId); const failed = integrations.syncRuns.filter((run) => run.status === "FAILED" || run.status === "PARTIAL"); return { name: "getFailedSyncRuns", mode: "READ_ONLY", status: "COMPLETED", data: failed, evidence: failed.map((run) => evidence({ sourceType: "OTHER", entityType: "IntegrationSyncRun", entityId: run.id, evidenceRef: `integrations:sync-run:${run.id}`, label: `${run.mode} · ${run.status}` })) }; } }),

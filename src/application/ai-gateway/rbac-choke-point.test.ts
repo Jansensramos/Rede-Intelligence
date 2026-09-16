@@ -41,6 +41,9 @@ const GATEWAY_ENTRY_POINTS: Array<{ module: string; name: string }> = [
   { module: "@/application/ai-gateway", name: "createOrganizationAiGateway" },
   { module: "@/application/ai/ai-service", name: "askRedeAI" },
   { module: "@/application/ai/tool-registry", name: "aiToolRegistry" },
+  // Fase 10C (decisao 6, docs/PHASE_10C_TOOL_LAYER_CONTRACT.md): novo entry point de
+  // execucao de ferramenta - precisa do mesmo choke point, sem excecao.
+  { module: "@/application/ai-tools", name: "executeAiTool" },
 ];
 
 function importsEntryPoint(content: string, entry: { module: string; name: string }): boolean {
@@ -57,6 +60,12 @@ describe("RBAC — choke point único assertAiUse (correção crítica pós-reau
     const toolRegistry = readFileSync(join(SRC_ROOT, "application", "ai", "tool-registry.ts"), "utf8");
     expect(toolRegistry).toMatch(/\bassertAiUse\(/);
     expect(toolRegistry).not.toMatch(MANUAL_COMBINATION_PATTERN);
+  });
+
+  it("Fase 10C: application/ai-tools/service.ts (executeAiTool) usa exclusivamente assertAiUse", () => {
+    const toolService = readFileSync(join(SRC_ROOT, "application", "ai-tools", "service.ts"), "utf8");
+    expect(toolService).toMatch(/\bassertAiUse\(/);
+    expect(toolService).not.toMatch(MANUAL_COMBINATION_PATTERN);
   });
 
   it("a Server Action (app/actions/ai.ts) e a rota /api/ai/chat usam exclusivamente assertAiUse", () => {

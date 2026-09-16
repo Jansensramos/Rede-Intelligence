@@ -37,8 +37,9 @@ export interface GatewayLedgerContext {
   messageId?: string;
 }
 
-const MAX_SERIALIZABLE_RETRY_ATTEMPTS = 3;
-const TRANSACTION_TIMEOUT_MS = 15_000;
+/** Reaproveitados pela Fase 10C (Tool Layer) para o mesmo padrao de transacao/retry/barreira, sem duplicar os valores. */
+export const MAX_SERIALIZABLE_RETRY_ATTEMPTS = 3;
+export const TRANSACTION_TIMEOUT_MS = 15_000;
 export const AI_GATEWAY_PROMPT_VERSION = "AI_GATEWAY_V1.0.0";
 
 function isTransientWriteConflict(error: unknown): boolean {
@@ -238,8 +239,10 @@ export interface ContextTransportAuthorization {
 // SHARE conflicts with every productive INSERT/UPDATE/DELETE (ROW EXCLUSIVE). A mutation
 // that committed first is visible to the reconstruction below; one that loses this lock
 // race can only commit after TRANSPORT_AUTHORIZED/RUNNING commits and is therefore later.
-// The statement is static and contains no user-controlled identifier.
-const CONTEXT_MUTATION_BARRIER_SQL = `LOCK TABLE
+// The statement is static and contains no user-controlled identifier. Exported so the Tool
+// Layer (Fase 10C, decisao 10) can reuse the exact same barrier for its own consumption
+// transaction instead of duplicating the table list.
+export const CONTEXT_MUTATION_BARRIER_SQL = `LOCK TABLE
   organization_memberships, users, ai_conversations, projects,
   viability_studies, study_versions, assumption_snapshots, calculation_runs,
   financial_results, risk_findings, legal_evidence_documents,
