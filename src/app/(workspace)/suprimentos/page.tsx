@@ -2,6 +2,7 @@ import { requireAuthContext } from "@/application/auth/session";
 import { getProcurementOperabilityMetadata } from "@/application/procurement/procurement-operability-service";
 import { getProcurementWorkspace } from "@/application/procurement/procurement-service";
 import { getCurrentOperationalContext } from "@/application/workspace/current-context";
+import { ProcurementContractOperabilityPanel } from "@/components/procurement-contract-operability-panel";
 import { ProcurementOperabilityPanel } from "@/components/procurement-operability-panel";
 import { ProcurementView } from "@/components/procurement-view";
 import { SectionTitle } from "@/components/ui";
@@ -23,6 +24,7 @@ export default async function SuprimentosPage() {
         description="Necessidade → requisição → cotação → contrato → medição → obrigação, sem dupla contagem."
       />
       <ProcurementOperabilityPanel workspace={workspace} operability={operability} />
+      <ProcurementContractOperabilityPanel workspace={workspace} operability={operability} />
       <ProcurementView workspace={workspace} />
     </div>
   );
