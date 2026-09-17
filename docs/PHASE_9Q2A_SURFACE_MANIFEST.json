@@ -21,11 +21,11 @@
   },
   {
     "path": "src/app/actions/closure.ts",
-    "sha256": "996501a8337b2ccee31246b362486e106ef4c989a8e706a825e686398a75762e"
+    "sha256": "6940d552b4b0edd5d22780876c11b2f758154bd4c6c94e3a21db733115e8473f"
   },
   {
     "path": "src/app/actions/data-intelligence.ts",
-    "sha256": "f2f3efb9685ce2fca8d90aee928fc847cb20b3b8e4ba8ebc2f47344d5431ba54"
+    "sha256": "9b43f5e1abfeaaf269a15cca26387a113bcd3e479d751203eb59d131f1b41382"
   },
   {
     "path": "src/app/actions/design.ts",
@@ -57,7 +57,7 @@
   },
   {
     "path": "src/app/actions/handover.ts",
-    "sha256": "166d503fb702cb18c29f90e61b398fc6634b3e9c2872c18047a3c29e2516df88"
+    "sha256": "09215f19a7e63f93c376d32a67aa0d1191674eddc16556d5b2690e4dc5d29341"
   },
   {
     "path": "src/app/actions/integrations.ts",
@@ -77,11 +77,11 @@
   },
   {
     "path": "src/app/actions/legal.ts",
-    "sha256": "4d1dd1b8b97f5d0f4147d72391179593ce3b5c91bb623cb294ad162f9f978753"
+    "sha256": "dbabf505cf3277a8f57ca47182c4d8125ddcc34155e71c774361f3779609af33"
   },
   {
     "path": "src/app/actions/local-readiness.ts",
-    "sha256": "9ea32fc7f7522d9bc87608fc79880d9de181e9b765071571babcecc317ec8abd"
+    "sha256": "40d4a41e55c7779bbd056989de07f2bcd3f242b0fb15726808c05a693df0ff74"
   },
   {
     "path": "src/app/actions/market-product.ts",
@@ -93,7 +93,7 @@
   },
   {
     "path": "src/app/actions/people.ts",
-    "sha256": "78abe76e2a92fe2c6d8a8b150ab179b07d085da2c7694aaf501289cd9c8849ec"
+    "sha256": "577ffdb327dba6843bc87754c4f47fb838bcc23882622b0b717ad86c9d9a1425"
   },
   {
     "path": "src/app/actions/procurement.ts",
@@ -101,11 +101,11 @@
   },
   {
     "path": "src/app/actions/sales.ts",
-    "sha256": "55577d5599f1b3ec5a753ba7602d34e02f0a937ba8c6509359f7c6804d99c604"
+    "sha256": "27f4c64a254cda6be640de63d036f71ae720e318161ce025c369e8efb7136684"
   },
   {
     "path": "src/app/actions/service-orders.ts",
-    "sha256": "3f0d9d09642346ca9d5c8ad48efb349b1396f13243c426e6ad31961b401c0a55"
+    "sha256": "61082f8cd579032bcb37044f9b775f3f1e5efbb341b310f982e899b6317f9fbf"
   },
   {
     "path": "src/app/actions/studies.ts",
