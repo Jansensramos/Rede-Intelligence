@@ -32,8 +32,9 @@ export function BusinessDocumentPrintButton({
   label?: string;
 }) {
   const print = () => {
-    const popup = window.open("", "_blank", "noopener,noreferrer,width=980,height=760");
+    const popup = window.open("", "_blank", "width=980,height=760");
     if (!popup) return;
+    popup.opener = null;
     const fieldHtml = fields.filter((field) => field.value !== null && field.value !== undefined && field.value !== "").map((field) => `<div class="field"><span>${escapeHtml(field.label)}</span><strong>${escapeHtml(field.value)}</strong></div>`).join("");
     const tableHtml = columns.length && rows.length ? `<table><thead><tr>${columns.map((column) => `<th class="${column.align === "right" ? "right" : ""}">${escapeHtml(column.label)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${columns.map((column) => `<td class="${column.align === "right" ? "right" : ""}">${escapeHtml(row[column.key])}</td>`).join("")}</tr>`).join("")}</tbody></table>` : "";
     const totalHtml = totalValue ? `<div class="total"><span>${escapeHtml(totalLabel ?? "Total")}</span><strong>${escapeHtml(totalValue)}</strong></div>` : "";
