@@ -8,7 +8,7 @@ export async function getProcurementOperabilityMetadata(context: Pick<AuthContex
   });
   if (!project) throw new Error("Empreendimento não encontrado nesta organização.");
 
-  const [quotations, contracts] = await Promise.all([
+  const [quotations, contracts, orders] = await Promise.all([
     prisma.quotationProcess.findMany({
       where: { organizationId: context.organizationId, projectId },
       include: {
@@ -26,6 +26,12 @@ export async function getProcurementOperabilityMetadata(context: Pick<AuthContex
     prisma.operationalContract.findMany({
       where: { organizationId: context.organizationId, projectId },
       include: { items: true, amendments: true },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    prisma.purchaseOrder.findMany({
+      where: { organizationId: context.organizationId, projectId },
+      include: { supplier: true, items: true },
       orderBy: { createdAt: "desc" },
       take: 100,
     }),
@@ -66,6 +72,24 @@ export async function getProcurementOperabilityMetadata(context: Pick<AuthContex
           unitPrice: Number(item.unitPrice),
         })),
       } : null,
+    })),
+    orders: orders.map((order) => ({
+      id: order.id,
+      number: order.number,
+      title: order.title,
+      status: order.status,
+      supplierName: order.supplier.name,
+      scope: order.scope,
+      deliveryAt: order.deliveryAt?.toISOString() ?? null,
+      paymentTerms: order.paymentTerms,
+      items: order.items.map((item) => ({
+        id: item.id,
+        description: item.description,
+        quantity: Number(item.quantity),
+        unit: item.unit,
+        unitPrice: Number(item.unitPrice),
+        amount: Number(item.quantity) * Number(item.unitPrice),
+      })),
     })),
     contracts: contracts.map((contract) => ({
       id: contract.id,
