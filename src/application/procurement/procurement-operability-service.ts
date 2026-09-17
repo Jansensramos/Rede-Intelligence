@@ -1,7 +1,7 @@
 import type { AuthContext } from "@/application/auth/session";
 import { prisma } from "@/infrastructure/database/prisma";
 
-export async function getProcurementOperabilityMetadata(context: Pick<AuthContext, "organizationId">, projectId: string) {
+export async function getProcurementOperabilityMetadata(context: Pick<AuthContext, "organizationId" | "userId">, projectId: string) {
   const project = await prisma.project.findFirst({
     where: { id: projectId, organizationId: context.organizationId },
     select: { id: true, companyId: true },
@@ -34,6 +34,7 @@ export async function getProcurementOperabilityMetadata(context: Pick<AuthContex
   return {
     projectId,
     companyId: project.companyId,
+    currentUserId: context.userId,
     quotations: quotations.map((quotation) => ({
       id: quotation.id,
       number: quotation.number,
