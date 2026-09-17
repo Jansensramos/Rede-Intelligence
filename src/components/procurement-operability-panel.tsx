@@ -2,31 +2,39 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, FilePlus2, ShoppingCart, Workflow } from "lucide-react";
+import { CheckCircle2, FilePlus2, Gavel, ReceiptText, ShoppingCart, Workflow } from "lucide-react";
+import type { ProcurementOperabilityMetadata } from "@/application/procurement/procurement-operability-service";
 import type { ProcurementWorkspaceView } from "@/application/procurement/procurement-service";
 import {
   createProcurementNeedAction,
   createPurchaseRequisitionAction,
   createQuotationProcessAction,
+  decideQuotationAction,
+  submitSupplierProposalAction,
   transitionPurchaseRequisitionAction,
   validateProcurementNeedAction,
 } from "@/app/actions/procurement";
 
-type FormKey = "need" | "requisition" | "quotation" | null;
-
+type FormKey = "need" | "requisition" | "quotation" | "proposal" | "decision" | null;
 type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
-export function ProcurementOperabilityPanel({ workspace }: { workspace: ProcurementWorkspaceView }) {
+export function ProcurementOperabilityPanel({ workspace, operability }: { workspace: ProcurementWorkspaceView; operability: ProcurementOperabilityMetadata }) {
   const router = useRouter();
   const [form, setForm] = useState<FormKey>(null);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [selectedNeedIds, setSelectedNeedIds] = useState<string[]>([]);
   const [selectedSupplierIds, setSelectedSupplierIds] = useState<string[]>([]);
+  const [proposalQuotationId, setProposalQuotationId] = useState("");
+  const [decisionQuotationId, setDecisionQuotationId] = useState("");
 
   const validatedNeeds = useMemo(() => workspace.needs.filter((item) => item.status === "VALIDATED"), [workspace.needs]);
   const requisitionsForQuotation = useMemo(() => workspace.requisitions.filter((item) => ["APPROVED_FOR_QUOTATION", "IN_QUOTATION"].includes(item.status)), [workspace.requisitions]);
   const requisitionsToAdvance = useMemo(() => workspace.requisitions.filter((item) => ["DRAFT", "REQUESTED", "IN_APPROVAL"].includes(item.status)), [workspace.requisitions]);
+  const openQuotations = useMemo(() => operability.quotations.filter((item) => item.status === "OPEN"), [operability.quotations]);
+  const proposalQuotation = useMemo(() => openQuotations.find((item) => item.id === proposalQuotationId) ?? null, [openQuotations, proposalQuotationId]);
+  const decisionQuotation = useMemo(() => workspace.quotations.find((item) => item.id === decisionQuotationId) ?? null, [workspace.quotations, decisionQuotationId]);
+  const decidableQuotations = useMemo(() => workspace.quotations.filter((item) => ["OPEN", "UNDER_ANALYSIS"].includes(item.status) && item.proposals.some((proposal) => proposal.status === "SUBMITTED")), [workspace.quotations]);
 
   async function run<T>(operation: () => Promise<ActionResult<T>>, success: string) {
     setBusy(true);
@@ -80,10 +88,6 @@ export function ProcurementOperabilityPanel({ workspace }: { workspace: Procurem
       return;
     }
     const requisitionId = String(data.get("requisitionId"));
-    if (!requisitionId) {
-      setFeedback("Selecione uma requisição aprovada para cotação.");
-      return;
-    }
     const deadline = String(data.get("responseDeadline") || "");
     const ok = await run(() => createQuotationProcessAction({
       requisitionId,
@@ -97,6 +101,66 @@ export function ProcurementOperabilityPanel({ workspace }: { workspace: Procurem
       supplierIds: selectedSupplierIds,
     }), "Processo de cotação aberto.");
     if (ok) setSelectedSupplierIds([]);
+  }
+
+  async function submitProposal(data: FormData) {
+    const quotation = operability.quotations.find((item) => item.id === String(data.get("quotationProcessId")));
+    if (!quotation) {
+      setFeedback("Selecione uma cotação aberta.");
+      return;
+    }
+    const supplierId = String(data.get("supplierId"));
+    if (!supplierId) {
+      setFeedback("Selecione o fornecedor da proposta.");
+      return;
+    }
+    const items = quotation.requisitionItems.map((item) => ({
+      requisitionItemId: item.id,
+      description: item.description,
+      quantity: String(item.quantity),
+      unit: item.unit,
+      unitPrice: String(data.get(`price_${item.id}`) || "0"),
+      taxAmount: "0",
+      freightAmount: "0",
+      discountAmount: "0",
+      comparability: "COMPARABLE" as const,
+      inclusions: [],
+      exclusions: [],
+      technicalNotes: null,
+    }));
+    await run(() => submitSupplierProposalAction({
+      quotationProcessId: quotation.id,
+      supplierId,
+      version: 1,
+      taxAmount: String(data.get("taxAmount") || "0"),
+      freightAmount: String(data.get("freightAmount") || "0"),
+      discountAmount: String(data.get("discountAmount") || "0"),
+      validityUntil: data.get("validityUntil") ? new Date(`${data.get("validityUntil")}T23:59:59.000Z`) : null,
+      deliveryTermDays: data.get("deliveryTermDays") ? Number(data.get("deliveryTermDays")) : null,
+      paymentTerms: String(data.get("paymentTerms") || "") || null,
+      warrantyTerms: String(data.get("warrantyTerms") || "") || null,
+      inclusions: [],
+      exclusions: [],
+      notes: String(data.get("notes") || "") || null,
+      items,
+    }), "Proposta do fornecedor registrada.");
+  }
+
+  async function submitDecision(data: FormData) {
+    const quotationProcessId = String(data.get("quotationProcessId"));
+    const selectedProposalId = String(data.get("selectedProposalId"));
+    if (!quotationProcessId || !selectedProposalId) {
+      setFeedback("Selecione a cotação e a proposta vencedora.");
+      return;
+    }
+    await run(() => decideQuotationAction({
+      quotationProcessId,
+      selectedProposalId,
+      technicalOpinion: String(data.get("technicalOpinion")),
+      commercialRationale: String(data.get("commercialRationale")),
+      referenceAmount: String(data.get("referenceAmount")),
+      scopeComparable: data.get("scopeComparable") === "on",
+    }), "Cotação decidida e registrada.");
   }
 
   async function validateNeed(id: string) {
@@ -122,12 +186,14 @@ export function ProcurementOperabilityPanel({ workspace }: { workspace: Procurem
         <div>
           <span className="eyebrow">OPERAÇÃO HUMANA · 10C.1</span>
           <h3>Lançamentos de Suprimentos</h3>
-          <p>Crie necessidades, valide, gere requisições e abra cotações sem depender de seed ou banco manual.</p>
+          <p>Necessidade → requisição → cotação → proposta → decisão, com persistência e auditoria reais.</p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button className="button button-secondary" onClick={() => setForm(form === "need" ? null : "need")}><FilePlus2 size={16} /> Nova necessidade</button>
           <button className="button button-secondary" onClick={() => setForm(form === "requisition" ? null : "requisition")}><Workflow size={16} /> Nova requisição</button>
-          <button className="button button-primary" onClick={() => setForm(form === "quotation" ? null : "quotation")}><ShoppingCart size={16} /> Nova cotação</button>
+          <button className="button button-secondary" onClick={() => setForm(form === "quotation" ? null : "quotation")}><ShoppingCart size={16} /> Nova cotação</button>
+          <button className="button button-secondary" onClick={() => setForm(form === "proposal" ? null : "proposal")}><ReceiptText size={16} /> Registrar proposta</button>
+          <button className="button button-primary" onClick={() => setForm(form === "decision" ? null : "decision")}><Gavel size={16} /> Decidir cotação</button>
         </div>
       </header>
 
@@ -165,6 +231,36 @@ export function ProcurementOperabilityPanel({ workspace }: { workspace: Procurem
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}><input name="deliveryLocation" placeholder="Local de entrega" /><input name="deliveryTerm" placeholder="Prazo/condição de entrega" /><input name="responseDeadline" type="date" /></div>
           <div><strong>Fornecedores convidados</strong><div style={{ display: "grid", gap: 8, marginTop: 8 }}>{workspace.suppliers.filter((item) => item.status === "ACTIVE").map((item) => <label key={item.id} style={{ display: "flex", gap: 8, alignItems: "center" }}><input type="checkbox" checked={selectedSupplierIds.includes(item.id)} onChange={() => toggleSupplier(item.id)} /><span>{item.name}{item.taxId ? ` · ${item.taxId}` : ""}</span></label>)}{workspace.suppliers.filter((item) => item.status === "ACTIVE").length === 0 && <span className="operations-empty">Nenhum fornecedor ativo disponível.</span>}</div></div>
           <div style={{ display: "flex", gap: 8 }}><button className="button button-primary" disabled={busy || requisitionsForQuotation.length === 0} type="submit">Abrir cotação</button><button className="button button-secondary" type="button" onClick={() => setForm(null)}>Cancelar</button></div>
+        </form>
+      )}
+
+      {form === "proposal" && (
+        <form action={submitProposal} className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 12 }}>
+          <select name="quotationProcessId" required value={proposalQuotationId} onChange={(event) => setProposalQuotationId(event.target.value)}><option value="">Selecione a cotação aberta</option>{openQuotations.map((item) => <option key={item.id} value={item.id}>{item.number} · {item.title}</option>)}</select>
+          {proposalQuotation && <>
+            <select name="supplierId" required defaultValue=""><option value="" disabled>Selecione o fornecedor convidado</option>{proposalQuotation.invitedSuppliers.map((item) => <option key={item.supplierId} value={item.supplierId}>{item.supplierName}</option>)}</select>
+            <div className="operations-table-wrap"><table className="operations-table"><thead><tr><th>Item</th><th>Quantidade</th><th>Unidade</th><th>Preço unitário</th></tr></thead><tbody>{proposalQuotation.requisitionItems.map((item) => <tr key={item.id}><td>{item.description}</td><td>{item.quantity}</td><td>{item.unit}</td><td><input name={`price_${item.id}`} type="number" step="0.01" min="0" required placeholder="0,00" /></td></tr>)}</tbody></table></div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}><input name="taxAmount" type="number" step="0.01" min="0" defaultValue="0" placeholder="Impostos" /><input name="freightAmount" type="number" step="0.01" min="0" defaultValue="0" placeholder="Frete" /><input name="discountAmount" type="number" step="0.01" min="0" defaultValue="0" placeholder="Desconto" /></div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><input name="validityUntil" type="date" /><input name="deliveryTermDays" type="number" min="0" placeholder="Prazo de entrega (dias)" /></div>
+            <input name="paymentTerms" placeholder="Condições de pagamento" /><input name="warrantyTerms" placeholder="Garantias" /><textarea name="notes" placeholder="Observações da proposta" style={{ minHeight: 70 }} />
+            <div style={{ display: "flex", gap: 8 }}><button className="button button-primary" disabled={busy} type="submit">Registrar proposta</button><button className="button button-secondary" type="button" onClick={() => setForm(null)}>Cancelar</button></div>
+          </>}
+          {!proposalQuotation && <span className="operations-empty">Selecione uma cotação para carregar seus itens e fornecedores convidados.</span>}
+        </form>
+      )}
+
+      {form === "decision" && (
+        <form action={submitDecision} className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 12 }}>
+          <select name="quotationProcessId" required value={decisionQuotationId} onChange={(event) => setDecisionQuotationId(event.target.value)}><option value="">Selecione a cotação</option>{decidableQuotations.map((item) => <option key={item.id} value={item.id}>{item.number} · {item.title}</option>)}</select>
+          {decisionQuotation && <>
+            <select name="selectedProposalId" required defaultValue=""><option value="" disabled>Selecione a proposta vencedora</option>{decisionQuotation.proposals.filter((proposal) => proposal.status === "SUBMITTED").map((proposal) => <option key={proposal.id} value={proposal.id}>{proposal.supplier} · {proposal.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</option>)}</select>
+            <input name="referenceAmount" type="number" step="0.01" min="0" required placeholder="Valor de referência / orçamento oficial" />
+            <textarea name="technicalOpinion" required placeholder="Parecer técnico" style={{ minHeight: 80 }} />
+            <textarea name="commercialRationale" required placeholder="Justificativa comercial da decisão" style={{ minHeight: 80 }} />
+            <label style={{ display: "flex", gap: 8, alignItems: "center" }}><input name="scopeComparable" type="checkbox" /> Escopo tecnicamente comparável para cálculo de economia validada</label>
+            <div style={{ display: "flex", gap: 8 }}><button className="button button-primary" disabled={busy} type="submit">Registrar decisão</button><button className="button button-secondary" type="button" onClick={() => setForm(null)}>Cancelar</button></div>
+          </>}
+          {!decisionQuotation && <span className="operations-empty">Selecione uma cotação com proposta submetida.</span>}
         </form>
       )}
 
