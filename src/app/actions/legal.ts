@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireDomainActionContext } from "./authorization";
+import { requireDomainApprovalContext, requireDomainWriteContext } from "./authorization";
 import {
   createDueDiligenceCase,
   recordLegalDecision,
@@ -25,21 +25,21 @@ async function run<T>(operation: () => Promise<T>): Promise<Result<T>> {
 }
 
 export async function createDueDiligenceCaseAction(input: Parameters<typeof createDueDiligenceCase>[1]) {
-  const context = await requireDomainActionContext("LEGAL_READ");
+  const context = await requireDomainWriteContext("LEGAL_READ", "LEGAL_WRITE");
   return run(() => createDueDiligenceCase(context, input));
 }
 
 export async function recordLegalDecisionAction(diligenceCaseId: string, input: Parameters<typeof recordLegalDecision>[2]) {
-  const context = await requireDomainActionContext("LEGAL_READ");
+  const context = await requireDomainApprovalContext("LEGAL_READ", "LEGAL_APPROVE");
   return run(() => recordLegalDecision(context, diligenceCaseId, input));
 }
 
 export async function sendLegalObligationToFinanceAction(legalObligationId: string) {
-  const context = await requireDomainActionContext("LEGAL_READ");
+  const context = await requireDomainApprovalContext("LEGAL_READ", "LEGAL_APPROVE");
   return run(() => sendLegalObligationToFinance(context, legalObligationId));
 }
 
 export async function reverseLegalFinancialEventAction(legalObligationId: string, reason: string) {
-  const context = await requireDomainActionContext("LEGAL_READ");
+  const context = await requireDomainApprovalContext("LEGAL_READ", "LEGAL_APPROVE");
   return run(() => reverseLegalFinancialEvent(context, legalObligationId, reason));
 }
