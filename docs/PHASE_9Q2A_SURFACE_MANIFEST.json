@@ -69,7 +69,7 @@
   },
   {
     "path": "src/app/actions/land.ts",
-    "sha256": "af300418f68b5e5efc4620f9bc7b0c3900f7a07fc4be4bb29a905c75ca6ba610"
+    "sha256": "58d41729617c682da0b70f4c1f106348a94ed7064ee9fab394ec1e55fd3d9cae"
   },
   {
     "path": "src/app/actions/launch-intelligence.ts",
