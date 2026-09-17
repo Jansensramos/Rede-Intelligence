@@ -16,10 +16,16 @@ import {
   rescindSale,
 } from "@/application/sales/sales-service";
 
-type Result<T> = { ok: true; data: T } | { ok: false; error: string };
+type Result = { ok: true } | { ok: false; error: string };
 const message = (error: unknown) => error instanceof Error ? error.message : "Não foi possível concluir a operação comercial.";
-async function run<T>(op: () => Promise<T>): Promise<Result<T>> {
-  try { const data = await op(); revalidatePath("/comercial"); revalidatePath("/financeiro"); revalidatePath("/executivo"); return { ok: true, data }; }
+async function run(op: () => Promise<unknown>): Promise<Result> {
+  try {
+    await op();
+    revalidatePath("/comercial");
+    revalidatePath("/financeiro");
+    revalidatePath("/executivo");
+    return { ok: true };
+  }
   catch (error) { return { ok: false, error: message(error) }; }
 }
 const write = () => requireDomainWriteContext("COMMERCIAL_READ", "COMMERCIAL_WRITE");
