@@ -1,5 +1,9 @@
 [
   {
+    "path": "src/app/actions/accounting.ts",
+    "sha256": "448da69ad1a1be05844f4c96f768c3a72ad4b2f3499a81191b648e341ae40c5c"
+  },
+  {
     "path": "src/app/actions/ai.ts",
     "sha256": "3089c02963a187dc6b49fb44065a94290625a5c650c15b0cc1c7c24e99df9df5"
   },
@@ -14,6 +18,14 @@
   {
     "path": "src/app/actions/capital.ts",
     "sha256": "5dbf1d1f2cde36479764738ba975f11564781e7fa7449cf2f4eb8d8c09ae6c24"
+  },
+  {
+    "path": "src/app/actions/closure.ts",
+    "sha256": "996501a8337b2ccee31246b362486e106ef4c989a8e706a825e686398a75762e"
+  },
+  {
+    "path": "src/app/actions/data-intelligence.ts",
+    "sha256": "f2f3efb9685ce2fca8d90aee928fc847cb20b3b8e4ba8ebc2f47344d5431ba54"
   },
   {
     "path": "src/app/actions/design.ts",
@@ -44,6 +56,10 @@
     "sha256": "9a3160ca1f72db7c70eb5c4ee0c9c823fe7a460f65d1ce9b0d1f037f3cc1b9ab"
   },
   {
+    "path": "src/app/actions/handover.ts",
+    "sha256": "166d503fb702cb18c29f90e61b398fc6634b3e9c2872c18047a3c29e2516df88"
+  },
+  {
     "path": "src/app/actions/integrations.ts",
     "sha256": "458fe0fba0b7b17b0b61af2b9073f6f73511d31ad97aca43ec1b86d24aff1153"
   },
@@ -60,6 +76,14 @@
     "sha256": "95b3f8cd84795db465cb524c5b2a7b092647d52558976141c4a74d639cbe2c6d"
   },
   {
+    "path": "src/app/actions/legal.ts",
+    "sha256": "4d1dd1b8b97f5d0f4147d72391179593ce3b5c91bb623cb294ad162f9f978753"
+  },
+  {
+    "path": "src/app/actions/local-readiness.ts",
+    "sha256": "9ea32fc7f7522d9bc87608fc79880d9de181e9b765071571babcecc317ec8abd"
+  },
+  {
     "path": "src/app/actions/market-product.ts",
     "sha256": "034fc7dea1c06532852299b9a3f8829c2ebfc5a0d6cb77ddece3756a1b152b18"
   },
@@ -68,8 +92,20 @@
     "sha256": "6dfcc76bbf0d2c8d23ea0f5a9bbaed1039f18909c20081ab568357b7500305ff"
   },
   {
+    "path": "src/app/actions/people.ts",
+    "sha256": "78abe76e2a92fe2c6d8a8b150ab179b07d085da2c7694aaf501289cd9c8849ec"
+  },
+  {
     "path": "src/app/actions/procurement.ts",
     "sha256": "a70c570799c681f6abbcff9fd9ca7e222765a5bf9ae27f094007c7ca87dd3efb"
+  },
+  {
+    "path": "src/app/actions/sales.ts",
+    "sha256": "55577d5599f1b3ec5a753ba7602d34e02f0a937ba8c6509359f7c6804d99c604"
+  },
+  {
+    "path": "src/app/actions/service-orders.ts",
+    "sha256": "3f0d9d09642346ca9d5c8ad48efb349b1396f13243c426e6ad31961b401c0a55"
   },
   {
     "path": "src/app/actions/studies.ts",
