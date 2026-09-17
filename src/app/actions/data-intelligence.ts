@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireDomainActionContext } from "./authorization";
+import { requireDomainWriteContext } from "./authorization";
 import {
   ensureAnalyticsContracts,
   ensureComparabilityPolicy,
@@ -15,9 +15,10 @@ async function run<T>(op: () => Promise<T>): Promise<Result<T>> {
   try { const data = await op(); revalidatePath("/inteligencia-dados"); return { ok: true, data }; }
   catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Não foi possível concluir a operação de Inteligência de Dados." }; }
 }
+const write = () => requireDomainWriteContext("DATA_INTELLIGENCE_READ", "DATA_INTELLIGENCE_WRITE");
 
 export async function initializeDataIntelligenceAction() {
-  const context = await requireDomainActionContext("DATA_INTELLIGENCE_READ");
+  const context = await write();
   return run(async () => {
     const contracts = await ensureAnalyticsContracts(context);
     const metrics = await ensureMetricCatalog(context);
@@ -26,12 +27,5 @@ export async function initializeDataIntelligenceAction() {
   });
 }
 
-export async function refreshAnalyticsFactsAction(projectId: string) {
-  const context = await requireDomainActionContext("DATA_INTELLIGENCE_READ");
-  return run(() => refreshAnalyticsFacts(context, projectId));
-}
-
-export async function refreshDataIntelligenceAction(projectId: string) {
-  const context = await requireDomainActionContext("DATA_INTELLIGENCE_READ");
-  return run(() => refreshDataIntelligence(context, projectId));
-}
+export async function refreshAnalyticsFactsAction(projectId: string) { const context = await write(); return run(() => refreshAnalyticsFacts(context, projectId)); }
+export async function refreshDataIntelligenceAction(projectId: string) { const context = await write(); return run(() => refreshDataIntelligence(context, projectId)); }
