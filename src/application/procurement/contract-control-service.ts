@@ -20,6 +20,25 @@ export type ContractControlView = {
   measurementBalance: number;
 };
 
+export type ServiceOrderMeasurementView = {
+  id: string;
+  contractId: string;
+  contractNumber: string;
+  number: string;
+  title: string;
+  status: string;
+  items: Array<{
+    serviceOrderItemId: string;
+    contractItemId: string;
+    description: string;
+    unit: string;
+    unitPrice: number;
+    authorizedQuantity: number;
+    previousMeasuredQuantity: number;
+    remainingQuantity: number;
+  }>;
+};
+
 export async function getContractControl(context: Pick<AuthContext, "organizationId">, projectId: string): Promise<ContractControlView[]> {
   const contracts = await prisma.$queryRaw<Array<{
     id: string;
@@ -108,4 +127,74 @@ export async function getContractControl(context: Pick<AuthContext, "organizatio
       measurementBalance: Math.max(0, authorizedByServiceOrders - measured.measured),
     };
   });
+}
+
+export async function getServiceOrderMeasurementAvailability(context: Pick<AuthContext, "organizationId">, projectId: string): Promise<ServiceOrderMeasurementView[]> {
+  const orders = await prisma.$queryRaw<Array<{
+    id: string;
+    contract_id: string;
+    contract_number: string;
+    number: string;
+    title: string;
+    status: string;
+  }>>(Prisma.sql`
+    SELECT so.id, so.contract_id, oc.number AS contract_number, so.number, so.title, so.status
+      FROM service_orders so
+      JOIN operational_contracts oc ON oc.id = so.contract_id
+     WHERE so.organization_id = ${context.organizationId}
+       AND so.project_id = ${projectId}
+       AND so.status IN ('ISSUED','IN_PROGRESS','COMPLETED')
+     ORDER BY so.created_at DESC
+  `);
+
+  if (orders.length === 0) return [];
+  const orderIds = orders.map((item) => item.id);
+  const items = await prisma.$queryRaw<Array<{
+    service_order_id: string;
+    service_order_item_id: string;
+    contract_item_id: string;
+    description: string;
+    unit: string;
+    unit_price: Prisma.Decimal;
+    authorized_quantity: Prisma.Decimal;
+    measured_quantity: Prisma.Decimal;
+  }>>(Prisma.sql`
+    SELECT soi.service_order_id,
+           soi.id AS service_order_item_id,
+           soi.contract_item_id,
+           soi.description,
+           soi.unit,
+           soi.unit_price,
+           soi.quantity AS authorized_quantity,
+           COALESCE(SUM(CASE WHEN mc.status::text NOT IN ('REVERSED','CANCELLED') THEN ml.period_quantity ELSE 0 END), 0) AS measured_quantity
+      FROM service_order_items soi
+      LEFT JOIN measurement_certificates mc ON mc.service_order_id = soi.service_order_id
+      LEFT JOIN measurement_lines ml ON ml.measurement_id = mc.id AND ml.contract_item_id = soi.contract_item_id
+     WHERE soi.service_order_id IN (${Prisma.join(orderIds)})
+     GROUP BY soi.service_order_id, soi.id, soi.contract_item_id, soi.description, soi.unit, soi.unit_price, soi.quantity, soi.sort_order
+     ORDER BY soi.service_order_id, soi.sort_order
+  `);
+
+  return orders.map((order) => ({
+    id: order.id,
+    contractId: order.contract_id,
+    contractNumber: order.contract_number,
+    number: order.number,
+    title: order.title,
+    status: order.status,
+    items: items.filter((item) => item.service_order_id === order.id).map((item) => {
+      const authorizedQuantity = Number(item.authorized_quantity);
+      const previousMeasuredQuantity = Number(item.measured_quantity);
+      return {
+        serviceOrderItemId: item.service_order_item_id,
+        contractItemId: item.contract_item_id,
+        description: item.description,
+        unit: item.unit,
+        unitPrice: Number(item.unit_price),
+        authorizedQuantity,
+        previousMeasuredQuantity,
+        remainingQuantity: Math.max(0, authorizedQuantity - previousMeasuredQuantity),
+      };
+    }),
+  }));
 }
