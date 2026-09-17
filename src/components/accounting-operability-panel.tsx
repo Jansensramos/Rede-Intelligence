@@ -14,6 +14,13 @@ type ModalState =
 
 type ActionResult = { ok: boolean; error?: string };
 
+const EVENT_STATUS: Record<string, string> = {
+  PENDING: "Pendente", CLASSIFIED: "Classificado", POSTED: "Contabilizado", REVERSED: "Revertido", CANCELLED: "Cancelado",
+};
+const PERIOD_STATUS: Record<string, string> = {
+  OPEN: "Aberto", UNDER_REVIEW: "Em revisão", ADJUSTMENT: "Em ajuste", CLOSED: "Fechado", REOPENED: "Reaberto",
+};
+
 export function AccountingOperabilityPanel({ workspace }: { workspace: AccountingWorkspaceView }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -50,8 +57,8 @@ export function AccountingOperabilityPanel({ workspace }: { workspace: Accountin
     <div className="panel-heading"><div><span className="eyebrow">CONTABILIDADE E CONTROLADORIA</span><h2>Contabilização e fechamento</h2><p>Revise eventos classificados, contabilize lançamentos e conduza o fechamento mensal com rastreabilidade.</p></div></div>
     {feedback && <div className={feedback.type === "error" ? styles.error : styles.success}>{feedback.text}</div>}
     <div className="data-table-scroll"><table className="data-table"><thead><tr><th>Tipo</th><th>Registro</th><th>Situação</th><th>Ação</th></tr></thead><tbody>
-      {classified.slice(0,12).map(event => <tr key={event.id}><td>Evento</td><td><strong>{event.sourceModule} · {event.sourceType}</strong><small>{event.sourceId} · {event.netAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</small></td><td>{event.status}</td><td><button className="button button-secondary" disabled={pending || !workspace.permissions.canPost} onClick={() => setModal({ type: "post", eventId: event.id, label: `${event.sourceModule} · ${event.sourceType}` })}><BookCheck size={15}/> Contabilizar</button></td></tr>)}
-      {closable.slice(0,8).map(period => { const label = new Date(period.referenceMonth).toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }); return <tr key={period.id}><td>Período</td><td><strong>{label}</strong></td><td>{period.status}</td><td><button className="button button-primary" disabled={pending || !workspace.permissions.canClose} onClick={() => setModal({ type: "close", periodId: period.id, label })}><LockKeyhole size={15}/> Fechar período</button></td></tr>; })}
+      {classified.slice(0,12).map(event => <tr key={event.id}><td>Evento</td><td><strong>{event.sourceModule} · {event.sourceType}</strong><small>{event.sourceId} · {event.netAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</small></td><td>{EVENT_STATUS[event.status] ?? event.status}</td><td><button className="button button-secondary" disabled={pending || !workspace.permissions.canPost} onClick={() => setModal({ type: "post", eventId: event.id, label: `${event.sourceModule} · ${event.sourceType}` })}><BookCheck size={15}/> Contabilizar</button></td></tr>)}
+      {closable.slice(0,8).map(period => { const label = new Date(period.referenceMonth).toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }); return <tr key={period.id}><td>Período</td><td><strong>{label}</strong></td><td>{PERIOD_STATUS[period.status] ?? period.status}</td><td><button className="button button-primary" disabled={pending || !workspace.permissions.canClose} onClick={() => setModal({ type: "close", periodId: period.id, label })}><LockKeyhole size={15}/> Fechar período</button></td></tr>; })}
       {classified.length === 0 && closable.length === 0 && <tr><td colSpan={4}>Nenhum evento classificado ou período disponível para ação.</td></tr>}
     </tbody></table></div>
 
