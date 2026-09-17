@@ -3,10 +3,10 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { DatabaseZap, RefreshCw } from "lucide-react";
-import type { DataIntelligenceWorkspaceView } from "@/application/data-intelligence/data-intelligence-service";
+import type { DataIntelligenceWorkspace } from "@/application/data-intelligence/data-intelligence-service";
 import { initializeDataIntelligenceAction, refreshAnalyticsFactsAction } from "@/app/actions/data-intelligence";
 
-export function DataIntelligenceOperabilityPanel({ workspace }: { workspace: DataIntelligenceWorkspaceView }) {
+export function DataIntelligenceOperabilityPanel({ workspace }: { workspace: DataIntelligenceWorkspace }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const act = (op: () => Promise<{ ok: boolean; error?: string }>) => startTransition(async () => { const result = await op(); if (!result.ok) alert(result.error ?? "Não foi possível concluir."); else router.refresh(); });
