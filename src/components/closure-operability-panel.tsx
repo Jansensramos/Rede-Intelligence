@@ -58,11 +58,11 @@ export function ClosureOperabilityPanel({ projectId, latest, gate }: { projectId
   };
 
   return <section className="panel">
-    <div className="panel-heading"><div><span className="eyebrow">OPERAÇÃO HUMANA · 10C.1</span><h2>Encerramento do Empreendimento</h2><p>Preparação, distribuição, aprovação final e reabertura permanecem submetidas aos gates operacional, contratual, jurídico, financeiro e contábil.</p></div><div className="panel-actions">
+    <div className="panel-heading"><div><span className="eyebrow">ENCERRAMENTO DO EMPREENDIMENTO</span><h2>Fechamento e distribuição de resultados</h2><p>Consolide as pendências operacionais, contratuais, jurídicas, financeiras e contábeis antes do encerramento definitivo.</p></div><div className="panel-actions">
       {!latest && <button className="button button-primary" disabled={pending} onClick={() => act(() => prepareProjectClosureResultAction({ projectId }))}><Archive size={15}/> Preparar encerramento</button>}
       {latest?.status === "DRAFT" && <><button className="button button-secondary" disabled={pending} onClick={createDistribution}><WalletCards size={15}/> Nova distribuição</button><button className="button button-secondary" disabled={pending} onClick={approvePendingDistribution}>Aprovar distribuição</button><button className="button button-primary" disabled={pending || gate.overall !== "APTO"} onClick={() => act(() => approveProjectClosureResultAction({ closureResultId: latest.id }))}><CheckCircle2 size={15}/> Aprovar encerramento</button></>}
       {latest?.status === "FINAL" && <button className="button button-secondary" disabled={pending} onClick={reopen}><RotateCcw size={15}/> Reabrir</button>}
     </div></div>
-    <div className="scenario-deltas"><span>Gate geral: <strong>{gate.overall}</strong></span><span>Operacional: {gate.operational.status}</span><span>Contratual: {gate.contractual.status}</span><span>Jurídico: {gate.legal.status}</span><span>Financeiro: {gate.financial.status}</span><span>Contábil: {gate.accounting.status}</span>{latest && <span>Versão: {latest.version} · {latest.status}</span>}</div>
+    <div className="scenario-deltas"><span>Situação geral: <strong>{gate.overall}</strong></span><span>Operacional: {gate.operational.status}</span><span>Contratual: {gate.contractual.status}</span><span>Jurídico: {gate.legal.status}</span><span>Financeiro: {gate.financial.status}</span><span>Contábil: {gate.accounting.status}</span>{latest && <span>Versão: {latest.version} · {latest.status}</span>}</div>
   </section>;
 }
