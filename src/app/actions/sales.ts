@@ -12,6 +12,8 @@ import {
   createSalesProposal,
   createSalesReservation,
   releaseSalesReservation,
+  renegotiateSalesPaymentPlan,
+  rescindSale,
 } from "@/application/sales/sales-service";
 
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -21,6 +23,7 @@ async function run<T>(op: () => Promise<T>): Promise<Result<T>> {
   catch (error) { return { ok: false, error: message(error) }; }
 }
 const write = () => requireDomainWriteContext("COMMERCIAL_READ", "COMMERCIAL_WRITE");
+const approve = () => requireDomainApprovalContext("COMMERCIAL_READ", "COMMERCIAL_APPROVE");
 
 export async function createCommercialCustomerAction(input: Parameters<typeof createCustomer>[1]) { const ctx = await write(); return run(() => createCustomer(ctx, input)); }
 export async function createSalesLeadAction(input: Parameters<typeof createSalesLead>[1]) { const ctx = await write(); return run(() => createSalesLead(ctx, input)); }
@@ -30,4 +33,6 @@ export async function createSalesReservationAction(input: Omit<Parameters<typeof
 export async function confirmSalesReservationAction(id: string) { const ctx = await write(); return run(() => confirmSalesReservation(ctx, id)); }
 export async function releaseSalesReservationAction(id: string, reason: string) { const ctx = await write(); return run(() => releaseSalesReservation(ctx, id, reason)); }
 export async function createSaleAction(input: Parameters<typeof createSale>[1]) { const ctx = await write(); return run(() => createSale(ctx, input)); }
-export async function approveSaleAction(input: Parameters<typeof approveSale>[1]) { const ctx = await requireDomainApprovalContext("COMMERCIAL_READ", "COMMERCIAL_APPROVE"); return run(() => approveSale(ctx, input)); }
+export async function approveSaleAction(input: Parameters<typeof approveSale>[1]) { const ctx = await approve(); return run(() => approveSale(ctx, input)); }
+export async function renegotiateSalesPaymentPlanAction(input: Parameters<typeof renegotiateSalesPaymentPlan>[1]) { const ctx = await approve(); return run(() => renegotiateSalesPaymentPlan(ctx, input)); }
+export async function rescindSaleAction(input: Parameters<typeof rescindSale>[1]) { const ctx = await approve(); return run(() => rescindSale(ctx, input)); }
