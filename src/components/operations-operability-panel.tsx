@@ -27,11 +27,11 @@ export function OperationsOperabilityPanel({ workspace }: { workspace: Operation
   }
 
   return <section className="panel">
-    <div className="panel-heading"><div><span className="eyebrow">OPERAÇÃO HUMANA · 10C.1</span><h2>Fluxo da Base, Orçamento e Cronograma</h2><p>O usuário autorizado conduz cada mudança de estado; bases aprovadas permanecem versionadas e rastreáveis.</p></div><div className="panel-actions">
-      {!workspace.baseline && projectId && <button className="button button-primary" disabled={pending} onClick={() => act(() => prepareLatestOperationalBaselineAction(projectId))}><FileLock2 size={15}/> Preparar Base</button>}
+    <div className="panel-heading"><div><span className="eyebrow">PLANEJAMENTO E OPERAÇÃO</span><h2>Base, orçamento e cronograma</h2><p>Conduza a aprovação da base do empreendimento, formalize o orçamento oficial e mantenha o cronograma rastreável.</p></div><div className="panel-actions">
+      {!workspace.baseline && projectId && <button className="button button-primary" disabled={pending} onClick={() => act(() => prepareLatestOperationalBaselineAction(projectId))}><FileLock2 size={15}/> Preparar base</button>}
       {workspace.baseline?.status === "PREPARING" && <button className="button button-primary" disabled={pending} onClick={() => act(() => requestBaselineApprovalAction(workspace.baseline!.id))}><ListChecks size={15}/> Solicitar aprovação</button>}
-      {workspace.baseline?.status === "UNDER_APPROVAL" && <button className="button button-primary" disabled={pending} onClick={() => act(() => approveOperationalBaselineAction(workspace.baseline!.id))}><CheckCircle2 size={15}/> Aprovar Base</button>}
-      {workspace.baseline?.status === "APPROVED" && !workspace.budget && <button className="button button-primary" disabled={pending} onClick={() => act(() => createOfficialBudgetAction(workspace.baseline!.id))}>Criar Orçamento Oficial</button>}
+      {workspace.baseline?.status === "UNDER_APPROVAL" && <button className="button button-primary" disabled={pending} onClick={() => act(() => approveOperationalBaselineAction(workspace.baseline!.id))}><CheckCircle2 size={15}/> Aprovar base</button>}
+      {workspace.baseline?.status === "APPROVED" && !workspace.budget && <button className="button button-primary" disabled={pending} onClick={() => act(() => createOfficialBudgetAction(workspace.baseline!.id))}>Criar orçamento oficial</button>}
       {workspace.budget && ["OFFICIAL","APPROVED"].includes(workspace.budget.status) && !workspace.schedule && <button className="button button-primary" disabled={pending} onClick={createSchedule}><Milestone size={15}/> Criar cronograma</button>}
       {workspace.schedule && ["DRAFT","UNDER_REVIEW"].includes(workspace.schedule.status) && <button className="button button-primary" disabled={pending} onClick={() => act(() => approveOperationalScheduleAction(workspace.schedule!.id))}><CheckCircle2 size={15}/> Aprovar cronograma</button>}
     </div></div>
