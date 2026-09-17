@@ -1,0 +1,204 @@
+/*
+ * Camada de acabamento visual para as telas legadas da REDE.
+ * Mantém a identidade existente, mas elimina tipografia microscópica,
+ * overflow de página e navegações comprimidas.
+ */
+
+/* Shell */
+.brand-name small { font-size: 10px !important; letter-spacing: .18em !important; }
+.sidebar-module > span:first-child { font-size: 10px !important; }
+.sidebar-module strong { font-size: 12px !important; line-height: 1.3; }
+.sidebar-module .soon { font-size: 10px !important; }
+.main-nav button,
+.main-nav a { font-size: 12.5px !important; }
+.topbar-left { font-size: 12px !important; }
+
+/* Cabeçalhos de página */
+.project-heading {
+  margin-bottom: 22px !important;
+  min-width: 0;
+}
+.project-heading > * { min-width: 0; }
+.project-heading h1 {
+  font-size: clamp(28px, 2.4vw, 36px) !important;
+  line-height: 1.08 !important;
+  text-wrap: balance;
+}
+.project-heading p {
+  max-width: 900px;
+  font-size: 13px !important;
+  line-height: 1.55;
+}
+.eyebrow { font-size: 11px !important; }
+.section-title h2 { line-height: 1.2; }
+.section-title p { font-size: 13px !important; line-height: 1.5; }
+
+/* Abas legadas: leitura confortável e scroll somente no próprio componente. */
+.scenario-switch {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+}
+.scenario-switch button {
+  flex: 0 0 auto !important;
+  min-width: max-content !important;
+  height: 40px !important;
+  padding: 0 14px !important;
+  font-size: 12px !important;
+  line-height: 1.2;
+  white-space: nowrap !important;
+}
+
+/* Tabelas/grades antigas. O scroll fica no bloco, nunca na página inteira. */
+.scenario-strip,
+.flow-table-panel,
+.isolated-panel,
+.compact-table {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.scenario-table,
+.isolated-table,
+.data-table-scroll,
+.compact-table {
+  overflow-x: auto !important;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+}
+.table-row {
+  min-height: 50px !important;
+  padding-inline: 14px !important;
+  column-gap: 12px;
+}
+.table-row span,
+.table-row strong { font-size: 12px !important; line-height: 1.35; }
+.table-head { min-height: 38px !important; }
+.table-head span { font-size: 10px !important; line-height: 1.2; }
+.data-table { font-size: 12px !important; }
+.data-table th { font-size: 10px !important; }
+.data-table td { font-size: 12px !important; height: 46px !important; }
+.isolated-row { font-size: 12px !important; min-height: 48px !important; }
+.isolated-head { font-size: 10px !important; min-height: 36px !important; }
+
+/* Conteúdo analítico legado: nenhum texto funcional abaixo de ~11px. */
+.priority-actions li,
+.score-hero p,
+.break-even-list span,
+.red-team-summary p,
+.red-agent-grid strong,
+.red-blocker-list strong,
+.evidence-request-list strong,
+.risk-card p,
+.scenario-card > p { font-size: 12px !important; }
+
+.resilience-card span,
+.resilience-card small,
+.version-chip,
+.score-dimensions small,
+.score-evidence-grid > div > strong,
+.score-evidence-grid p,
+.break-even-list small,
+.stress-card header small,
+.stress-adjustments span,
+.stress-card dt,
+.red-team-summary-count span,
+.red-agent-grid small,
+.red-agent-detail > header > span,
+.red-agent-questions > strong,
+.red-agent-questions p,
+.red-finding > header span,
+.red-finding > header b,
+.red-finding > p,
+.red-finding > div,
+.red-finding > div strong,
+.red-compact-findings small,
+.red-compact-findings b,
+.evidence-request-list small,
+.evidence-request-list b,
+.disagreement-list p,
+.disagreement-list span,
+.decision-change-list p,
+.risk-card header span:not(.risk-icon),
+.risk-card strong,
+.active-label,
+.scenario-deltas span,
+.scenario-card dt,
+.scenario-card footer { font-size: 11px !important; line-height: 1.4; }
+
+/* Cards e grids não podem estourar por conteúdo. */
+.metrics-grid,
+.operations-kpis,
+.scenario-cards,
+.score-dimensions,
+.score-evidence-grid,
+.stress-grid,
+.red-team-hero,
+.red-finding-grid,
+.red-two-column,
+.decision-change-list,
+.operations-structure { min-width: 0; }
+.metrics-grid > *,
+.operations-kpis > *,
+.scenario-cards > *,
+.score-dimensions > *,
+.score-evidence-grid > *,
+.stress-grid > *,
+.red-team-hero > *,
+.red-finding-grid > *,
+.red-two-column > *,
+.decision-change-list > *,
+.operations-structure > * { min-width: 0; }
+
+/* Botões de ação em linhas não devem ser cortados. */
+.table-row .button,
+.table-row button,
+.operations-table .button,
+.operations-table button,
+.data-table .button,
+.data-table button {
+  min-width: max-content;
+  white-space: nowrap;
+}
+
+/* Desktop intermediário: sidebar e conteúdo permanecem alinhados. */
+@media (min-width: 901px) and (max-width: 1280px) {
+  .sidebar { width: 210px !important; }
+  .workspace { margin-left: 210px !important; }
+  .workspace-content { padding-inline: 20px !important; }
+}
+
+@media (max-width: 1100px) {
+  .scenario-cards,
+  .stress-grid,
+  .score-dimensions,
+  .score-evidence-grid,
+  .red-finding-grid,
+  .red-two-column,
+  .decision-change-list { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+
+  .red-team-hero { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+
+@media (max-width: 900px) {
+  .project-heading { gap: 14px !important; }
+  .scenario-switch button { min-width: max-content !important; flex: 0 0 auto !important; }
+  .scenario-cards,
+  .stress-grid,
+  .score-dimensions,
+  .score-evidence-grid,
+  .red-team-hero,
+  .red-finding-grid,
+  .red-two-column,
+  .decision-change-list { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 640px) {
+  .project-heading h1 { font-size: 27px !important; }
+  .project-heading p { font-size: 13px !important; }
+  .table-row { padding-inline: 12px !important; }
+}
