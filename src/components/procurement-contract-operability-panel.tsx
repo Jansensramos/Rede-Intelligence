@@ -16,9 +16,24 @@ import {
   transitionMeasurementAction,
   transitionOperationalContractAction,
 } from "@/app/actions/procurement";
+import styles from "./procurement-professional.module.css";
 
 type FormKey = "order" | "contract" | "amendment" | "measurement" | null;
 type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
+
+const STATUS: Record<string, string> = {
+  DRAFT: "Rascunho",
+  UNDER_REVIEW: "Em revisão",
+  IN_APPROVAL: "Em aprovação",
+  APPROVED: "Aprovado",
+  ACTIVE: "Ativo",
+  SUSPENDED: "Suspenso",
+  SUBMITTED: "Enviada",
+  IN_TECHNICAL_REVIEW: "Em análise técnica",
+  TECHNICALLY_APPROVED: "Aprovada tecnicamente",
+};
+
+const money = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
 
 export function ProcurementContractOperabilityPanel({ workspace, operability }: { workspace: ProcurementWorkspaceView; operability: ProcurementOperabilityMetadata }) {
   const router = useRouter();
@@ -32,6 +47,10 @@ export function ProcurementContractOperabilityPanel({ workspace, operability }: 
   const selectedSource = useMemo(() => decidedSources.find((item) => item.id === sourceQuotationId) ?? null, [decidedSources, sourceQuotationId]);
   const measurableContracts = useMemo(() => operability.contracts.filter((item) => ["APPROVED", "ACTIVE", "SUSPENDED"].includes(item.status)), [operability.contracts]);
   const selectedMeasurementContract = useMemo(() => measurableContracts.find((item) => item.id === measurementContractId) ?? null, [measurableContracts, measurementContractId]);
+
+  const openOrders = workspace.orders.filter((item) => ["DRAFT", "IN_APPROVAL"].includes(item.status));
+  const contractsInFlow = workspace.contracts.filter((item) => ["DRAFT", "UNDER_REVIEW", "IN_APPROVAL", "APPROVED"].includes(item.status));
+  const measurementsInFlow = workspace.measurements.filter((item) => ["DRAFT", "SUBMITTED", "IN_TECHNICAL_REVIEW", "TECHNICALLY_APPROVED", "IN_APPROVAL"].includes(item.status));
 
   async function run<T>(operation: () => Promise<ActionResult<T>>, success: string) {
     setBusy(true);
@@ -61,7 +80,7 @@ export function ProcurementContractOperabilityPanel({ workspace, operability }: 
 
   async function submitOrder(data: FormData) {
     if (!selectedSource?.selectedProposal || !operability.companyId) {
-      setFeedback("O empreendimento precisa ter uma SPE/empresa vinculada e uma cotação decidida.");
+      setFeedback("Vincule uma empresa/SPE ao empreendimento e selecione uma cotação decidida.");
       return;
     }
     await run(() => createPurchaseOrderAction({
@@ -81,7 +100,7 @@ export function ProcurementContractOperabilityPanel({ workspace, operability }: 
 
   async function submitContract(data: FormData) {
     if (!selectedSource?.selectedProposal || !operability.companyId) {
-      setFeedback("O empreendimento precisa ter uma SPE/empresa vinculada e uma cotação decidida.");
+      setFeedback("Vincule uma empresa/SPE ao empreendimento e selecione uma cotação decidida.");
       return;
     }
     await run(() => createOperationalContractAction({
@@ -151,83 +170,153 @@ export function ProcurementContractOperabilityPanel({ workspace, operability }: 
 
   async function advanceContract(id: string, status: string) {
     const next = status === "DRAFT" ? "UNDER_REVIEW" : status === "UNDER_REVIEW" ? "IN_APPROVAL" : status === "IN_APPROVAL" ? "APPROVED" : "ACTIVE";
-    await run(() => transitionOperationalContractAction(id, next as "UNDER_REVIEW" | "IN_APPROVAL" | "APPROVED" | "ACTIVE"), `Contrato movido para ${next.replaceAll("_", " ").toLowerCase()}.`);
+    await run(() => transitionOperationalContractAction(id, next as "UNDER_REVIEW" | "IN_APPROVAL" | "APPROVED" | "ACTIVE"), `Contrato atualizado para ${STATUS[next]?.toLowerCase() ?? next.toLowerCase()}.`);
   }
 
   async function advanceMeasurement(id: string, status: string) {
     const next = status === "DRAFT" ? "SUBMITTED" : status === "SUBMITTED" ? "IN_TECHNICAL_REVIEW" : status === "IN_TECHNICAL_REVIEW" ? "TECHNICALLY_APPROVED" : "IN_APPROVAL";
-    await run(() => transitionMeasurementAction(id, next as "SUBMITTED" | "IN_TECHNICAL_REVIEW" | "TECHNICALLY_APPROVED" | "IN_APPROVAL"), `Medição movida para ${next.replaceAll("_", " ").toLowerCase()}.`);
+    await run(() => transitionMeasurementAction(id, next as "SUBMITTED" | "IN_TECHNICAL_REVIEW" | "TECHNICALLY_APPROVED" | "IN_APPROVAL"), `Medição atualizada para ${STATUS[next]?.toLowerCase() ?? next.toLowerCase()}.`);
   }
 
-  return (
-    <section className="operations-panel">
-      <header>
-        <div><span className="eyebrow">CONTRATAÇÃO E MEDIÇÃO · 10C.1</span><h3>Pedidos, contratos, aditivos e medições</h3><p>Transforme a decisão de compra em compromisso contratual e execução medida.</p></div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button className="button button-secondary" onClick={() => setForm(form === "order" ? null : "order")}><ShoppingBag size={16} /> Novo pedido</button>
-          <button className="button button-secondary" onClick={() => setForm(form === "contract" ? null : "contract")}><FileSignature size={16} /> Novo contrato</button>
-          <button className="button button-secondary" onClick={() => setForm(form === "amendment" ? null : "amendment")}><SquarePen size={16} /> Novo aditivo</button>
-          <button className="button button-primary" onClick={() => setForm(form === "measurement" ? null : "measurement")}><Ruler size={16} /> Nova medição</button>
-        </div>
-      </header>
+  const selectedContractValue = selectedMeasurementContract?.items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unitPrice), 0) ?? 0;
 
-      {feedback && <div className="model-note"><CheckCircle2 size={20} /><div><strong>Contratação</strong><p>{feedback}</p></div></div>}
+  return (
+    <section className={styles.section}>
+      <div className={styles.header}>
+        <div>
+          <span className={styles.kicker}>Contratação e execução</span>
+          <h2 className={styles.title}>Pedidos, contratos, aditivos e medições</h2>
+          <p className={styles.description}>Transforme uma compra aprovada em compromisso contratual, acompanhe alterações e leve a execução medida até o Financeiro com rastreabilidade.</p>
+        </div>
+        <div className={styles.actions}>
+          <button className="button button-secondary" onClick={() => setForm(form === "order" ? null : "order")}><ShoppingBag size={15} /> Pedido de compra</button>
+          <button className="button button-secondary" onClick={() => setForm(form === "contract" ? null : "contract")}><FileSignature size={15} /> Contrato</button>
+          <button className="button button-secondary" onClick={() => setForm(form === "amendment" ? null : "amendment")}><SquarePen size={15} /> Aditivo</button>
+          <button className="button button-primary" onClick={() => setForm(form === "measurement" ? null : "measurement")}><Ruler size={15} /> Medição</button>
+        </div>
+      </div>
+
+      <div className={styles.flowBar} aria-label="Fluxo de contratação">
+        {['Cotação decidida', 'Pedido ou contrato', 'Aprovação', 'Execução', 'Medição', 'Financeiro'].map((step) => <span className={styles.flowStep} key={step}>{step}</span>)}
+      </div>
+
+      <div className={styles.summaryGrid}>
+        <div className={styles.summaryCard}><span className={styles.summaryLabel}>Pedidos em fluxo</span><span className={styles.summaryValue}>{openOrders.length}</span></div>
+        <div className={styles.summaryCard}><span className={styles.summaryLabel}>Contratos em fluxo</span><span className={styles.summaryValue}>{contractsInFlow.length}</span></div>
+        <div className={styles.summaryCard}><span className={styles.summaryLabel}>Contratos mensuráveis</span><span className={styles.summaryValue}>{measurableContracts.length}</span></div>
+        <div className={styles.summaryCard}><span className={styles.summaryLabel}>Medições em análise</span><span className={styles.summaryValue}>{measurementsInFlow.length}</span></div>
+      </div>
+
+      {feedback && <div className={styles.info} role="status"><CheckCircle2 size={18} /><div><strong>Contratação</strong><p>{feedback}</p></div></div>}
 
       {(form === "order" || form === "contract") && (
-        <div className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 12 }}>
-          <select value={sourceQuotationId} onChange={(event) => setSourceQuotationId(event.target.value)}><option value="">Selecione uma cotação decidida</option>{decidedSources.map((item) => <option value={item.id} key={item.id}>{item.number} · {item.title} · {item.selectedProposal?.supplierName}</option>)}</select>
-          {!operability.companyId && <span className="negative-value">Este empreendimento não possui empresa/SPE vinculada. Pedido e contrato exigem `companyId`.</span>}
-          {selectedSource && <div className="model-note"><FileSignature size={18} /><div><strong>{selectedSource.selectedProposal?.supplierName}</strong><p>{selectedSource.selectedProposal?.items.length} item(ns) serão trazidos da proposta selecionada.</p></div></div>}
+        <div className={styles.formCard}>
+          <h3 className={styles.formTitle}>Origem da contratação</h3>
+          <div className={styles.field}><label>Cotação decidida</label><select value={sourceQuotationId} onChange={(event) => setSourceQuotationId(event.target.value)}><option value="">Selecione uma cotação</option>{decidedSources.map((item) => <option value={item.id} key={item.id}>{item.number} · {item.title} · {item.selectedProposal?.supplierName}</option>)}</select></div>
+          {!operability.companyId && <div className={styles.warning}>Vincule uma empresa/SPE ao empreendimento antes de criar pedidos ou contratos.</div>}
+          {selectedSource && <div className={styles.info}><FileSignature size={18} /><div><strong>{selectedSource.selectedProposal?.supplierName}</strong><p>{selectedSource.selectedProposal?.items.length} item(ns) da proposta vencedora serão usados como base da contratação.</p></div></div>}
         </div>
       )}
 
       {form === "order" && selectedSource && (
-        <form action={submitOrder} className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10 }}><input name="number" required placeholder="Número do pedido" /><input name="title" required placeholder="Título do pedido" /></div>
-          <textarea name="scope" required placeholder="Escopo do pedido" style={{ minHeight: 80 }} />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10 }}><input name="deliveryAt" type="date" /><input name="paymentTerms" placeholder="Condições de pagamento" /></div>
-          <button className="button button-primary" disabled={busy || !operability.companyId} type="submit">Criar pedido</button>
+        <form action={submitOrder} className={styles.formCard}>
+          <h3 className={styles.formTitle}>Novo pedido de compra</h3>
+          <div className={styles.grid2}>
+            <div className={styles.field}><label>Número do pedido</label><input name="number" required placeholder="PC-0001" /></div>
+            <div className={styles.field}><label>Título</label><input name="title" required placeholder="Descrição objetiva do pedido" /></div>
+          </div>
+          <div className={styles.field}><label>Escopo</label><textarea name="scope" required placeholder="Descreva o objeto do fornecimento, limites e condições principais." /></div>
+          <div className={styles.grid2}>
+            <div className={styles.field}><label>Data prevista de entrega</label><input name="deliveryAt" type="date" /></div>
+            <div className={styles.field}><label>Condições de pagamento</label><input name="paymentTerms" placeholder="Ex.: 30/60/90 dias" /></div>
+          </div>
+          <div className={styles.formActions}><button className="button button-secondary" type="button" onClick={() => setForm(null)}>Cancelar</button><button className="button button-primary" disabled={busy || !operability.companyId} type="submit">Criar pedido de compra</button></div>
         </form>
       )}
 
       {form === "contract" && selectedSource && (
-        <form action={submitContract} className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10 }}><input name="number" required placeholder="Número do contrato" /><input name="title" required placeholder="Título do contrato" /></div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><select name="type" defaultValue="CONSTRUCTION"><option value="SUPPLY">Fornecimento</option><option value="SERVICE">Serviço</option><option value="CONSTRUCTION">Construção</option><option value="DESIGN">Projeto</option><option value="CONSULTING">Consultoria</option><option value="OTHER">Outro</option></select><select name="billingModel" defaultValue="MEASUREMENT"><option value="MEASUREMENT">Medição</option><option value="FIXED_INSTALLMENT">Parcela fixa</option><option value="MONTHLY">Mensal</option><option value="MILESTONE">Marco</option><option value="DELIVERY">Entrega</option><option value="CUSTOM">Personalizado</option></select></div>
-          <textarea name="scope" required placeholder="Escopo contratual" style={{ minHeight: 90 }} />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><input name="startsAt" type="date" required /><input name="endsAt" type="date" required /></div>
-          <input name="paymentTerms" placeholder="Condições de pagamento" /><div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10 }}><input name="retentionRate" type="number" min="0" step="0.01" defaultValue="0" placeholder="Retenção" /><input name="warrantyTerms" placeholder="Condições de garantia" /></div>
-          <button className="button button-primary" disabled={busy || !operability.companyId} type="submit">Criar contrato</button>
+        <form action={submitContract} className={styles.formCard}>
+          <h3 className={styles.formTitle}>Novo contrato</h3>
+          <div className={styles.grid2}>
+            <div className={styles.field}><label>Número</label><input name="number" required placeholder="CT-0001" /></div>
+            <div className={styles.field}><label>Título do contrato</label><input name="title" required placeholder="Objeto principal do contrato" /></div>
+          </div>
+          <div className={styles.grid2}>
+            <div className={styles.field}><label>Tipo</label><select name="type" defaultValue="CONSTRUCTION"><option value="SUPPLY">Fornecimento</option><option value="SERVICE">Serviço</option><option value="CONSTRUCTION">Construção</option><option value="DESIGN">Projeto</option><option value="CONSULTING">Consultoria</option><option value="LEASE">Locação</option><option value="ACQUISITION">Aquisição</option><option value="OTHER">Outro</option></select></div>
+            <div className={styles.field}><label>Modelo de cobrança</label><select name="billingModel" defaultValue="MEASUREMENT"><option value="MEASUREMENT">Por medição</option><option value="FIXED_INSTALLMENT">Parcela fixa</option><option value="MONTHLY">Mensal</option><option value="MILESTONE">Por marco</option><option value="DELIVERY">Por entrega</option><option value="ADVANCE">Adiantamento</option><option value="CUSTOM">Personalizado</option></select></div>
+          </div>
+          <div className={styles.field}><label>Escopo contratual</label><textarea name="scope" required placeholder="Defina o escopo, exclusões e responsabilidades principais." /></div>
+          <div className={styles.grid2}>
+            <div className={styles.field}><label>Início</label><input name="startsAt" type="date" required /></div>
+            <div className={styles.field}><label>Término previsto</label><input name="endsAt" type="date" required /></div>
+          </div>
+          <div className={styles.field}><label>Condições de pagamento</label><input name="paymentTerms" placeholder="Condição contratual de pagamento" /></div>
+          <div className={styles.grid2}>
+            <div className={styles.field}><label>Retenção (%)</label><input name="retentionRate" type="number" min="0" step="0.01" defaultValue="0" /></div>
+            <div className={styles.field}><label>Garantia</label><input name="warrantyTerms" placeholder="Prazo e condições de garantia" /></div>
+          </div>
+          <div className={styles.formActions}><button className="button button-secondary" type="button" onClick={() => setForm(null)}>Cancelar</button><button className="button button-primary" disabled={busy || !operability.companyId} type="submit">Criar contrato</button></div>
         </form>
       )}
 
       {form === "amendment" && (
-        <form action={submitAmendment} className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10 }}>
-          <select name="contractId" required defaultValue=""><option value="" disabled>Selecione o contrato vigente</option>{measurableContracts.map((item) => <option value={item.id} key={item.id}>{item.number} · {item.title}</option>)}</select>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}><input name="number" type="number" min="1" required placeholder="Nº do aditivo" /><select name="type" defaultValue="INCREASE"><option value="INCREASE">Acréscimo</option><option value="SUPPRESSION">Supressão</option><option value="TERM">Prazo</option><option value="SCOPE">Escopo</option><option value="READJUSTMENT">Reajuste</option><option value="OTHER">Outro</option></select><select name="deviationCause" defaultValue="SCOPE"><option value="PRICE">Preço</option><option value="QUANTITY">Quantidade</option><option value="SCOPE">Escopo</option><option value="TERM">Prazo</option><option value="DESIGN">Projeto</option><option value="MARKET">Mercado</option><option value="SUPPLIER">Fornecedor</option><option value="OTHER">Outro</option></select></div>
-          <textarea name="reason" required placeholder="Motivo do aditivo" style={{ minHeight: 80 }} /><textarea name="scopeDescription" placeholder="Descrição do escopo alterado" style={{ minHeight: 70 }} />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}><input name="value" type="number" min="0" step="0.01" defaultValue="0" placeholder="Valor" /><input name="termDays" type="number" defaultValue="0" placeholder="Dias de prazo" /><input name="effectiveAt" type="date" /></div>
-          <button className="button button-primary" disabled={busy} type="submit">Criar aditivo</button>
+        <form action={submitAmendment} className={styles.formCard}>
+          <h3 className={styles.formTitle}>Novo aditivo contratual</h3>
+          <div className={styles.field}><label>Contrato</label><select name="contractId" required defaultValue=""><option value="" disabled>Selecione o contrato</option>{measurableContracts.map((item) => <option value={item.id} key={item.id}>{item.number} · {item.title}</option>)}</select></div>
+          <div className={styles.grid3}>
+            <div className={styles.field}><label>Número do aditivo</label><input name="number" type="number" min="1" required /></div>
+            <div className={styles.field}><label>Tipo</label><select name="type" defaultValue="INCREASE"><option value="INCREASE">Acréscimo</option><option value="SUPPRESSION">Supressão</option><option value="TERM">Prazo</option><option value="SCOPE">Escopo</option><option value="READJUSTMENT">Reajuste</option><option value="OTHER">Outro</option></select></div>
+            <div className={styles.field}><label>Causa do desvio</label><select name="deviationCause" defaultValue="SCOPE"><option value="PRICE">Preço</option><option value="QUANTITY">Quantidade</option><option value="SCOPE">Escopo</option><option value="TERM">Prazo</option><option value="DESIGN">Projeto</option><option value="MARKET">Mercado</option><option value="SUPPLIER">Fornecedor</option><option value="OTHER">Outro</option></select></div>
+          </div>
+          <div className={styles.field}><label>Motivo</label><textarea name="reason" required placeholder="Explique por que o aditivo é necessário." /></div>
+          <div className={styles.field}><label>Escopo alterado</label><textarea name="scopeDescription" placeholder="Descreva o que muda em relação ao contrato vigente." /></div>
+          <div className={styles.grid3}>
+            <div className={styles.field}><label>Valor</label><input name="value" type="number" min="0" step="0.01" defaultValue="0" /></div>
+            <div className={styles.field}><label>Prazo adicional (dias)</label><input name="termDays" type="number" defaultValue="0" /></div>
+            <div className={styles.field}><label>Vigência</label><input name="effectiveAt" type="date" /></div>
+          </div>
+          <div className={styles.formActions}><button className="button button-secondary" type="button" onClick={() => setForm(null)}>Cancelar</button><button className="button button-primary" disabled={busy} type="submit">Criar aditivo</button></div>
         </form>
       )}
 
       {form === "measurement" && (
-        <form action={submitMeasurement} className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10 }}>
-          <select value={measurementContractId} onChange={(event) => setMeasurementContractId(event.target.value)} required><option value="">Selecione o contrato</option>{measurableContracts.map((item) => <option value={item.id} key={item.id}>{item.number} · {item.title}</option>)}</select>
-          {selectedMeasurementContract && <div className="operations-table-wrap"><table className="operations-table"><thead><tr><th>Item</th><th>Contratado</th><th>Unidade</th><th>Quantidade no período</th></tr></thead><tbody>{selectedMeasurementContract.items.map((item) => <tr key={item.id}><td>{item.code} · {item.description}</td><td>{item.quantity}</td><td>{item.unit}</td><td><input name={`quantity_${item.id}`} type="number" min="0" max={item.quantity} step="0.0001" defaultValue="0" /></td></tr>)}</tbody></table></div>}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}><input name="number" type="number" min="1" required placeholder="Nº medição" /><input name="competenceDate" type="date" required /><input name="physicalProgress" type="number" min="0" step="0.0001" placeholder="Avanço físico" /></div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}><input name="periodStart" type="date" required /><input name="periodEnd" type="date" required /><input name="issuedAt" type="date" required /><input name="dueDate" type="date" required /></div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}><input name="retentionAmount" type="number" min="0" step="0.01" defaultValue="0" placeholder="Retenção" /><input name="discountAmount" type="number" min="0" step="0.01" defaultValue="0" placeholder="Desconto/glosa" /><input name="advanceAmortizationAmount" type="number" min="0" step="0.01" defaultValue="0" placeholder="Amortização adiantamento" /></div>
-          <button className="button button-primary" disabled={busy || !selectedMeasurementContract} type="submit">Criar medição</button>
+        <form action={submitMeasurement} className={styles.formCard}>
+          <h3 className={styles.formTitle}>Nova medição</h3>
+          <div className={styles.field}><label>Contrato</label><select value={measurementContractId} onChange={(event) => setMeasurementContractId(event.target.value)} required><option value="">Selecione o contrato</option>{measurableContracts.map((item) => <option value={item.id} key={item.id}>{item.number} · {item.title}</option>)}</select></div>
+          {selectedMeasurementContract && <div className={styles.info}><Ruler size={18} /><div><strong>{selectedMeasurementContract.number} · {selectedMeasurementContract.title}</strong><p>Valor-base dos itens: {money(selectedContractValue)}. Informe abaixo somente a quantidade executada neste período.</p></div></div>}
+          {selectedMeasurementContract && <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Item</th><th>Contratado</th><th>Unidade</th><th>Quantidade no período</th></tr></thead><tbody>{selectedMeasurementContract.items.map((item) => <tr key={item.id}><td><span className={styles.recordTitle}>{item.code}</span><span className={styles.recordMeta}>{item.description}</span></td><td>{item.quantity}</td><td>{item.unit}</td><td><input name={`quantity_${item.id}`} type="number" min="0" max={item.quantity} step="0.0001" defaultValue="0" /></td></tr>)}</tbody></table></div>}
+          <div className={styles.grid3}>
+            <div className={styles.field}><label>Número da medição</label><input name="number" type="number" min="1" required /></div>
+            <div className={styles.field}><label>Competência</label><input name="competenceDate" type="date" required /></div>
+            <div className={styles.field}><label>Avanço físico (%)</label><input name="physicalProgress" type="number" min="0" step="0.0001" /></div>
+          </div>
+          <div className={styles.grid4}>
+            <div className={styles.field}><label>Início do período</label><input name="periodStart" type="date" required /></div>
+            <div className={styles.field}><label>Fim do período</label><input name="periodEnd" type="date" required /></div>
+            <div className={styles.field}><label>Emissão</label><input name="issuedAt" type="date" required /></div>
+            <div className={styles.field}><label>Vencimento</label><input name="dueDate" type="date" required /></div>
+          </div>
+          <div className={styles.grid3}>
+            <div className={styles.field}><label>Retenção</label><input name="retentionAmount" type="number" min="0" step="0.01" defaultValue="0" /></div>
+            <div className={styles.field}><label>Desconto / glosa</label><input name="discountAmount" type="number" min="0" step="0.01" defaultValue="0" /></div>
+            <div className={styles.field}><label>Amortização de adiantamento</label><input name="advanceAmortizationAmount" type="number" min="0" step="0.01" defaultValue="0" /></div>
+          </div>
+          <div className={styles.formActions}><button className="button button-secondary" type="button" onClick={() => setForm(null)}>Cancelar</button><button className="button button-primary" disabled={busy || !selectedMeasurementContract} type="submit">Criar medição</button></div>
         </form>
       )}
 
-      <div className="operations-table-wrap" style={{ marginTop: 16 }}><table className="operations-table"><thead><tr><th>Tipo</th><th>Registro</th><th>Situação</th><th>Ação</th></tr></thead><tbody>
-        {workspace.orders.filter((item) => ["DRAFT", "IN_APPROVAL"].includes(item.status)).map((item) => <tr key={`order-${item.id}`}><td>Pedido</td><td>{item.number} · {item.title}</td><td>{item.status}</td><td><button className="button button-secondary" disabled={busy} onClick={() => run(() => approvePurchaseOrderAction(item.id), "Pedido aprovado.")}>Aprovar pedido</button></td></tr>)}
-        {workspace.contracts.filter((item) => ["DRAFT", "UNDER_REVIEW", "IN_APPROVAL", "APPROVED"].includes(item.status)).map((item) => <tr key={`contract-${item.id}`}><td>Contrato</td><td>{item.number} · {item.title}</td><td>{item.status.replaceAll("_", " ")}</td><td><button className="button button-secondary" disabled={busy} onClick={() => advanceContract(item.id, item.status)}>{item.status === "APPROVED" ? "Ativar" : "Avançar"}</button></td></tr>)}
-        {workspace.contracts.flatMap((contract) => contract.amendments.map((amendment) => ({ ...amendment, contract: contract.number }))).filter((item) => item.status === "DRAFT").map((item) => <tr key={`amendment-${item.id}`}><td>Aditivo</td><td>{item.contract} · aditivo {item.number}</td><td>{item.status}</td><td><button className="button button-secondary" disabled={busy} onClick={() => run(() => approveContractAmendmentAction(item.id), "Aditivo aprovado.")}>Aprovar aditivo</button></td></tr>)}
-        {workspace.measurements.filter((item) => ["DRAFT", "SUBMITTED", "IN_TECHNICAL_REVIEW", "TECHNICALLY_APPROVED", "IN_APPROVAL"].includes(item.status)).map((item) => <tr key={`measurement-${item.id}`}><td>Medição</td><td>BM {item.number} · {item.contract}</td><td>{item.status.replaceAll("_", " ")}</td><td>{item.status === "IN_APPROVAL" ? <button className="button button-primary" disabled={busy} onClick={() => run(() => approveMeasurementAction(item.id), "Medição aprovada e enviada ao Financeiro.")}>Aprovar e enviar ao Financeiro</button> : <button className="button button-secondary" disabled={busy} onClick={() => advanceMeasurement(item.id, item.status)}>Avançar</button>}</td></tr>)}
-      </tbody></table></div>
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead><tr><th>Fluxo</th><th>Registro</th><th>Situação</th><th>Próxima ação</th></tr></thead>
+          <tbody>
+            {openOrders.map((item) => <tr key={`order-${item.id}`}><td>Pedido de compra</td><td><span className={styles.recordTitle}>{item.number}</span><span className={styles.recordMeta}>{item.title}</span></td><td><span className={styles.status}>{STATUS[item.status] ?? item.status}</span></td><td><button className="button button-secondary" disabled={busy} onClick={() => run(() => approvePurchaseOrderAction(item.id), "Pedido aprovado.")}>Aprovar pedido</button></td></tr>)}
+            {contractsInFlow.map((item) => <tr key={`contract-${item.id}`}><td>Contrato</td><td><span className={styles.recordTitle}>{item.number}</span><span className={styles.recordMeta}>{item.title}</span></td><td><span className={styles.status}>{STATUS[item.status] ?? item.status}</span></td><td><button className="button button-secondary" disabled={busy} onClick={() => advanceContract(item.id, item.status)}>{item.status === "APPROVED" ? "Ativar contrato" : "Avançar etapa"}</button></td></tr>)}
+            {workspace.contracts.flatMap((contract) => contract.amendments.map((amendment) => ({ ...amendment, contract: contract.number }))).filter((item) => item.status === "DRAFT").map((item) => <tr key={`amendment-${item.id}`}><td>Aditivo</td><td><span className={styles.recordTitle}>{item.contract}</span><span className={styles.recordMeta}>Aditivo {item.number}</span></td><td><span className={styles.status}>Rascunho</span></td><td><button className="button button-secondary" disabled={busy} onClick={() => run(() => approveContractAmendmentAction(item.id), "Aditivo aprovado.")}>Aprovar aditivo</button></td></tr>)}
+            {measurementsInFlow.map((item) => <tr key={`measurement-${item.id}`}><td>Medição</td><td><span className={styles.recordTitle}>BM {item.number}</span><span className={styles.recordMeta}>{item.contract}</span></td><td><span className={styles.status}>{STATUS[item.status] ?? item.status}</span></td><td>{item.status === "IN_APPROVAL" ? <button className="button button-primary" disabled={busy} onClick={() => run(() => approveMeasurementAction(item.id), "Medição aprovada e enviada ao Financeiro.")}>Aprovar e enviar ao Financeiro</button> : <button className="button button-secondary" disabled={busy} onClick={() => advanceMeasurement(item.id, item.status)}>Avançar etapa</button>}</td></tr>)}
+            {openOrders.length === 0 && contractsInFlow.length === 0 && measurementsInFlow.length === 0 && <tr><td colSpan={4} className={styles.empty}>Nenhum pedido, contrato, aditivo ou medição aguardando ação.</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
