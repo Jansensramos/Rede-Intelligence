@@ -25,7 +25,6 @@ export function Contract360MeasurementPanel({ workspace, contracts, serviceOrder
   const selectedContract = useMemo(() => contracts.find((item) => item.id === selectedContractId) ?? null, [contracts, selectedContractId]);
   const eligibleOrders = useMemo(() => serviceOrders.filter((item) => item.items.some((line) => line.remainingQuantity > 0)), [serviceOrders]);
   const selectedOrder = useMemo(() => eligibleOrders.find((item) => item.id === selectedServiceOrderId) ?? null, [eligibleOrders, selectedServiceOrderId]);
-  const pendingMeasurements = workspace.measurements.filter((item) => ["DRAFT", "SUBMITTED", "IN_TECHNICAL_REVIEW", "TECHNICALLY_APPROVED", "IN_APPROVAL"].includes(item.status));
 
   async function run<T>(operation: () => Promise<ActionResult<T>>, success: string) {
     setBusy(true); setFeedback(null);
