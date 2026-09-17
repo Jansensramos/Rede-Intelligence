@@ -32,12 +32,13 @@ type ModalState =
 
 type ActionResult = { ok: boolean; error?: string };
 type InstallmentNature = "DOWN_PAYMENT" | "MONTHLY" | "INTERMEDIATE" | "ANNUAL" | "KEYS" | "FINANCING" | "BALANCE" | "REINFORCEMENT" | "CUSTOM";
-type Installment = { number: number; nature: InstallmentNature; dueDate: Date; amount: number };
+type Installment = { number: number; nature: InstallmentNature; dueDate: Date; amount: number; correctionRuleId?: string | null };
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const RESERVATION_STATUS: Record<string, string> = { ACTIVE: "Ativa", CONFIRMED: "Confirmada", RELEASED: "Liberada", EXPIRED: "Expirada", CANCELLED: "Cancelada", CONVERTED: "Convertida em venda" };
 const SALE_STATUS: Record<string, string> = { DRAFT: "Rascunho", UNDER_APPROVAL: "Em aprovação", IN_APPROVAL: "Em aprovação", APPROVED: "Aprovada", CANCELLED: "Distratada", REVERSED: "Revertida" };
 const UNIT_STATUS: Record<string, string> = { DISPONIVEL: "Disponível", EM_PROPOSTA: "Em proposta", EM_RESERVA: "Em reserva", RESERVADA: "Reservada", VENDIDA: "Vendida", BLOQUEADA: "Bloqueada", ENTREGUE: "Entregue", DISTRATADA: "Distratada", PERMUTA: "Permuta" };
+const INDEX_LABELS: Record<string, string> = { INCC: "INCC", IPCA: "IPCA", IGP_M: "IGP-M", CDI: "CDI", SELIC: "Selic", TR: "TR", FIXED: "Taxa fixa", NONE: "Sem índice" };
 
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 const amountOf = (data: FormData, key: string) => roundMoney(Math.max(0, Number(data.get(key) ?? 0) || 0));
@@ -59,14 +60,21 @@ function buildPaymentPlan(data: FormData, targetAmount: number): { installments:
   if (target <= 0) return { installments: [], error: "Não há saldo positivo para estruturar o plano de pagamento." };
 
   const installments: Installment[] = [];
+  const correctionRuleId = stringOf(data, "correctionRuleId") || null;
   let number = 1;
-  const push = (nature: InstallmentNature, amount: number, dueDate: Date) => installments.push({ number: number++, nature, dueDate, amount: roundMoney(amount) });
+  const push = (nature: InstallmentNature, amount: number, dueDate: Date, applyCorrection = true) => installments.push({
+    number: number++,
+    nature,
+    dueDate,
+    amount: roundMoney(amount),
+    correctionRuleId: applyCorrection ? correctionRuleId : null,
+  });
 
   const entryAmount = amountOf(data, "entryAmount");
   const entryDate = stringOf(data, "entryDate");
   if (entryAmount > 0) {
     if (!entryDate) return { installments: [], error: "Informe a data da entrada." };
-    push("DOWN_PAYMENT", entryAmount, dateOf(entryDate));
+    push("DOWN_PAYMENT", entryAmount, dateOf(entryDate), false);
   }
 
   const monthlyCount = Math.max(0, Math.trunc(Number(data.get("monthlyCount") ?? 0) || 0));
@@ -113,9 +121,17 @@ function buildPaymentPlan(data: FormData, targetAmount: number): { installments:
   return { installments };
 }
 
-function PaymentPlanFields({ targetAmount }: { targetAmount: number }) {
+function PaymentPlanFields({ targetAmount, correctionRules }: { targetAmount: number; correctionRules: SalesWorkspaceView["correctionRules"] }) {
   return <>
     <div className={`${styles.field} ${styles.fieldFull}`}><span className={styles.help}>Valor a estruturar: <strong>{currency.format(targetAmount)}</strong>. Se a soma informada ficar abaixo desse valor, a diferença será criada como saldo final.</span></div>
+    <div className={`${styles.field} ${styles.fieldFull}`}>
+      <label htmlFor="correction-rule">Correção monetária das parcelas futuras</label>
+      <select id="correction-rule" name="correctionRuleId" defaultValue="" disabled={correctionRules.length === 0}>
+        <option value="">{correctionRules.length === 0 ? "Nenhuma regra ativa cadastrada" : "Sem correção monetária"}</option>
+        {correctionRules.map((rule) => <option key={rule.id} value={rule.id}>{rule.name} · {INDEX_LABELS[rule.indexName] ?? rule.indexName}{rule.lagMonths ? ` · defasagem ${rule.lagMonths}m` : ""}</option>)}
+      </select>
+      <span className={styles.help}>A regra escolhida é vinculada às mensais, intermediárias, chaves, financiamento e saldo final. A entrada permanece sem correção.</span>
+    </div>
     <div className={styles.field}><label htmlFor="entry-amount">Entrada</label><input id="entry-amount" name="entryAmount" type="number" min="0" step="0.01" defaultValue="0" /></div>
     <div className={styles.field}><label htmlFor="entry-date">Data da entrada</label><input id="entry-date" name="entryDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} /></div>
     <div className={styles.field}><label htmlFor="monthly-count">Mensais · quantidade</label><input id="monthly-count" name="monthlyCount" type="number" min="0" step="1" defaultValue="0" /></div>
@@ -296,8 +312,8 @@ export function SalesOperabilityPanel({ workspace }: { workspace: SalesWorkspace
         {modal.type === "reservation" && <><div className={styles.field}><label htmlFor="reservation-unit">Unidade</label><select id="reservation-unit" name="salesUnitId" required defaultValue=""><option value="" disabled>Selecione</option>{availableUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {UNIT_STATUS[unit.status] ?? unit.status}</option>)}</select></div><div className={styles.field}><label htmlFor="reservation-customer">Cliente</label><select id="reservation-customer" name="customerId" required defaultValue=""><option value="" disabled>Selecione</option>{workspace.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></div><div className={styles.field}><label htmlFor="reservation-days">Prazo da reserva</label><input id="reservation-days" name="days" type="number" min="1" defaultValue="3" required /><span className={styles.help}>Quantidade de dias</span></div></>}
         {modal.type === "sale" && <><div className={styles.field}><label htmlFor="sale-unit">Unidade</label><select id="sale-unit" name="salesUnitId" required defaultValue=""><option value="" disabled>Selecione</option>{availableUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {UNIT_STATUS[unit.status] ?? unit.status}{unit.listPrice ? ` · ${currency.format(Number(unit.listPrice))}` : ""}</option>)}</select></div><div className={styles.field}><label htmlFor="sale-customer">Comprador principal</label><select id="sale-customer" name="customerId" required defaultValue=""><option value="" disabled>Selecione</option>{workspace.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></div><div className={styles.field}><label htmlFor="co-buyer">Co-comprador</label><select id="co-buyer" name="coBuyerId" defaultValue=""><option value="">Sem co-comprador</option>{workspace.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></div><div className={styles.field}><label htmlFor="primary-ownership">Participação principal (%)</label><input id="primary-ownership" name="primaryOwnership" type="number" min="0" max="100" step="0.01" defaultValue="50" /></div><div className={styles.field}><label htmlFor="co-buyer-ownership">Participação co-comprador (%)</label><input id="co-buyer-ownership" name="coBuyerOwnership" type="number" min="0" max="100" step="0.01" defaultValue="50" /></div><div className={styles.field}><label htmlFor="sold-price">Valor de venda</label><input id="sold-price" name="soldPrice" type="number" min="0.01" step="0.01" required /></div><div className={styles.field}><label htmlFor="incentive-amount">Incentivo comercial</label><input id="incentive-amount" name="incentiveAmount" type="number" min="0" step="0.01" defaultValue="0" /></div></>}
         {modal.type === "release" && <div className={`${styles.field} ${styles.fieldFull}`}><label>Reserva</label><input value={modal.label} readOnly /><label htmlFor="release-reason">Motivo da liberação</label><textarea id="release-reason" name="reason" autoFocus required /></div>}
-        {modal.type === "approve" && <><div className={`${styles.field} ${styles.fieldFull}`}><label>Venda</label><input value={`${modal.unit} · ${currency.format(modal.soldPrice)}`} readOnly /></div><div className={`${styles.field} ${styles.fieldFull}`}><label htmlFor="contract-number">Número do contrato</label><input id="contract-number" name="contractNumber" defaultValue={`CV-${new Date().getFullYear()}-${modal.saleId.slice(-6).toUpperCase()}`} required /></div><PaymentPlanFields targetAmount={modal.soldPrice} /></>}
-        {modal.type === "renegotiate" && <><div className={`${styles.field} ${styles.fieldFull}`}><label>Venda</label><input value={`${modal.unit} · vendido ${currency.format(modal.soldPrice)} · recebido ${currency.format(modal.received)}`} readOnly /></div><div className={`${styles.field} ${styles.fieldFull}`}><label htmlFor="renegotiation-reason">Motivo da renegociação</label><textarea id="renegotiation-reason" name="reason" autoFocus required /></div><PaymentPlanFields targetAmount={roundMoney(Math.max(0, modal.soldPrice - modal.received))} /></>}
+        {modal.type === "approve" && <><div className={`${styles.field} ${styles.fieldFull}`}><label>Venda</label><input value={`${modal.unit} · ${currency.format(modal.soldPrice)}`} readOnly /></div><div className={`${styles.field} ${styles.fieldFull}`}><label htmlFor="contract-number">Número do contrato</label><input id="contract-number" name="contractNumber" defaultValue={`CV-${new Date().getFullYear()}-${modal.saleId.slice(-6).toUpperCase()}`} required /></div><PaymentPlanFields targetAmount={modal.soldPrice} correctionRules={workspace.correctionRules} /></>}
+        {modal.type === "renegotiate" && <><div className={`${styles.field} ${styles.fieldFull}`}><label>Venda</label><input value={`${modal.unit} · vendido ${currency.format(modal.soldPrice)} · recebido ${currency.format(modal.received)}`} readOnly /></div><div className={`${styles.field} ${styles.fieldFull}`}><label htmlFor="renegotiation-reason">Motivo da renegociação</label><textarea id="renegotiation-reason" name="reason" autoFocus required /></div><PaymentPlanFields targetAmount={roundMoney(Math.max(0, modal.soldPrice - modal.received))} correctionRules={workspace.correctionRules} /></>}
         {modal.type === "rescind" && <><div className={`${styles.field} ${styles.fieldFull}`}><label>Venda</label><input value={`${modal.unit} · vendido ${currency.format(modal.soldPrice)} · recebido ${currency.format(modal.received)}`} readOnly /></div><div className={`${styles.field} ${styles.fieldFull}`}><label htmlFor="rescind-reason">Motivo do distrato</label><textarea id="rescind-reason" name="reason" autoFocus required /></div><div className={styles.field}><label htmlFor="retention-percent">Retenção sobre o valor recebido (%)</label><input id="retention-percent" name="retentionPercent" type="number" min="0" max="100" step="0.01" defaultValue="0" /></div><div className={`${styles.field} ${styles.fieldFull}`}><span className={styles.help}>O motor calcula a retenção e eventual devolução sobre valores efetivamente pagos; parcelas abertas são canceladas pelo fluxo de distrato.</span></div></>}
       </div>{feedback?.type === "error" && <div className={styles.error}>{feedback.text}</div>}<div className={styles.modalActions}><button type="button" className="button button-secondary" disabled={pending} onClick={() => setModal(null)}>Cancelar</button><button type="submit" className="button button-primary" disabled={pending}>{pending ? "Salvando..." : "Confirmar"}</button></div></form></div></div>}
     </section>
