@@ -7,6 +7,7 @@ import {
   ensureComparabilityPolicy,
   ensureMetricCatalog,
   refreshAnalyticsFacts,
+  refreshDataIntelligence,
 } from "@/application/data-intelligence/data-intelligence-service";
 
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -28,4 +29,9 @@ export async function initializeDataIntelligenceAction() {
 export async function refreshAnalyticsFactsAction(projectId: string) {
   const context = await requireDomainActionContext("DATA_INTELLIGENCE_READ");
   return run(() => refreshAnalyticsFacts(context, projectId));
+}
+
+export async function refreshDataIntelligenceAction(projectId: string) {
+  const context = await requireDomainActionContext("DATA_INTELLIGENCE_READ");
+  return run(() => refreshDataIntelligence(context, projectId));
 }
