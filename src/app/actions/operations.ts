@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireDomainActionContext } from "./authorization";
+import { prisma } from "@/infrastructure/database/prisma";
 const requireAuthContext = () => requireDomainActionContext("OPERATIONS_READ");
 import {
   approveOperationalBaseline,
@@ -30,6 +31,19 @@ async function run<T>(operation: () => Promise<T>): Promise<ActionResult<T>> {
 export async function prepareOperationalBaselineAction(input: Parameters<typeof prepareOperationalBaseline>[1]) {
   const context = await requireAuthContext();
   return run(() => prepareOperationalBaseline(context, input));
+}
+
+export async function prepareLatestOperationalBaselineAction(projectId: string) {
+  const context = await requireAuthContext();
+  return run(async () => {
+    const latestVersion = await prisma.studyVersion.findFirst({
+      where: { study: { projectId, project: { organizationId: context.organizationId } } },
+      orderBy: [{ versionNumber: "desc" }, { createdAt: "desc" }],
+      select: { id: true },
+    });
+    if (!latestVersion) throw new Error("Este empreendimento ainda não possui uma versão de estudo disponível para congelar como Base Aprovada.");
+    return prepareOperationalBaseline(context, { projectId, studyVersionId: latestVersion.id, confirmed: true });
+  });
 }
 
 export async function requestBaselineApprovalAction(baselineId: string) {
