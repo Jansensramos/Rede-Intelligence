@@ -29,6 +29,9 @@ type ModalState =
 type ActionResult = { ok: boolean; error?: string };
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const RESERVATION_STATUS: Record<string, string> = { ACTIVE: "Ativa", CONFIRMED: "Confirmada", RELEASED: "Liberada", EXPIRED: "Expirada", CANCELLED: "Cancelada" };
+const SALE_STATUS: Record<string, string> = { DRAFT: "Rascunho", IN_APPROVAL: "Em aprovação", APPROVED: "Aprovada", CANCELLED: "Cancelada", REVERSED: "Revertida" };
+const UNIT_STATUS: Record<string, string> = { DISPONIVEL: "Disponível", EM_PROPOSTA: "Em proposta", EM_RESERVA: "Em reserva", RESERVADA: "Reservada", VENDIDA: "Vendida", BLOQUEADA: "Bloqueada", ENTREGUE: "Entregue" };
 
 export function SalesOperabilityPanel({ workspace }: { workspace: SalesWorkspaceView }) {
   const router = useRouter();
@@ -210,13 +213,13 @@ export function SalesOperabilityPanel({ workspace }: { workspace: SalesWorkspace
 
       <div className="data-table-scroll" style={{ marginTop: 18 }}>
         <table className="data-table">
-          <thead><tr><th>Etapa</th><th>Registro</th><th>Status</th><th>Próxima ação</th></tr></thead>
+          <thead><tr><th>Etapa</th><th>Registro</th><th>Situação</th><th>Próxima ação</th></tr></thead>
           <tbody>
             {pendingReservations.slice(0, 8).map((reservation) => (
               <tr key={reservation.id}>
                 <td>Reserva</td>
                 <td>{reservation.unit} · {reservation.customer}</td>
-                <td className={styles.statusCell}>{reservation.status}</td>
+                <td className={styles.statusCell}>{RESERVATION_STATUS[reservation.status] ?? reservation.status}</td>
                 <td>
                   <div className="panel-actions">
                     {reservation.status === "ACTIVE" && <button className="button button-secondary" disabled={pending} onClick={() => run(() => confirmSalesReservationAction(reservation.id), "Reserva confirmada.")}>Confirmar</button>}
@@ -229,7 +232,7 @@ export function SalesOperabilityPanel({ workspace }: { workspace: SalesWorkspace
               <tr key={sale.id}>
                 <td>Venda</td>
                 <td>{sale.unit} · {sale.buyers.join(", ")}</td>
-                <td className={styles.statusCell}>{sale.status}</td>
+                <td className={styles.statusCell}>{SALE_STATUS[sale.status] ?? sale.status}</td>
                 <td><button className="button button-primary" disabled={pending} onClick={() => setModal({ type: "approve", saleId: sale.id, unit: sale.unit, soldPrice: Number(sale.soldPrice) })}><FileCheck2 size={15}/> Aprovar e gerar recebível</button></td>
               </tr>
             ))}
@@ -263,20 +266,20 @@ export function SalesOperabilityPanel({ workspace }: { workspace: SalesWorkspace
                 </>}
 
                 {modal.type === "proposal" && <>
-                  <div className={styles.field}><label htmlFor="proposal-unit">Unidade</label><select id="proposal-unit" name="salesUnitId" required defaultValue=""><option value="" disabled>Selecione</option>{availableUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {unit.status}{unit.listPrice ? ` · ${currency.format(Number(unit.listPrice))}` : ""}</option>)}</select></div>
+                  <div className={styles.field}><label htmlFor="proposal-unit">Unidade</label><select id="proposal-unit" name="salesUnitId" required defaultValue=""><option value="" disabled>Selecione</option>{availableUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {UNIT_STATUS[unit.status] ?? unit.status}{unit.listPrice ? ` · ${currency.format(Number(unit.listPrice))}` : ""}</option>)}</select></div>
                   <div className={styles.field}><label htmlFor="proposal-customer">Cliente</label><select id="proposal-customer" name="customerId" required defaultValue=""><option value="" disabled>Selecione</option>{workspace.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></div>
                   <div className={styles.field}><label htmlFor="proposal-price">Preço proposto</label><input id="proposal-price" name="proposedPrice" type="number" min="0.01" step="0.01" required /></div>
                   <div className={styles.field}><label htmlFor="validity-days">Validade</label><input id="validity-days" name="validityDays" type="number" min="1" defaultValue="7" required /><span className={styles.help}>Quantidade de dias</span></div>
                 </>}
 
                 {modal.type === "reservation" && <>
-                  <div className={styles.field}><label htmlFor="reservation-unit">Unidade</label><select id="reservation-unit" name="salesUnitId" required defaultValue=""><option value="" disabled>Selecione</option>{availableUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {unit.status}</option>)}</select></div>
+                  <div className={styles.field}><label htmlFor="reservation-unit">Unidade</label><select id="reservation-unit" name="salesUnitId" required defaultValue=""><option value="" disabled>Selecione</option>{availableUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {UNIT_STATUS[unit.status] ?? unit.status}</option>)}</select></div>
                   <div className={styles.field}><label htmlFor="reservation-customer">Cliente</label><select id="reservation-customer" name="customerId" required defaultValue=""><option value="" disabled>Selecione</option>{workspace.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></div>
                   <div className={styles.field}><label htmlFor="reservation-days">Prazo da reserva</label><input id="reservation-days" name="days" type="number" min="1" defaultValue="3" required /><span className={styles.help}>Quantidade de dias</span></div>
                 </>}
 
                 {modal.type === "sale" && <>
-                  <div className={styles.field}><label htmlFor="sale-unit">Unidade</label><select id="sale-unit" name="salesUnitId" required defaultValue=""><option value="" disabled>Selecione</option>{availableUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {unit.status}{unit.listPrice ? ` · ${currency.format(Number(unit.listPrice))}` : ""}</option>)}</select></div>
+                  <div className={styles.field}><label htmlFor="sale-unit">Unidade</label><select id="sale-unit" name="salesUnitId" required defaultValue=""><option value="" disabled>Selecione</option>{availableUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {UNIT_STATUS[unit.status] ?? unit.status}{unit.listPrice ? ` · ${currency.format(Number(unit.listPrice))}` : ""}</option>)}</select></div>
                   <div className={styles.field}><label htmlFor="sale-customer">Comprador</label><select id="sale-customer" name="customerId" required defaultValue=""><option value="" disabled>Selecione</option>{workspace.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></div>
                   <div className={styles.field}><label htmlFor="sold-price">Valor de venda</label><input id="sold-price" name="soldPrice" type="number" min="0.01" step="0.01" required /></div>
                   <div className={styles.field}><label htmlFor="incentive-amount">Incentivo comercial</label><input id="incentive-amount" name="incentiveAmount" type="number" min="0" step="0.01" defaultValue="0" /></div>
