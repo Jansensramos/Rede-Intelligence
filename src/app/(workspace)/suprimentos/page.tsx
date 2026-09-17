@@ -7,7 +7,6 @@ import { ProcurementOperabilityPanel } from "@/components/procurement-operabilit
 import { ProcurementView } from "@/components/procurement-view";
 import { SectionTitle } from "@/components/ui";
 
-/** Fase 10C.1 — Suprimentos com operação humana sobre o backend transacional existente. */
 export default async function SuprimentosPage() {
   const [authContext, context] = await Promise.all([requireAuthContext(), getCurrentOperationalContext()]);
   if (!context.project) return null;
@@ -19,9 +18,9 @@ export default async function SuprimentosPage() {
   return (
     <div className="view-stack">
       <SectionTitle
-        eyebrow="SUPRIMENTOS, CONTRATOS E MEDIÇÕES"
-        title="Do planejamento à execução contratual"
-        description="Necessidade → requisição → cotação → contrato → medição → obrigação, sem dupla contagem."
+        eyebrow="SUPRIMENTOS E CONTRATAÇÃO"
+        title="Da necessidade de compra à medição aprovada"
+        description="Planeje a compra, compare propostas, formalize o compromisso e acompanhe a execução até a geração da obrigação financeira."
       />
       <ProcurementOperabilityPanel workspace={workspace} operability={operability} />
       <ProcurementContractOperabilityPanel workspace={workspace} operability={operability} />
