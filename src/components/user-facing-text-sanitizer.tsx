@@ -5,16 +5,16 @@ import { useEffect } from "react";
 const replacements: Array<[RegExp, string]> = [
   [/OPERAÇÃO HUMANA\s*[·•-]\s*10C\.1/gi, ""],
   [/ENGINE\s*v?1\.0/gi, ""],
-  [/\s*\(Fase\s+\d+[A-Z](?:\.\d+[A-Z]?)?\)/gi, ""],
+  [/\s*\((?:Fase|Phase)\s+\d+[A-Z](?:\.\d+[A-Z]?)?\)/gi, ""],
   [/\s*\(\d+[A-Z](?:\.\d+[A-Z]?)?\)/g, ""],
-  [/\bFase\s+\d+[A-Z](?:\.\d+[A-Z]?)?\b/gi, ""],
+  [/\b(?:Fase|Phase)\s+\d+[A-Z](?:\.\d+[A-Z]?)?\b/gi, ""],
   [/\bleitura direta da\s+\d+[A-Z](?:\.\d+[A-Z]?)?\b/gi, "integrado ao Financeiro"],
 ];
 
 function cleanText(value: string) {
   let next = value;
   for (const [pattern, replacement] of replacements) next = next.replace(pattern, replacement);
-  return next.replace(/\s{2,}/g, " ").replace(/\s+([,.;:])/g, "$1").trimStart();
+  return next.replace(/[ \t]{2,}/g, " ").replace(/[ \t]+([,.;:])/g, "$1");
 }
 
 function sanitize(root: ParentNode) {
