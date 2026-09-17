@@ -2,19 +2,19 @@ import { requireAuthContext } from "@/application/auth/session";
 import { getCurrentOperationalContext } from "@/application/workspace/current-context";
 import { getExecutiveProjectOverview, getExecutivePortfolioOverview } from "@/application/executive/executive-service";
 import { getDecisionInsights, listSimulableSalesUnits } from "@/application/executive-insights/executive-insights-service";
+import { getProjectClosureOverview } from "@/application/closure/closure-service";
+import { ClosureOperabilityPanel } from "@/components/closure-operability-panel";
 import { GestaoExecutivaView } from "@/components/areas/gestao-executiva-view";
 
 /**
- * Fase 9K.2 — Gestão Executiva (ordem de serviço §1/§6/§AG): porta de entrada principal. Lê o
- * empreendimento ativo do contexto operacional (9K.0/9K.1) e, quando o contexto permitir nível de
- * grupo/empresa com mais de um empreendimento, também a carteira consolidada (ordem de serviço §6/
- * §8) — nunca os 15 workspaces de módulo inteiros de uma vez (ordem de serviço §18/§AS).
+ * Fase 10C.1 — Gestão Executiva permanece como leitura e decisão; o encerramento
+ * material do empreendimento é exposto aqui sem transformar o Executivo em tela de digitação geral.
  */
 export default async function ExecutivoPage() {
   const [authContext, context] = await Promise.all([requireAuthContext(), getCurrentOperationalContext()]);
   if (!context.project) return null;
 
-  const [overview, portfolio] = await Promise.all([
+  const [overview, portfolio, closure] = await Promise.all([
     getExecutiveProjectOverview(authContext, {
       id: context.project.id,
       name: context.project.name,
@@ -26,6 +26,7 @@ export default async function ExecutivoPage() {
       economicGroupName: context.economicGroup?.name ?? null,
     }),
     getExecutivePortfolioOverview(authContext, context),
+    getProjectClosureOverview(authContext, context.project.id),
   ]);
 
   const scopeProjects = portfolio ? portfolio.entries.map((entry) => ({ id: entry.project.id })) : [{ id: context.project.id }];
@@ -34,5 +35,19 @@ export default async function ExecutivoPage() {
     listSimulableSalesUnits(authContext, context.project.id),
   ]);
 
-  return <GestaoExecutivaView overview={overview} portfolio={portfolio} insights={insights} simulableUnits={simulableUnits} />;
+  return <div className="view-stack">
+    <ClosureOperabilityPanel
+      projectId={context.project.id}
+      latest={closure.latest ? { id: closure.latest.id, status: closure.latest.status, version: closure.latest.version } : null}
+      gate={{
+        overall: closure.gate.overall,
+        operational: { status: closure.gate.operational.status },
+        contractual: { status: closure.gate.contractual.status },
+        legal: { status: closure.gate.legal.status },
+        financial: { status: closure.gate.financial.status },
+        accounting: { status: closure.gate.accounting.status },
+      }}
+    />
+    <GestaoExecutivaView overview={overview} portfolio={portfolio} insights={insights} simulableUnits={simulableUnits} />
+  </div>;
 }
