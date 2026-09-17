@@ -755,7 +755,7 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
   await projectForTenant(context.organizationId, projectId);
   await releaseExpiredReservations(context, projectId, referenceDate);
 
-  const [units, priceTables, proposals, reservations, sales, leads, commissionPolicies, inspections, postSaleRequests, brokerProfiles, contractTemplates, disbursements, condominiumSetup] = await Promise.all([
+  const [units, priceTables, proposals, reservations, sales, leads, commissionPolicies, inspections, postSaleRequests, brokerProfiles, contractTemplates, disbursements, condominiumSetup, correctionRules] = await Promise.all([
     prisma.salesUnit.findMany({ where: { organizationId: context.organizationId, projectId }, include: { priceLines: { include: { priceTable: true } }, blocks: { where: { endedAt: null } } }, orderBy: { code: "asc" }, take: 2000 }),
     prisma.salesPriceTable.findMany({ where: { organizationId: context.organizationId, projectId }, include: { lines: true }, orderBy: { version: "desc" }, take: 50 }),
     prisma.salesProposal.findMany({ where: { organizationId: context.organizationId, projectId }, include: { customer: true, salesUnit: true, broker: true, creditBureauConsultations: { orderBy: { requestedAt: "desc" }, take: 1 } }, orderBy: { createdAt: "desc" }, take: 200 }),
@@ -770,6 +770,12 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
     // Fase 9R — repasse bancário e implantação do condomínio (leitura só de resumo; mutações via `app/actions/handover.ts`).
     prisma.bankFinancingDisbursement.findMany({ where: { organizationId: context.organizationId, sale: { projectId } }, include: { sale: { include: { salesUnit: true } }, financialInstitution: true }, orderBy: { createdAt: "desc" }, take: 200 }),
     prisma.condominiumSetup.findUnique({ where: { projectId }, include: { administratorSupplier: true } }),
+    prisma.correctionRule.findMany({
+      where: { organizationId: context.organizationId, isActive: true },
+      select: { id: true, name: true, indexName: true, periodicity: true, lagMonths: true, interestRate: true, fineRate: true },
+      orderBy: [{ name: "asc" }, { version: "desc" }],
+      take: 100,
+    }),
   ]);
 
   const activeLineByUnit = new Map(units.map((unit) => [unit.id, unit.priceLines.find((line) => line.priceTable.status === "ACTIVE") ?? null]));
@@ -833,6 +839,15 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
     } : null,
     brokers: brokerProfiles.map((profile) => ({ id: profile.id, name: profile.supplier.name, creci: profile.creci, defaultCommissionRate: profile.defaultCommissionRate ? Number(profile.defaultCommissionRate) : null })),
     contractTemplates: contractTemplates.map((template) => ({ id: template.id, name: template.name, status: template.status, versions: template.versions.map((version) => ({ id: version.id, version: version.version, status: version.status })) })),
+    correctionRules: correctionRules.map((rule) => ({
+      id: rule.id,
+      name: rule.name,
+      indexName: rule.indexName,
+      periodicity: rule.periodicity,
+      lagMonths: rule.lagMonths,
+      interestRate: rule.interestRate ? Number(rule.interestRate) : null,
+      fineRate: rule.fineRate ? Number(rule.fineRate) : null,
+    })),
     // Entrada para o Cliente 360 (Fase 9K.4B, item 1) — nenhum dado novo: só agrupa por cliente o
     // que este mesmo workspace já buscou (propostas/reservas/vendas/pós-venda), sem consulta extra.
     customers: buildCustomerSummaries(proposals, reservations, sales, postSaleRequests),
