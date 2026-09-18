@@ -884,6 +884,50 @@ export async function getRedTeamRunForOrganization(organizationId: string, runId
   return run?.output as unknown as RedTeamReport | undefined ?? null;
 }
 
+export async function createStudyForProject(
+  context: Pick<AuthContext, "userId" | "organizationId">,
+  projectId: string,
+  input: ProjectAssumptions,
+) {
+  return prisma.$transaction(async (tx) => {
+    const project = await tx.project.findFirst({
+      where: { id: projectId, organizationId: context.organizationId },
+      select: { id: true, name: true, city: true, state: true },
+    });
+    if (!project) throw new Error("Empreendimento não encontrado nesta organização.");
+
+    const existing = await tx.viabilityStudy.findFirst({
+      where: { projectId: project.id, status: "ACTIVE" },
+      include: { versions: { where: { status: StudyVersionStatus.SNAPSHOT }, orderBy: { versionNumber: "desc" }, take: 1 } },
+    });
+    if (existing?.versions.length) throw new Error("Este empreendimento já possui um estudo ativo. Atualize as premissas criando uma nova versão.");
+    if (existing) return appendVersion(tx, context, project.id, existing.id, input);
+
+    const study = await tx.viabilityStudy.create({
+      data: {
+        projectId: project.id,
+        name: "Estudo de viabilidade",
+        createdById: context.userId,
+        updatedById: context.userId,
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        organizationId: context.organizationId,
+        userId: context.userId,
+        projectId: project.id,
+        studyId: study.id,
+        action: "STUDY_CREATED",
+        entityType: "ViabilityStudy",
+        entityId: study.id,
+        before: json({ project: { name: project.name, city: project.city, state: project.state } }),
+        after: json({ name: study.name, status: study.status, origin: "EXISTING_PROJECT" }),
+      },
+    });
+    return appendVersion(tx, context, project.id, study.id, input);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
 export async function createStudy(context: Pick<AuthContext, "userId" | "organizationId">, input: ProjectAssumptions) {
   return prisma.$transaction(async (tx) => {
     const project = await tx.project.create({
