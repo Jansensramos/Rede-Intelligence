@@ -7,6 +7,7 @@ import type { SalesWorkspaceView } from "@/application/sales/sales-service";
 import {
   approveSaleAction,
   confirmSalesReservationAction,
+  convertSalesLeadAction,
   createCommercialCustomerAction,
   createSaleAction,
   createSalesLeadAction,
@@ -21,6 +22,7 @@ import styles from "./sales-operability-panel.module.css";
 type ModalState =
   | { type: "customer" }
   | { type: "lead" }
+  | { type: "convertLead"; leadId: string; name: string }
   | { type: "proposal" }
   | { type: "reservation" }
   | { type: "sale" }
@@ -160,6 +162,7 @@ export function SalesOperabilityPanel({ workspace }: { workspace: SalesWorkspace
   const pendingReservations = workspace.reservations.filter((reservation) => ["ACTIVE", "CONFIRMED"].includes(reservation.status));
   const draftSales = workspace.sales.filter((sale) => sale.status === "DRAFT");
   const approvedSales = workspace.sales.filter((sale) => sale.status === "APPROVED");
+  const openLeads = workspace.leads.filter((lead) => lead.stage !== "CONVERTIDO");
 
   const run = (op: () => Promise<ActionResult>, successMessage: string) => {
     setFeedback(null);
@@ -196,6 +199,12 @@ export function SalesOperabilityPanel({ workspace }: { workspace: SalesWorkspace
       const channel = stringOf(data, "channel") || null;
       if (!name || !contact || !source) return setFeedback({ type: "error", text: "Preencha nome, contato e origem do lead." });
       return run(() => createSalesLeadAction({ projectId: workspace.projectId, name, contact, source, channel }), "Lead cadastrado com sucesso.");
+    }
+
+    if (modal.type === "convertLead") {
+      const customerId = stringOf(data, "customerId");
+      if (!customerId) return setFeedback({ type: "error", text: "Selecione o cliente correspondente ao lead." });
+      return run(() => convertSalesLeadAction({ leadId: modal.leadId, customerId }), "Lead convertido em cliente.");
     }
 
     if (modal.type === "proposal") {
@@ -268,6 +277,7 @@ export function SalesOperabilityPanel({ workspace }: { workspace: SalesWorkspace
 
   const modalTitle = modal?.type === "customer" ? "Novo cliente"
     : modal?.type === "lead" ? "Novo lead"
+    : modal?.type === "convertLead" ? "Converter lead em cliente"
     : modal?.type === "proposal" ? "Nova proposta"
     : modal?.type === "reservation" ? "Nova reserva"
     : modal?.type === "sale" ? "Registrar venda"
@@ -299,15 +309,17 @@ export function SalesOperabilityPanel({ workspace }: { workspace: SalesWorkspace
       </div><button className="button button-primary" disabled={pending || !activeTable} onClick={() => setModal({ type: "sale" })}><ShoppingCart size={15}/> Registrar venda</button></div>
 
       <div className="data-table-scroll" style={{ marginTop: 18 }}><table className="data-table"><thead><tr><th>Etapa</th><th>Registro</th><th>Situação</th><th>Próxima ação</th></tr></thead><tbody>
+        {openLeads.slice(0, 8).map((lead) => <tr key={`lead-${lead.id}`}><td>Lead</td><td><strong>{lead.name}</strong><small>Origem: {lead.source}</small></td><td className={styles.statusCell}>{lead.stage.replaceAll("_", " ")}</td><td><button className="button button-secondary" disabled={pending || workspace.customers.length === 0} onClick={() => setModal({ type: "convertLead", leadId: lead.id, name: lead.name })}>Converter em cliente</button></td></tr>)}
         {pendingReservations.slice(0, 8).map((reservation) => <tr key={reservation.id}><td>Reserva</td><td>{reservation.unit} · {reservation.customer}</td><td className={styles.statusCell}>{RESERVATION_STATUS[reservation.status] ?? reservation.status}</td><td><div className="panel-actions">{reservation.status === "ACTIVE" && <button className="button button-secondary" disabled={pending} onClick={() => run(() => confirmSalesReservationAction(reservation.id), "Reserva confirmada.")}>Confirmar</button>}<button className="button button-secondary" disabled={pending} onClick={() => setModal({ type: "release", reservationId: reservation.id, label: `${reservation.unit} · ${reservation.customer}` })}>Liberar</button></div></td></tr>)}
         {draftSales.slice(0, 8).map((sale) => <tr key={sale.id}><td>Venda</td><td>{sale.unit} · {sale.buyers.join(", ")}</td><td className={styles.statusCell}>{SALE_STATUS[sale.status] ?? sale.status}</td><td><button className="button button-primary" disabled={pending} onClick={() => setModal({ type: "approve", saleId: sale.id, unit: sale.unit, soldPrice: Number(sale.soldPrice) })}><FileCheck2 size={15}/> Aprovar e montar plano</button></td></tr>)}
         {approvedSales.slice(0, 12).map((sale) => <tr key={`approved-${sale.id}`}><td>Contrato</td><td><strong>{sale.unit}</strong> · {sale.buyers.join(", ")}<small>{sale.contractNumber ? `Contrato ${sale.contractNumber} · ` : ""}{sale.installments} parcela(s) · recebido {currency.format(Number(sale.received))}</small></td><td className={styles.statusCell}>Aprovada</td><td><div className="panel-actions"><button className="button button-secondary" disabled={pending || Number(sale.received) >= Number(sale.soldPrice)} onClick={() => setModal({ type: "renegotiate", saleId: sale.id, unit: sale.unit, soldPrice: Number(sale.soldPrice), received: Number(sale.received) })}>Renegociar</button><button className="button button-secondary" disabled={pending} onClick={() => setModal({ type: "rescind", saleId: sale.id, unit: sale.unit, soldPrice: Number(sale.soldPrice), received: Number(sale.received) })}>Distrato</button></div></td></tr>)}
-        {pendingReservations.length === 0 && draftSales.length === 0 && approvedSales.length === 0 && <tr><td colSpan={4}>Nenhuma reserva ou venda registrada.</td></tr>}
+        {openLeads.length === 0 && pendingReservations.length === 0 && draftSales.length === 0 && approvedSales.length === 0 && <tr><td colSpan={4}>Nenhum lead, reserva ou venda registrada.</td></tr>}
       </tbody></table></div>
 
       {modal && <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !pending) setModal(null); }}><div className={styles.modal} role="dialog" aria-modal="true" aria-label={modalTitle}><div className={styles.modalHeader}><div><h3>{modalTitle}</h3><p>Preencha os dados necessários para concluir esta etapa do fluxo comercial.</p></div><button className={styles.closeButton} type="button" aria-label="Fechar" disabled={pending} onClick={() => setModal(null)}>×</button></div><form className={styles.form} onSubmit={handleSubmit}><div className={styles.formGrid}>
         {modal.type === "customer" && <><div className={`${styles.field} ${styles.fieldFull}`}><label htmlFor="customer-name">Nome / razão social</label><input id="customer-name" name="name" autoFocus required /></div><div className={styles.field}><label htmlFor="person-type">Tipo de pessoa</label><select id="person-type" name="personType" defaultValue="INDIVIDUAL"><option value="INDIVIDUAL">Pessoa física</option><option value="LEGAL_ENTITY">Pessoa jurídica</option></select></div><div className={styles.field}><label htmlFor="tax-id">CPF / CNPJ</label><input id="tax-id" name="taxId" /></div><div className={styles.field}><label htmlFor="email">E-mail</label><input id="email" name="email" type="email" /></div><div className={styles.field}><label htmlFor="phone">Telefone</label><input id="phone" name="phone" /></div></>}
         {modal.type === "lead" && <><div className={`${styles.field} ${styles.fieldFull}`}><label htmlFor="lead-name">Nome do lead</label><input id="lead-name" name="name" autoFocus required /></div><div className={styles.field}><label htmlFor="lead-contact">Contato</label><input id="lead-contact" name="contact" required /></div><div className={styles.field}><label htmlFor="lead-source">Origem</label><input id="lead-source" name="source" defaultValue="Indicação" required /></div><div className={styles.field}><label htmlFor="lead-channel">Canal</label><input id="lead-channel" name="channel" placeholder="WhatsApp, portal, imobiliária..." /></div></>}
+        {modal.type === "convertLead" && <><div className={`${styles.field} ${styles.fieldFull}`}><label>Lead</label><input value={modal.name} readOnly /></div><div className={`${styles.field} ${styles.fieldFull}`}><label htmlFor="convert-lead-customer">Cliente correspondente</label><select id="convert-lead-customer" name="customerId" required defaultValue=""><option value="" disabled>Selecione</option>{workspace.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select><span className={styles.help}>Se o cliente ainda não existe, feche esta janela e use “Novo cliente” primeiro.</span></div></>}
         {modal.type === "proposal" && <><div className={styles.field}><label htmlFor="proposal-unit">Unidade</label><select id="proposal-unit" name="salesUnitId" required defaultValue=""><option value="" disabled>Selecione</option>{availableUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {UNIT_STATUS[unit.status] ?? unit.status}{unit.listPrice ? ` · ${currency.format(Number(unit.listPrice))}` : ""}</option>)}</select></div><div className={styles.field}><label htmlFor="proposal-customer">Cliente</label><select id="proposal-customer" name="customerId" required defaultValue=""><option value="" disabled>Selecione</option>{workspace.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></div><div className={styles.field}><label htmlFor="proposal-price">Preço proposto</label><input id="proposal-price" name="proposedPrice" type="number" min="0.01" step="0.01" required /></div><div className={styles.field}><label htmlFor="validity-days">Validade</label><input id="validity-days" name="validityDays" type="number" min="1" defaultValue="7" required /><span className={styles.help}>Quantidade de dias</span></div></>}
         {modal.type === "reservation" && <><div className={styles.field}><label htmlFor="reservation-unit">Unidade</label><select id="reservation-unit" name="salesUnitId" required defaultValue=""><option value="" disabled>Selecione</option>{availableUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {UNIT_STATUS[unit.status] ?? unit.status}</option>)}</select></div><div className={styles.field}><label htmlFor="reservation-customer">Cliente</label><select id="reservation-customer" name="customerId" required defaultValue=""><option value="" disabled>Selecione</option>{workspace.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></div><div className={styles.field}><label htmlFor="reservation-days">Prazo da reserva</label><input id="reservation-days" name="days" type="number" min="1" defaultValue="3" required /><span className={styles.help}>Quantidade de dias</span></div></>}
         {modal.type === "sale" && <><div className={styles.field}><label htmlFor="sale-unit">Unidade</label><select id="sale-unit" name="salesUnitId" required defaultValue=""><option value="" disabled>Selecione</option>{availableUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {UNIT_STATUS[unit.status] ?? unit.status}{unit.listPrice ? ` · ${currency.format(Number(unit.listPrice))}` : ""}</option>)}</select></div><div className={styles.field}><label htmlFor="sale-customer">Comprador principal</label><select id="sale-customer" name="customerId" required defaultValue=""><option value="" disabled>Selecione</option>{workspace.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></div><div className={styles.field}><label htmlFor="co-buyer">Co-comprador</label><select id="co-buyer" name="coBuyerId" defaultValue=""><option value="">Sem co-comprador</option>{workspace.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></div><div className={styles.field}><label htmlFor="primary-ownership">Participação principal (%)</label><input id="primary-ownership" name="primaryOwnership" type="number" min="0" max="100" step="0.01" defaultValue="50" /></div><div className={styles.field}><label htmlFor="co-buyer-ownership">Participação co-comprador (%)</label><input id="co-buyer-ownership" name="coBuyerOwnership" type="number" min="0" max="100" step="0.01" defaultValue="50" /></div><div className={styles.field}><label htmlFor="sold-price">Valor de venda</label><input id="sold-price" name="soldPrice" type="number" min="0.01" step="0.01" required /></div><div className={styles.field}><label htmlFor="incentive-amount">Incentivo comercial</label><input id="incentive-amount" name="incentiveAmount" type="number" min="0" step="0.01" defaultValue="0" /></div></>}
