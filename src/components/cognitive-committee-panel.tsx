@@ -155,12 +155,12 @@ export function CognitiveCommitteePanel({
   }
 
   return (
-    <section className="cognitive-panel" aria-label="Comitê cognitivo">
+    <section className="cognitive-panel" aria-label="Análise assistida">
       <div className="cognitive-panel-head">
         <div>
-          <span className="eyebrow">COMITÊ COGNITIVO</span>
-          <h3><BrainCircuit size={18} /> Análise multidisciplinar</h3>
-          <p>Agentes especializados analisam as evidências disponíveis, o Red Team contesta as conclusões e a decisão final permanece humana.</p>
+          <span className="eyebrow">ANÁLISE ASSISTIDA</span>
+          <h3><BrainCircuit size={18} /> Avaliação multidisciplinar</h3>
+          <p>A REDE reúne diferentes perspectivas, revisa criticamente as evidências disponíveis e apresenta uma recomendação. A decisão final permanece com o responsável.</p>
         </div>
         <div className="cognitive-panel-actions">
           <button
@@ -170,7 +170,7 @@ export function CognitiveCommitteePanel({
             disabled={pending}
           >
             {pending ? <LoaderCircle size={15} className="spin" /> : <Users size={15} />}
-            Executar comitê
+            Executar análise
           </button>
           <button
             type="button"
@@ -197,7 +197,7 @@ export function CognitiveCommitteePanel({
       </div>
 
       <label className="cognitive-objective">
-        <span>Objetivo da rodada</span>
+        <span>Objetivo da análise</span>
         <textarea
           rows={2}
           value={objective}
@@ -221,7 +221,7 @@ export function CognitiveCommitteePanel({
               <HistoryIcon size={16} />
               <strong>Histórico do empreendimento</strong>
             </div>
-            <small>Últimas 20 rodadas auditadas</small>
+            <small>Últimas 20 análises registradas</small>
           </header>
           {pending && history.length === 0 ? (
             <div className="cognitive-history-empty">
@@ -229,7 +229,7 @@ export function CognitiveCommitteePanel({
               Carregando histórico...
             </div>
           ) : history.length === 0 ? (
-            <div className="cognitive-history-empty">Nenhuma rodada cognitiva registrada.</div>
+            <div className="cognitive-history-empty">Nenhuma análise registrada.</div>
           ) : (
             <div className="cognitive-history-list">
               {history.map((item) => (
@@ -252,7 +252,7 @@ export function CognitiveCommitteePanel({
                   <div className="cognitive-history-decision">
                     {item.decision
                       ? `${humanDecisionText(item.decision)} · ${item.decidedBy ?? "usuário"}`
-                      : "Decisão humana pendente"}
+                      : "Decisão pendente"}
                   </div>
                 </button>
               ))}
@@ -268,7 +268,7 @@ export function CognitiveCommitteePanel({
           <Summary label="Críticos" value={String(criticalChallenges)} />
           <Summary
             label="Status"
-            value={humanDecision ? humanDecisionLabel(humanDecision) : "Decisão humana pendente"}
+            value={humanDecision ? humanDecisionLabel(humanDecision) : "Decisão pendente"}
           />
         </div>
       )}
@@ -279,7 +279,7 @@ export function CognitiveCommitteePanel({
             <header>
               <ShieldCheck size={17} />
               <div>
-                <span>PROPOSTA DO DECISION ENGINE</span>
+                <span>RECOMENDAÇÃO ESTRUTURADA</span>
                 <strong>{dispositionLabel(report.proposal.disposition)}</strong>
               </div>
             </header>
@@ -322,7 +322,7 @@ export function CognitiveCommitteePanel({
             <article className="cognitive-challenges">
               <header>
                 <AlertTriangle size={16} />
-                <strong>Red Team 2.0</strong>
+                <strong>Revisão crítica</strong>
               </header>
               {report.challenges.map((challenge) => (
                 <div key={challenge.id} className={`severity-${challenge.severity.toLowerCase()}`}>
@@ -337,13 +337,13 @@ export function CognitiveCommitteePanel({
             <article className="cognitive-autopilot">
               <header>
                 <BrainCircuit size={16} />
-                <strong>Autopilot · recomendações</strong>
+                <strong>Recomendações assistidas</strong>
               </header>
               {recommendations.map((item) => (
                 <div key={item.id}>
                   <strong>{item.title}</strong>
                   <p>{item.rationale}</p>
-                  <small>{item.requiresHumanApproval ? "Requer aprovação humana" : "Somente recomendação"}</small>
+                  <small>{item.requiresHumanApproval ? "Requer aprovação humana" : "Recomendação informativa"}</small>
                 </div>
               ))}
             </article>
@@ -353,8 +353,8 @@ export function CognitiveCommitteePanel({
             <header>
               <ShieldCheck size={16} />
               <div>
-                <strong>Decisão humana</strong>
-                <p>A REDE registra sua decisão sobre esta rodada sem alterar automaticamente o empreendimento.</p>
+                <strong>Decisão do responsável</strong>
+                <p>A REDE registra a decisão desta análise sem alterar automaticamente o empreendimento.</p>
               </div>
             </header>
             {humanDecision ? (
