@@ -50,7 +50,8 @@ Não são tratadas como código faltante e não devem ser simuladas:
 Depois do aceite operacional, novos trabalhos devem ser tratados como evolução de produto, e não como “fase faltante” da linha atual. Exemplos:
 
 - ampliar conectores por fornecedor;
-- enriquecer superfícies especializadas de Jurídico, Comercial, Pessoas e Contabilidade conforme demanda real;
+- evoluir UX de Comercial, Pessoas e Contabilidade sobre as operações já disponíveis;
+- evoluir o Jurídico especializado somente quando mutations de domínio correspondentes forem formalmente modeladas e auditadas;
 - calibrar REDE Score e políticas com histórico;
 - evoluir Autopilot de ADVISORY para ASSISTED apenas onde houver adapter seguro e aprovação humana;
 - expandir Learning Loop com histórico real multiempreendimento.
