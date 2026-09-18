@@ -165,6 +165,29 @@ export async function addCausalEvidence(context: PeopleContext, input: { hypothe
   return evidence;
 }
 
+export async function transitionCausalHypothesis(context: PeopleContext, hypothesisId: string, to: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED") {
+  requireCapability(context, "ROOT_CAUSE_MANAGE");
+  const hypothesis = await prisma.causalHypothesis.findFirst({
+    where: { id: hypothesisId, investigation: { varianceCase: { organizationId: context.organizationId } } },
+    include: { evidence: true, investigation: { include: { varianceCase: true } } },
+  });
+  if (!hypothesis) throw new Error("Hipótese não encontrada nesta organização.");
+  const allowed: Record<string, string[]> = {
+    PROPOSED: ["UNDER_REVIEW", "REJECTED"],
+    UNDER_REVIEW: ["ACCEPTED", "REJECTED"],
+    ACCEPTED: ["UNDER_REVIEW"],
+    REJECTED: ["UNDER_REVIEW"],
+  };
+  if (!(allowed[hypothesis.status] ?? []).includes(to)) throw new Error(`Transição de hipótese inválida: ${hypothesis.status} → ${to}.`);
+  if (to === "ACCEPTED" && hypothesis.evidence.length === 0) throw new Error("A hipótese só pode ser aceita após o vínculo de ao menos uma evidência.");
+  const updated = await prisma.causalHypothesis.update({
+    where: { id: hypothesis.id },
+    data: { status: to, confidence: to === "ACCEPTED" ? "HIGH" : hypothesis.confidence, updatedById: context.userId },
+  });
+  await prisma.auditLog.create({ data: audit(context, hypothesis.investigation.varianceCase.projectId, "CAUSAL_HYPOTHESIS_TRANSITIONED", "CausalHypothesis", hypothesis.id, { status: hypothesis.status }, { status: updated.status }) });
+  return updated;
+}
+
 export async function allocateRootCause(context: PeopleContext, input: { investigationId: string; hypothesisId: string; contributionRate: number; amountImpact?: number | null; rationale: string; validate?: boolean }) {
   requireCapability(context, "ROOT_CAUSE_MANAGE");
   const investigation = await prisma.rootCauseInvestigation.findFirst({ where: { id: input.investigationId, varianceCase: { organizationId: context.organizationId } }, include: { varianceCase: true, causeAllocations: true } });
@@ -182,6 +205,25 @@ export async function addExternalDependency(context: PeopleContext, input: { inv
   const dependency = await prisma.externalDependency.create({ data: { investigationId: input.investigationId, name: input.name.trim(), description: input.description.trim(), owner: input.owner?.trim() || null, dueDate: input.dueDate ?? null, evidenceRef: input.evidenceRef ?? null, createdById: context.userId, updatedById: context.userId } });
   await prisma.auditLog.create({ data: audit(context, investigation.varianceCase.projectId, "EXTERNAL_DEPENDENCY_ADDED", "ExternalDependency", dependency.id, undefined, { name: dependency.name, dueDate: dependency.dueDate?.toISOString() ?? null }) });
   return dependency;
+}
+
+export async function transitionExternalDependency(context: PeopleContext, dependencyId: string, to: "OPEN" | "MONITORED" | "RESOLVED" | "CANCELLED") {
+  requireCapability(context, "ROOT_CAUSE_MANAGE");
+  const dependency = await prisma.externalDependency.findFirst({
+    where: { id: dependencyId, investigation: { varianceCase: { organizationId: context.organizationId } } },
+    include: { investigation: { include: { varianceCase: true } } },
+  });
+  if (!dependency) throw new Error("Dependência externa não encontrada nesta organização.");
+  const allowed: Record<string, string[]> = {
+    OPEN: ["MONITORED", "RESOLVED", "CANCELLED"],
+    MONITORED: ["OPEN", "RESOLVED", "CANCELLED"],
+    RESOLVED: [],
+    CANCELLED: [],
+  };
+  if (!(allowed[dependency.status] ?? []).includes(to)) throw new Error(`Transição de dependência inválida: ${dependency.status} → ${to}.`);
+  const updated = await prisma.externalDependency.update({ where: { id: dependency.id }, data: { status: to, updatedById: context.userId } });
+  await prisma.auditLog.create({ data: audit(context, dependency.investigation.varianceCase.projectId, "EXTERNAL_DEPENDENCY_TRANSITIONED", "ExternalDependency", dependency.id, { status: dependency.status }, { status: updated.status }) });
+  return updated;
 }
 
 export async function transitionPerformanceVariance(context: PeopleContext, varianceCaseId: string, to: "UNDER_ANALYSIS" | "CLASSIFIED" | "VALIDATED" | "CLOSED") {
@@ -296,7 +338,7 @@ export async function getPeoplePerformanceWorkspace(context: Pick<PeopleContext,
   return {
     projectId,
     generatedAt: new Date().toISOString(),
-    permissions: { canViewCompensation, canManagePeople: hasPeopleCapability(context.role, "PEOPLE_MANAGE"), canAnalyze: hasPeopleCapability(context.role, "EFFICIENCY_ANALYZE"), canSimulateIncentive: hasPeopleCapability(context.role, "INCENTIVE_SIMULATE") },
+    permissions: { canViewCompensation, canManagePeople: hasPeopleCapability(context.role, "PEOPLE_MANAGE"), canAnalyze: hasPeopleCapability(context.role, "EFFICIENCY_ANALYZE"), canManageRootCause: hasPeopleCapability(context.role, "ROOT_CAUSE_MANAGE"), canApproveAction: hasPeopleCapability(context.role, "ACTION_APPROVE"), canVerifyAction: hasPeopleCapability(context.role, "ACTION_VERIFY"), canSimulateIncentive: hasPeopleCapability(context.role, "INCENTIVE_SIMULATE") },
     summary: { people: people.length, departments: departments.length, positions: positions.length, teams: teams.length, allocations: allocations.length, activeVarianceCases: variances.filter((item) => !["CLOSED"].includes(item.status)).length, activeActions: activeActions.length, totalMonthlyCost },
     people,
     departments: departments.map((item) => ({ id: item.id, code: item.code, name: item.name, parentId: item.parentId })),
@@ -305,7 +347,7 @@ export async function getPeoplePerformanceWorkspace(context: Pick<PeopleContext,
     allocations: allocations.map((item) => ({ id: item.id, person: item.relationship.person.preferredName ?? item.relationship.person.fullName, team: item.team?.name ?? null, costCenter: item.costCenter?.name ?? null, scheduleActivity: item.scheduleActivity?.name ?? null, criterion: item.criterion, rate: item.allocationRate ? Number(item.allocationRate) : null, hours: item.allocatedHours ? Number(item.allocatedHours) : null, overAllocated: Boolean(item.overAllocationJustification) })),
     administrativeCosts: adminPlans.map((plan) => ({ id: plan.id, name: plan.name, version: plan.version, status: plan.status, planned: plan.lines.reduce((sum, item) => sum + Number(item.plannedAmount), 0), actual: plan.lines.reduce((sum, item) => sum + Number(item.actualAmount), 0), latestProofZero: plan.snapshots[0]?.proofZero ?? null, latestResidual: plan.snapshots[0] ? Number(plan.snapshots[0].residualAmount) : null })),
     efficiencyRuns: runs.map((run) => ({ id: run.id, referenceFrom: run.referenceFrom.toISOString(), referenceTo: run.referenceTo.toISOString(), status: run.status, methodologyVersion: run.methodologyVersion, metrics: run.metrics.map((metric) => ({ key: metric.metricKey, value: Number(metric.resultValue), unit: metric.unit, confidence: metric.confidence, evidenceRefs: metric.evidenceRefs })) })),
-    varianceCases: variances.map((item) => ({ id: item.id, code: item.code, title: item.title, type: item.type, status: item.status, plannedAmount: Number(item.plannedAmount), actualAmount: Number(item.actualAmount), cashVariance: Number(item.cashVariance), commitmentVariance: Number(item.commitmentVariance), plannedProgress: Number(item.plannedProgress), actualProgress: Number(item.actualProgress), savingEligible: item.savingEligible, investigation: item.investigation ? { id: item.investigation.id, problemStatement: item.investigation.problemStatement, hypotheses: item.investigation.hypotheses.map((hypothesis) => ({ id: hypothesis.id, category: hypothesis.category, description: hypothesis.description, status: hypothesis.status, confidence: hypothesis.confidence, evidence: hypothesis.evidence.length })), allocatedCauseRate: item.investigation.causeAllocations.reduce((sum, allocation) => sum + Number(allocation.contributionRate), 0), dependencies: item.investigation.dependencies.map((dependency) => ({ id: dependency.id, name: dependency.name, status: dependency.status })), actions: item.investigation.actions.map((action) => ({ id: action.id, title: action.title, priority: action.priority, status: action.status, dueDate: action.dueDate?.toISOString() ?? null, evidence: action.evidence.length })) } : null })),
+    varianceCases: variances.map((item) => ({ id: item.id, code: item.code, title: item.title, type: item.type, status: item.status, plannedAmount: Number(item.plannedAmount), actualAmount: Number(item.actualAmount), cashVariance: Number(item.cashVariance), commitmentVariance: Number(item.commitmentVariance), plannedProgress: Number(item.plannedProgress), actualProgress: Number(item.actualProgress), savingEligible: item.savingEligible, investigation: item.investigation ? { id: item.investigation.id, problemStatement: item.investigation.problemStatement, hypotheses: item.investigation.hypotheses.map((hypothesis) => ({ id: hypothesis.id, category: hypothesis.category, description: hypothesis.description, status: hypothesis.status, confidence: hypothesis.confidence, evidence: hypothesis.evidence.length, allocation: item.investigation!.causeAllocations.find((allocation) => allocation.hypothesisId === hypothesis.id) ? { contributionRate: Number(item.investigation!.causeAllocations.find((allocation) => allocation.hypothesisId === hypothesis.id)!.contributionRate), validated: Boolean(item.investigation!.causeAllocations.find((allocation) => allocation.hypothesisId === hypothesis.id)!.validatedAt) } : null })), allocatedCauseRate: item.investigation.causeAllocations.reduce((sum, allocation) => sum + Number(allocation.contributionRate), 0), allCauseAllocationsValidated: item.investigation.causeAllocations.length > 0 && item.investigation.causeAllocations.every((allocation) => Boolean(allocation.validatedAt)), dependencies: item.investigation.dependencies.map((dependency) => ({ id: dependency.id, name: dependency.name, status: dependency.status, owner: dependency.owner, dueDate: dependency.dueDate?.toISOString() ?? null, evidenceRef: dependency.evidenceRef })), actions: item.investigation.actions.map((action) => ({ id: action.id, title: action.title, priority: action.priority, status: action.status, dueDate: action.dueDate?.toISOString() ?? null, evidence: action.evidence.length })) } : null })),
     incentive: { policies: policies.map((policy) => ({ id: policy.id, name: policy.name, version: policy.version, poolRate: Number(policy.poolRate), reserveRate: Number(policy.reserveRate) })), simulations: simulations.map((simulation) => ({ id: simulation.id, name: simulation.name, status: simulation.status, validatedSavingId: simulation.validatedSavingId, validatedSavingAmount: Number(simulation.validatedSavingAmount), eligibleBase: Number(simulation.eligibleBase), simulatedPool: Number(simulation.simulatedPool), paymentCreated: false, policy: `${simulation.policy.name} v${simulation.policy.version}` })) },
   };
 }
