@@ -105,4 +105,21 @@ describe("cognitive product final integration", () => {
     expect(source).not.toContain("recordCognitiveDecisionAction");
     expect(source).not.toContain("runCognitiveReviewAction");
   });
+  it("closes People and Accounting human-operability gaps through guarded surfaces", () => {
+    const peopleActions = readFileSync("src/app/actions/people-extended.ts", "utf8");
+    const peoplePage = readFileSync("src/app/(workspace)/pessoas/page.tsx", "utf8");
+    const accountingActions = readFileSync("src/app/actions/accounting-extended.ts", "utf8");
+    const accountingPage = readFileSync("src/app/(workspace)/contabilidade-controladoria/page.tsx", "utf8");
+
+    expect(peopleActions).toContain("createEmploymentRelationshipAction");
+    expect(peopleActions).toContain("createWorkAllocationAction");
+    expect(peopleActions).toContain("recordRelationshipCostAction");
+    expect(peoplePage).toContain("PeopleStructureOperationsPanel");
+
+    expect(accountingActions).toContain("createAccountingReconciliationAction");
+    expect(accountingActions).toContain("reverseAccountingEntryAction");
+    expect(accountingActions).toContain("reopenAccountingPeriodAction");
+    expect(accountingPage).toContain("AccountingExtendedOperationsPanel");
+  });
+
 });
