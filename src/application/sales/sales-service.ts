@@ -777,7 +777,7 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
       take: 100,
     }),
     prisma.financialInstitution.findMany({ where: { organizationId: context.organizationId }, select: { id: true, name: true, code: true }, orderBy: { name: "asc" } }),
-    prisma.bankAccount.findMany({ where: { organizationId: context.organizationId, companyId: project.companyId, status: "ACTIVE" }, include: { institution: true }, orderBy: { createdAt: "asc" } }),
+    prisma.bankAccount.findMany({ where: { organizationId: context.organizationId, ...(project.companyId ? { companyId: project.companyId } : { projectId }), status: "ACTIVE" }, select: { id: true, agency: true, accountNumber: true, institution: { select: { name: true } } }, orderBy: { createdAt: "asc" } }),
     prisma.supplier.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" }, take: 500 }),
   ]);
 
