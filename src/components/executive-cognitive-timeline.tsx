@@ -121,12 +121,12 @@ export function ExecutiveCognitiveTimeline({ projectId }: { projectId: string })
 
   return (
     <div className="executive-cognitive-stack">
-      <section className="executive-phase-readiness" aria-label="Fechamento das fases cognitivas">
+      <section className="executive-phase-readiness" aria-label="Situação operacional">
         <header>
           <div>
-            <span className="eyebrow">FECHAMENTO DAS FASES</span>
-            <h3><Activity size={18} /> Prontidão operacional</h3>
-            <p>Estado real dos componentes que dependem de uso, dados e integrações do ambiente.</p>
+            <span className="eyebrow">SITUAÇÃO OPERACIONAL</span>
+            <h3><Activity size={18} /> O que já está pronto</h3>
+            <p>Visão objetiva do que está disponível, do que aguarda dados e do que depende de integrações externas.</p>
           </div>
           <div className="executive-readiness-summary">
             <strong>{readiness?.checks.filter((item) => item.status === "READY").length ?? 0}</strong>
@@ -154,12 +154,12 @@ export function ExecutiveCognitiveTimeline({ projectId }: { projectId: string })
         )}
       </section>
 
-      <section className="executive-learning-loop" aria-label="Learning Loop">
+      <section className="executive-learning-loop" aria-label="Aprendizado com resultados">
         <header>
           <div>
-            <span className="eyebrow">LEARNING LOOP · 10J</span>
+            <span className="eyebrow">APRENDIZADO COM RESULTADOS</span>
             <h3><BrainCircuit size={18} /> Previsto × realizado</h3>
-            <p>O sistema aprende com observações reais sem alterar política ou alçada automaticamente.</p>
+            <p>Compara o que foi previsto com o que realmente aconteceu para melhorar a qualidade das próximas análises.</p>
           </div>
           <div className="executive-cognitive-count">
             <Activity size={15} />
@@ -189,17 +189,17 @@ export function ExecutiveCognitiveTimeline({ projectId }: { projectId: string })
           </>
         ) : (
           <div className="executive-cognitive-empty">
-            O Learning Loop está operacional e aguardando avaliações reais de previsto × realizado.
+            O aprendizado com resultados está disponível e aguardando avaliações reais de previsto × realizado.
           </div>
         )}
       </section>
 
-      <section className="executive-cognitive-timeline" aria-label="Governança cognitiva">
+      <section className="executive-cognitive-timeline" aria-label="Registro de decisões">
         <header>
           <div>
-            <span className="eyebrow">GOVERNANÇA COGNITIVA</span>
-            <h3><BrainCircuit size={18} /> Linha do tempo de decisões</h3>
-            <p>Rodadas do Comitê Cognitivo e decisões humanas registradas para este empreendimento.</p>
+            <span className="eyebrow">REGISTRO DE DECISÕES</span>
+            <h3><BrainCircuit size={18} /> Histórico de decisões</h3>
+            <p>Histórico das análises realizadas e das decisões registradas para este empreendimento.</p>
           </div>
           <div className="executive-cognitive-count">
             <History size={15} />
@@ -213,7 +213,7 @@ export function ExecutiveCognitiveTimeline({ projectId }: { projectId: string })
         {pending && items.length === 0 ? (
           <div className="executive-cognitive-empty"><LoaderCircle size={16} className="spin" /> Carregando histórico...</div>
         ) : items.length === 0 ? (
-          <div className="executive-cognitive-empty">Nenhuma rodada cognitiva registrada para este empreendimento.</div>
+          <div className="executive-cognitive-empty">Nenhuma análise registrada para este empreendimento.</div>
         ) : (
           <div className="executive-cognitive-list">
             {items.slice(0, 8).map((item) => (
@@ -247,12 +247,12 @@ export function ExecutiveCognitiveTimeline({ projectId }: { projectId: string })
             </header>
             <div className="executive-cognitive-detail-grid">
               <div>
-                <span>Proposta do Decision Engine</span>
+                <span>Recomendação estruturada</span>
                 <strong>{dispositionLabel(selected.report.proposal.disposition)}</strong>
                 <p>{selected.report.proposal.executiveSummary}</p>
               </div>
               <div>
-                <span>Governança</span>
+                <span>Decisão registrada</span>
                 <strong>{selected.humanDecision ? decisionLabel(selected.humanDecision) : "Pendente"}</strong>
                 <p>
                   {selected.humanDecision
@@ -262,7 +262,7 @@ export function ExecutiveCognitiveTimeline({ projectId }: { projectId: string })
                 {selected.decisionNote && <small>{selected.decisionNote}</small>}
               </div>
               <div>
-                <span>Red Team</span>
+                <span>Revisão crítica</span>
                 <strong>{selected.report.challenges.length} questionamentos</strong>
                 <p>{selected.report.challenges.filter((item) => item.severity === "CRITICAL").length} críticos.</p>
               </div>
