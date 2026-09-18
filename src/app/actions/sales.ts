@@ -10,6 +10,8 @@ import {
   createSale,
   createSalesLead,
   createSalesProposal,
+  createSalesCommission,
+  approveSalesCommission,
   createSalesReservation,
   releaseSalesReservation,
   renegotiateSalesPaymentPlan,
@@ -68,4 +70,13 @@ export async function startLocalSignatureAction(input: {
 export async function completeLocalSignatureAction(requestId: string) {
   const ctx = await write();
   return run(() => completeMockSignatureRequest(ctx, requestId));
+}
+
+export async function createSalesCommissionAction(input: Parameters<typeof createSalesCommission>[1]) {
+  const ctx = await write();
+  return run(() => createSalesCommission(ctx, input));
+}
+export async function approveSalesCommissionAction(commissionId: string) {
+  const ctx = await approve();
+  return run(() => approveSalesCommission(ctx, commissionId));
 }
