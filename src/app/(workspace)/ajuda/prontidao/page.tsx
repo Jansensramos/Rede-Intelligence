@@ -32,7 +32,7 @@ export default async function LocalReadinessPage() {
       <ul>{report.metrics.jobs.map(row => <li key={row.status}>Fila {row.status}: {row.count}</li>)}</ul>
       <ul>{report.metrics.installations.map(row => <li key={row.status}>Integrações {row.status}: {row.count}</li>)}</ul>
       {report.alerts.length > 0
-        ? <div className="model-note"><div><strong>Atenção operacional</strong><p>{report.alerts.map(code => alertLabels[code] ?? code).join(" · ")}.</p></div></div>
+        ? <div className="model-note"><div><strong>Atenção operacional</strong><p>{report.alerts.map(code => code ? (alertLabels[code] ?? code) : "alerta operacional sem código").join(" · ")}.</p></div></div>
         : <p>Nenhum limiar operacional local excedido.</p>}
       <p>Saúde dos provedores externos: {report.providerHealth === "REAL_NOT_VERIFIED" ? "não verificada por esta checagem local" : report.providerHealth}.</p>
       {hasIntegrationAttention && <div className="panel-actions"><Link className="button button-primary" href="/integracoes">Tratar pendências de integração</Link></div>}
