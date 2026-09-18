@@ -2,6 +2,7 @@ import { requireAuthContext } from "@/application/auth/session";
 import { getLegalWorkspace } from "@/application/legal/legal-service";
 import { getCurrentOperationalContext } from "@/application/workspace/current-context";
 import { LegalOperabilityPanel } from "@/components/legal-operability-panel";
+import { LegalLifecycleOperabilityPanel } from "@/components/legal-lifecycle-operability-panel";
 import { LegalView } from "@/components/legal-view";
 import { SectionTitle } from "@/components/ui";
 import { hasProtectedApprovalCapability, hasProtectedWriteCapability } from "@/domain/auth/write-capabilities";
@@ -22,6 +23,7 @@ export default async function JuridicoPage() {
         description="Imóvel, evidências, riscos, licenças, prazos e impactos conectados à decisão, ao cronograma e ao Financeiro."
       />
       <LegalOperabilityPanel workspace={workspace} canWrite={canWrite} canApprove={canApprove} />
+      <LegalLifecycleOperabilityPanel workspace={workspace} canWrite={canWrite} canApprove={canApprove} />
       <LegalView workspace={workspace} />
     </div>
   );
