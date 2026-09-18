@@ -204,6 +204,7 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
   const [aiPrompt, setAiPrompt] = useState<string | undefined>();
   const [aiOriginModule, setAiOriginModule] = useState<ViewKey>("overview");
 
+  const canMutateDesign = role !== "VIEWER";
   const canWriteViability = hasProtectedWriteCapability(role, "VIABILITY_WRITE");
   const canWriteFinancial = hasProtectedWriteCapability(role, "FINANCIAL_WRITE");
   const canApproveFinancial = hasProtectedApprovalCapability(role, "FINANCIAL_APPROVE");
@@ -506,7 +507,7 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
           {view === "design" && (
             lazyError.design ? <ErrorState message={lazyError.design} onRetry={() => loadLazyView("design")} /> :
             !lazyLoaded.design || !lazyData.design ? <Loading label="Carregando Design Intelligence…" /> :
-            <DesignIntelligenceView initialWorkspace={lazyData.design} onWorkspaceChange={(next) => setLazyData((prev) => ({ ...prev, design: next }))} onAskAI={(prompt) => openAI(prompt)} />
+            <DesignIntelligenceView initialWorkspace={lazyData.design} canMutate={canMutateDesign} onWorkspaceChange={(next) => setLazyData((prev) => ({ ...prev, design: next }))} onAskAI={(prompt) => openAI(prompt)} />
           )}
 
           {view === "budget" && (
