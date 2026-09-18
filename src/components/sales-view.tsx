@@ -23,7 +23,7 @@ const areas: { key: Area; label: string }[] = [
   { key: "visao", label: "Visão Geral" }, { key: "estoque", label: "Estoque e Preços" }, { key: "propostas", label: "Propostas" },
   { key: "reservas", label: "Reservas" }, { key: "vendas", label: "Vendas e Contratos" }, { key: "fechamento360", label: "Crédito → Contrato → Assinatura" },
   { key: "comissoes", label: "Comissões" }, { key: "posvenda", label: "Entrega e Pós-venda" },
-  { key: "repasse", label: "Repasse, Chaves e Assistência (9R)" }, { key: "clientes", label: "Clientes (Cliente 360)" },
+  { key: "repasse", label: "Repasse, Chaves e Assistência" }, { key: "clientes", label: "Clientes (Cliente 360)" },
 ];
 
 /** Link para o Cliente 360 (Fase 9K.4B) — mesmo nome já exibido nesta tela, agora clicável. */
