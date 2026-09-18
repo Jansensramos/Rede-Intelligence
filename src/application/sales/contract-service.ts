@@ -79,6 +79,52 @@ export async function approveContractTemplateVersion(context: AuthContext, versi
   });
 }
 
+/**
+ * Garante um modelo padrão aprovado para o empreendimento. Usado pela operabilidade humana
+ * do Comercial: é idempotente por nome e nunca sobrescreve versão aprovada existente.
+ */
+export async function ensureDefaultContractTemplate(context: AuthContext, projectId: string) {
+  assertApprover(context);
+  const project = await prisma.project.findFirst({ where: { id: projectId, organizationId: context.organizationId } });
+  if (!project) throw new Error("Empreendimento não encontrado nesta organização.");
+
+  const name = "Modelo padrão de compra e venda";
+  let template = await prisma.contractTemplate.findFirst({
+    where: { organizationId: context.organizationId, projectId, name },
+    include: { versions: { where: { status: "APPROVED" }, orderBy: { version: "desc" }, take: 1 } },
+  });
+  if (template?.versions[0]) return { template, version: template.versions[0] };
+
+  if (!template) template = await createContractTemplate(context, { projectId, name });
+
+  const content = [
+    "CONTRATO DE COMPRA E VENDA",
+    "",
+    "Contrato: {{contractNumber}}",
+    "Empreendimento: " + project.name,
+    "Unidade: {{unitCode}}",
+    "Comprador(es): {{buyerNames}}",
+    "Valor da venda: R$ {{soldPrice}}",
+    "Vigência: {{effectiveFrom}}",
+    "",
+    "Este documento foi gerado pela REDE a partir da versão contratual aprovada do empreendimento.",
+  ].join("\n");
+
+  const version = await createContractTemplateVersion(context, {
+    templateId: template.id,
+    content,
+    variables: {
+      contractNumber: "Número do contrato",
+      unitCode: "Unidade",
+      buyerNames: "Compradores",
+      soldPrice: "Valor vendido",
+      effectiveFrom: "Data de vigência",
+    },
+  });
+  const approved = await approveContractTemplateVersion(context, version.id);
+  return { template, version: approved };
+}
+
 // ---------------------------------------------------------------------------
 // Documento contratual (item 3/9) — metadado + referência de storage, nunca bytes no Postgres
 // ---------------------------------------------------------------------------
