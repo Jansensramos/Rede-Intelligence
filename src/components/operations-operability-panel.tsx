@@ -7,6 +7,7 @@ import type { OperationsWorkspaceView } from "@/application/operations/operation
 import {
   approveOperationalBaselineAction,
   approveOperationalScheduleAction,
+  createBudgetRevisionAction,
   createOfficialBudgetAction,
   createOperationalScheduleAction,
   prepareLatestOperationalBaselineAction,
@@ -18,6 +19,7 @@ export function OperationsOperabilityPanel({ workspace }: { workspace: Operation
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [revisionOpen, setRevisionOpen] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "error" | "success"; text: string } | null>(null);
   const projectId = workspace.structure?.projectId;
 
@@ -31,6 +33,16 @@ export function OperationsOperabilityPanel({ workspace }: { workspace: Operation
       router.refresh();
     }
   });
+
+  function createRevision(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!workspace.budget) return;
+    const data = new FormData(event.currentTarget);
+    const reason = String(data.get("reason") ?? "").trim();
+    if (!reason) return setFeedback({ type: "error", text: "Informe o motivo da revisão orçamentária." });
+    act(() => createBudgetRevisionAction(workspace.budget!.id, reason), "Nova revisão orçamentária criada em rascunho.");
+    setRevisionOpen(false);
+  }
 
   function createSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,9 +62,12 @@ export function OperationsOperabilityPanel({ workspace }: { workspace: Operation
       {workspace.baseline?.status === "UNDER_APPROVAL" && <button className="button button-primary" disabled={pending} onClick={() => act(() => approveOperationalBaselineAction(workspace.baseline!.id), "Base aprovada.")}><CheckCircle2 size={15}/> Aprovar base</button>}
       {workspace.baseline?.status === "APPROVED" && !workspace.budget && <button className="button button-primary" disabled={pending} onClick={() => act(() => createOfficialBudgetAction(workspace.baseline!.id), "Orçamento oficial criado.")}>Criar orçamento oficial</button>}
       {workspace.budget && ["OFFICIAL","APPROVED"].includes(workspace.budget.status) && !workspace.schedule && <button className="button button-primary" disabled={pending} onClick={() => setScheduleOpen(true)}><Milestone size={15}/> Criar cronograma</button>}
+      {workspace.budget && ["OFFICIAL","APPROVED"].includes(workspace.budget.status) && <button className="button button-secondary" disabled={pending} onClick={() => setRevisionOpen(true)}>Criar revisão orçamentária</button>}
       {workspace.schedule && ["DRAFT","UNDER_REVIEW"].includes(workspace.schedule.status) && <button className="button button-primary" disabled={pending} onClick={() => act(() => approveOperationalScheduleAction(workspace.schedule!.id), "Cronograma aprovado.")}><CheckCircle2 size={15}/> Aprovar cronograma</button>}
     </div></div>
     {feedback && <div className={feedback.type === "error" ? styles.error : styles.success}>{feedback.text}</div>}
+
+    {revisionOpen && <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !pending) setRevisionOpen(false); }}><div className={styles.modal} role="dialog" aria-modal="true" aria-label="Criar revisão orçamentária"><div className={styles.modalHeader}><div><h3>Criar revisão orçamentária</h3><p>Duplica o orçamento vigente para uma nova versão em rascunho, preservando a versão oficial anterior.</p></div><button className={styles.closeButton} type="button" disabled={pending} onClick={() => setRevisionOpen(false)} aria-label="Fechar">×</button></div><form className={styles.form} onSubmit={createRevision}><div className={styles.formGrid}><div className={`${styles.field} ${styles.fieldFull}`}><label>Motivo da revisão</label><textarea name="reason" rows={4} required placeholder="Ex.: atualização de quantitativos, escopo ou preços após nova medição." /></div></div><div className={styles.modalActions}><button type="button" className="button button-secondary" disabled={pending} onClick={() => setRevisionOpen(false)}>Cancelar</button><button type="submit" className="button button-primary" disabled={pending}>{pending ? "Criando..." : "Criar revisão"}</button></div></form></div></div>}
 
     {scheduleOpen && <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !pending) setScheduleOpen(false); }}><div className={styles.modal} role="dialog" aria-modal="true" aria-label="Criar cronograma"><div className={styles.modalHeader}><div><h3>Criar cronograma</h3><p>Defina o período oficial que será utilizado para o acompanhamento do empreendimento.</p></div><button className={styles.closeButton} type="button" disabled={pending} onClick={() => setScheduleOpen(false)} aria-label="Fechar">×</button></div><form className={styles.form} onSubmit={createSchedule}><div className={styles.formGrid}><div className={styles.field}><label htmlFor="schedule-start">Início</label><input id="schedule-start" name="startDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} autoFocus required /></div><div className={styles.field}><label htmlFor="schedule-end">Término</label><input id="schedule-end" name="endDate" type="date" required /></div><div className={`${styles.field} ${styles.fieldFull}`}><span className={styles.help}>O cronograma será criado pelo método de curva S e poderá seguir o fluxo de aprovação operacional.</span></div></div>{feedback?.type === "error" && <div className={styles.error}>{feedback.text}</div>}<div className={styles.modalActions}><button type="button" className="button button-secondary" disabled={pending} onClick={() => setScheduleOpen(false)}>Cancelar</button><button type="submit" className="button button-primary" disabled={pending}>{pending ? "Criando..." : "Criar cronograma"}</button></div></form></div></div>}
   </section>;
