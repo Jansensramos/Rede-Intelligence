@@ -44,7 +44,7 @@ export default async function ViabilidadePage() {
           `useState(initialStudy)`/`useState(initialLand)`/`useState(initialInvestment)` preservam o
           projeto ANTERIOR depois de um `router.refresh()` (React só usa o valor inicial no primeiro
           mount; props novas não re-sincronizam state derivado). Ver relatório de fechamento da 9K.1. */}
-      <ViabilidadeWorkspace key={projectId} initialStudy={initialStudy} initialLand={initialLand} initialInvestment={initialInvestment} canWrite={canWrite} />
+      <ViabilidadeWorkspace key={projectId} initialStudy={initialStudy} initialLand={initialLand} initialInvestment={initialInvestment} canWrite={canWrite} role={authContext.role} />
     </Suspense>
   );
 }
