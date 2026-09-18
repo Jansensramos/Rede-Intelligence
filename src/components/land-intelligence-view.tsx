@@ -91,7 +91,7 @@ function InvestorView({ land, current, proposed, onClose }: { land: LandWorkspac
   </div>;
 }
 
-export function LandIntelligenceView({ initialLand, onLandChange }: { initialLand: LandWorkspaceView; onLandChange?: (land: LandWorkspaceView) => void }) {
+export function LandIntelligenceView({ initialLand, onLandChange, canWrite = true }: { initialLand: LandWorkspaceView; onLandChange?: (land: LandWorkspaceView) => void; canWrite?: boolean }) {
   const [land, setLand] = useState(initialLand);
   const [draft, setDraft] = useState<Controls>(() => initialControls(initialLand));
   const [applied, setApplied] = useState<Controls>(() => initialControls(initialLand));
@@ -154,7 +154,8 @@ export function LandIntelligenceView({ initialLand, onLandChange }: { initialLan
   if (investorMode) return <InvestorView land={{ ...land, snapshot: preview }} current={current} proposed={proposed} onClose={() => setInvestorMode(false)} />;
 
   return <div className="land-view view-stack">
-    <header className="land-title"><div><span className="eyebrow">REDE LAND INTELLIGENCE · {preview.version}</span><h2>Terreno & Potencial</h2><p>Do lote ao resultado econômico, com hipóteses urbanísticas sempre separadas da legislação vigente.</p></div><div><button className="button button-secondary" onClick={() => setInvestorMode(true)}><Eye size={16} /> Investor View</button><button className="button button-primary" disabled={saving || recalculating} onClick={saveSnapshot}><Save size={16} /> {saving ? "Salvando…" : `Criar snapshot v${land.versionNumber + 1}`}</button></div></header>
+    {!canWrite && <div className="model-note"><div><strong>Modo de leitura</strong><p>Os cenários podem ser explorados localmente, mas um novo snapshot só pode ser salvo por perfil com permissão de edição.</p></div></div>}
+    <header className="land-title"><div><span className="eyebrow">REDE LAND INTELLIGENCE · {preview.version}</span><h2>Terreno & Potencial</h2><p>Do lote ao resultado econômico, com hipóteses urbanísticas sempre separadas da legislação vigente.</p></div><div><button className="button button-secondary" onClick={() => setInvestorMode(true)}><Eye size={16} /> Investor View</button><button className="button button-primary" disabled={!canWrite || saving || recalculating} onClick={saveSnapshot}><Save size={16} /> {saving ? "Salvando…" : `Criar snapshot v${land.versionNumber + 1}`}</button></div></header>
     {message && <div className="land-message"><Check size={16} />{message}</div>}
     <section className="land-address panel"><div><span className="eyebrow">LOCALIZAÇÃO</span><label>Digite o endereço do terreno<input value={preview.landAsset.address} readOnly /></label></div><button className="button button-secondary" onClick={() => setMessage("Coordenada localizada. Lote mantido como confirmação manual por ausência de API cadastral pública estruturada.")}><LocateFixed size={16} /> Localizar</button><div className="land-coordinate"><Map size={16} /><span>{preview.landAsset.latitude.toFixed(5)}, {preview.landAsset.longitude.toFixed(5)}</span><strong>POLÍGONO CONFIRMADO MANUALMENTE</strong></div></section>
 
