@@ -101,7 +101,8 @@
 
 .cognitive-decision-card,
 .cognitive-challenges,
-.cognitive-autopilot {
+.cognitive-autopilot,
+.cognitive-human-decision {
   border: 1px solid var(--line, #d9dde3);
   border-radius: 12px;
   padding: 14px;
@@ -109,7 +110,8 @@
 
 .cognitive-decision-card > header,
 .cognitive-challenges > header,
-.cognitive-autopilot > header {
+.cognitive-autopilot > header,
+.cognitive-human-decision > header {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -265,4 +267,62 @@
   .cognitive-alternatives {
     grid-template-columns: 1fr;
   }
+}
+
+
+.cognitive-human-decision {
+  display: grid;
+  gap: 12px;
+}
+
+.cognitive-human-decision > header {
+  align-items: flex-start;
+}
+
+.cognitive-human-decision > header div {
+  display: grid;
+  gap: 3px;
+}
+
+.cognitive-human-decision > header p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted, #657080);
+}
+
+.cognitive-human-decision label {
+  display: grid;
+  gap: 6px;
+}
+
+.cognitive-human-decision label > span {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cognitive-human-decision textarea {
+  width: 100%;
+  min-height: 58px;
+  resize: vertical;
+}
+
+.cognitive-human-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cognitive-decision-recorded {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  background: rgba(35, 112, 76, .08);
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.cognitive-decision-recorded span {
+  color: var(--muted, #657080);
 }
