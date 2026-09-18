@@ -75,7 +75,7 @@ export const OPERATIONAL_AREAS: OperationalArea[] = [
   {
     id: "gestao-executiva",
     label: "Gestão Executiva",
-    description: "Porta de entrada principal: recomendação do motor, KPIs essenciais, riscos e panorama por módulo.",
+    description: "Porta de entrada principal: recomendação executiva, indicadores essenciais, riscos e panorama por área.",
     path: "/executivo",
     primary: true,
     viewKeys: ["overview"],
@@ -83,7 +83,7 @@ export const OPERATIONAL_AREAS: OperationalArea[] = [
   {
     id: "viabilidade",
     label: "Viabilidade",
-    description: "Terreno, premissas, cenários, score, sensibilidade, Red Team, comitê, Studio, Data Room, fluxo de caixa, riscos e trilha de cálculo — um único ambiente de decisão.",
+    description: "Terreno, premissas, cenários, índice de viabilidade, sensibilidade, revisão crítica, análise multidisciplinar, relatórios, sala de documentos, fluxo de caixa, riscos e trilha de cálculo — um único ambiente de decisão.",
     path: "/viabilidade",
     viewKeys: ["land", "assumptions", "scenarios", "sensitivity", "redteam", "committee", "studio", "dataroom", "cashflow", "risks", "audit"],
   },
@@ -97,7 +97,7 @@ export const OPERATIONAL_AREAS: OperationalArea[] = [
   {
     id: "engenharia-obra",
     label: "Engenharia e Obra",
-    description: "Design Intelligence/BIM, Orçamento e Operações/Cronograma.",
+    description: "Projetos e BIM, orçamento, obra e cronograma.",
     path: "/engenharia-obra",
     viewKeys: ["design", "budget"],
   },
@@ -160,7 +160,7 @@ export const OPERATIONAL_AREAS: OperationalArea[] = [
   {
     id: "inteligencia-dados",
     label: "Inteligência de Dados",
-    description: "Contratos analíticos, métricas, benchmarks, qualidade de dados e portfólio.",
+    description: "Contratos analíticos, métricas, comparativos, qualidade de dados e portfólio.",
     path: "/inteligencia-dados",
     viewKeys: ["dataIntelligence"],
   },
@@ -171,7 +171,7 @@ export const OPERATIONAL_AREAS: OperationalArea[] = [
  * como rota própria (`/assistente`) nesta sprint — o painel flutuante é a 9K.4.
  */
 export const TRANSVERSAL_AREAS: OperationalArea[] = [
-  { id: "rede-ai", label: "Pergunte ao REDE", description: "Assistente contextual. Painel flutuante é a 9K.4.", path: "/assistente", transversal: true, viewKeys: ["ai"] },
+  { id: "rede-ai", label: "Pergunte ao REDE", description: "Assistente contextual para consultar dados e apoiar decisões do empreendimento.", path: "/assistente", transversal: true, viewKeys: ["ai"] },
 ];
 
 /**
@@ -187,11 +187,11 @@ export interface EcosystemEntry {
 }
 
 export const ECOSYSTEM_ENTRIES: EcosystemEntry[] = [
-  { id: "rede-asset", label: "REDE Asset", description: "Oportunidades do ecossistema REDE Asset. Estrutural nesta sprint — sem marketplace, sem funding.", path: "/asset" },
-  { id: "rede-academy", label: "REDE Academy", description: "Mentorias, treinamentos e certificações REDE. Estrutural nesta sprint — sem plataforma de cursos.", path: "/academy" },
+  { id: "rede-asset", label: "REDE Ativos", description: "Oportunidades e ativos do ecossistema REDE. Área em evolução, sem operações de investimento automatizadas.", path: "/asset" },
+  { id: "rede-academy", label: "REDE Academia", description: "Mentorias, treinamentos e certificações da REDE. Área em evolução.", path: "/academy" },
 ];
 
-export const HELP_ENTRY = { id: "ajuda", label: "Central de Ajuda", description: "Arquitetura completa do Help System é a 9K.4.", path: "/ajuda" };
+export const HELP_ENTRY = { id: "ajuda", label: "Central de Ajuda", description: "Ajuda contextual e orientações de uso da plataforma.", path: "/ajuda" };
 
 export function findAreaForViewKey(viewKey: LegacyViewKey): OperationalArea | undefined {
   return [...OPERATIONAL_AREAS, ...TRANSVERSAL_AREAS].find((area) => area.viewKeys.includes(viewKey));
