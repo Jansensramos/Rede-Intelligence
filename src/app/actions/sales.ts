@@ -15,6 +15,8 @@ import {
   renegotiateSalesPaymentPlan,
   rescindSale,
 } from "@/application/sales/sales-service";
+import { ensureDefaultContractTemplate, generateContractDocument } from "@/application/sales/contract-service";
+import { completeMockSignatureRequest, prepareSignatureRequest, sendSignatureRequest } from "@/application/sales/signature-service";
 
 type Result = { ok: true } | { ok: false; error: string };
 const message = (error: unknown) => error instanceof Error ? error.message : "Não foi possível concluir a operação comercial.";
@@ -42,3 +44,28 @@ export async function createSaleAction(input: Parameters<typeof createSale>[1]) 
 export async function approveSaleAction(input: Parameters<typeof approveSale>[1]) { const ctx = await approve(); return run(() => approveSale(ctx, input)); }
 export async function renegotiateSalesPaymentPlanAction(input: Parameters<typeof renegotiateSalesPaymentPlan>[1]) { const ctx = await approve(); return run(() => renegotiateSalesPaymentPlan(ctx, input)); }
 export async function rescindSaleAction(input: Parameters<typeof rescindSale>[1]) { const ctx = await approve(); return run(() => rescindSale(ctx, input)); }
+
+export async function ensureDefaultContractTemplateAction(projectId: string) {
+  const ctx = await approve();
+  return run(() => ensureDefaultContractTemplate(ctx, projectId));
+}
+export async function generateContractDocumentAction(contractId: string, templateVersionId: string) {
+  const ctx = await write();
+  return run(() => generateContractDocument(ctx, { contractId, templateVersionId }));
+}
+export async function startLocalSignatureAction(input: {
+  contractId: string;
+  documentId: string;
+  parties: { customerId?: string; displayName: string; email?: string; role: string }[];
+}) {
+  const ctx = await write();
+  return run(async () => {
+    if (process.env.NODE_ENV === "production") throw new Error("Assinatura simulada é permitida apenas no ambiente local.");
+    const request = await prepareSignatureRequest(ctx, { ...input, provider: "MOCK" });
+    await sendSignatureRequest(ctx, request.id);
+  });
+}
+export async function completeLocalSignatureAction(requestId: string) {
+  const ctx = await write();
+  return run(() => completeMockSignatureRequest(ctx, requestId));
+}
