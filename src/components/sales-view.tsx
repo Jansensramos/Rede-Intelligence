@@ -73,7 +73,7 @@ function Metrics({ workspace }: { workspace: SalesWorkspaceView }) {
   return <div className="metric-grid">{cards.map(([label, value, meta, Icon]) => <article className="metric-card" key={label}><div><span>{label}</span><Icon size={17} /></div><strong>{brl.format(value)}</strong><small>{meta}</small></article>)}</div>;
 }
 
-export function SalesView({ workspace }: { workspace: SalesWorkspaceView }) {
+export function SalesView({ workspace, canWrite, canApprove }: { workspace: SalesWorkspaceView; canWrite: boolean; canApprove: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -192,6 +192,7 @@ export function SalesView({ workspace }: { workspace: SalesWorkspaceView }) {
   };
 
   return <div className="view-stack">
+    {!canWrite && !canApprove && <div className="model-note"><div><strong>Modo de leitura</strong><p>Seu perfil pode consultar o Comercial, mas não alterar nem aprovar registros.</p></div></div>}
     <div className="scenario-switch" aria-label="Áreas Comerciais">{areas.map((item) => <button key={item.key} className={area === item.key ? "is-active" : ""} onClick={() => setArea(item.key)}>{item.label}</button>)}</div>
 
     {area === "visao" && <><Metrics workspace={workspace} /><div className="metric-grid">
@@ -255,59 +256,59 @@ export function SalesView({ workspace }: { workspace: SalesWorkspaceView }) {
       <div className="panel-heading"><div><span className="eyebrow">CORRETAGEM</span><h2>Comissões — obrigação gerada exatamente uma vez</h2><p>Crie a comissão da venda assinada e aprove para gerar a obrigação no Financeiro.</p></div></div>
       <div className="scenario-table">
         <div className="table-row table-head"><span>Corretor</span><span>Venda</span><span>Valor</span><span>Situação</span><span>Ação</span></div>
-        {workspace.commissions.map((item) => <div className="table-row" key={item.id}><strong>{item.broker}</strong><span>{item.sale}</span><span>{brl.format(item.amount)}</span><Status value={item.status} /><span>{item.status === "PENDING" ? <button className="button button-primary" disabled={pending} onClick={() => runCommercialAction(() => approveSalesCommissionAction(item.id), "Comissão aprovada e obrigação financeira gerada.")}>Aprovar comissão</button> : "—"}</span></div>)}
-        {workspace.sales.filter((sale) => sale.status === "APPROVED" && !workspace.commissions.some((commission) => commission.sale === sale.id)).map((sale) => <div className="table-row" key={`eligible-${sale.id}`}><strong>{workspace.brokers[0]?.name ?? "Sem corretor cadastrado"}</strong><span>{sale.contractNumber ?? sale.id} · {sale.unit}</span><span>{workspace.brokers[0] ? brl.format(sale.soldPrice * 0.04) : "—"}</span><span>Não criada</span><span>{workspace.brokers[0] ? <button className="button button-secondary" disabled={pending} onClick={() => runCommercialAction(() => createSalesCommissionAction({ saleId: sale.id, brokerId: workspace.brokers[0].id, basis: "SOLD_PRICE", percentage: "0.04", triggerEvent: "SIGNATURE" }), "Comissão de 4% criada para a venda.")}>Criar comissão 4%</button> : "Cadastre um corretor"}</span></div>)}
+        {workspace.commissions.map((item) => <div className="table-row" key={item.id}><strong>{item.broker}</strong><span>{item.sale}</span><span>{brl.format(item.amount)}</span><Status value={item.status} /><span>{item.status === "PENDING" ? <button className="button button-primary" disabled={pending || !canApprove} onClick={() => runCommercialAction(() => approveSalesCommissionAction(item.id), "Comissão aprovada e obrigação financeira gerada.")}>Aprovar comissão</button> : "—"}</span></div>)}
+        {workspace.sales.filter((sale) => sale.status === "APPROVED" && !workspace.commissions.some((commission) => commission.sale === sale.id)).map((sale) => <div className="table-row" key={`eligible-${sale.id}`}><strong>{workspace.brokers[0]?.name ?? "Sem corretor cadastrado"}</strong><span>{sale.contractNumber ?? sale.id} · {sale.unit}</span><span>{workspace.brokers[0] ? brl.format(sale.soldPrice * 0.04) : "—"}</span><span>Não criada</span><span>{workspace.brokers[0] ? <button className="button button-secondary" disabled={pending || !canWrite} onClick={() => runCommercialAction(() => createSalesCommissionAction({ saleId: sale.id, brokerId: workspace.brokers[0].id, basis: "SOLD_PRICE", percentage: "0.04", triggerEvent: "SIGNATURE" }), "Comissão de 4% criada para a venda.")}>Criar comissão 4%</button> : "Cadastre um corretor"}</span></div>)}
         {workspace.commissions.length === 0 && workspace.sales.every((sale) => sale.status !== "APPROVED") && <p className="empty-state">Nenhuma venda aprovada disponível para comissão.</p>}
       </div>
     </article>}
 
     {area === "posvenda" && <>
     <article className="panel">
-      <div className="panel-heading"><div><span className="eyebrow">VISTORIA</span><h2>Entrega e vistoria de unidades</h2><p>Agende, registre o resultado e, quando os gates técnico, jurídico e financeiro estiverem aptos, conclua a entrega.</p></div><button className="button button-secondary" disabled={pending || workspace.sales.every((sale) => sale.status !== "APPROVED")} onClick={() => setShowInspectionForm((value) => !value)}>{showInspectionForm ? "Fechar" : "Agendar vistoria"}</button></div>
+      <div className="panel-heading"><div><span className="eyebrow">VISTORIA</span><h2>Entrega e vistoria de unidades</h2><p>Agende, registre o resultado e, quando os gates técnico, jurídico e financeiro estiverem aptos, conclua a entrega.</p></div><button className="button button-secondary" disabled={pending || !canWrite || workspace.sales.every((sale) => sale.status !== "APPROVED")} onClick={() => setShowInspectionForm((value) => !value)}>{showInspectionForm ? "Fechar" : "Agendar vistoria"}</button></div>
       {showInspectionForm && <form className="form-grid" action={submitInspection}>
         <label>Venda<select name="saleId" required defaultValue=""><option value="" disabled>Selecione</option>{workspace.sales.filter((sale) => sale.status === "APPROVED").map((sale) => <option key={sale.id} value={sale.id}>{sale.contractNumber ?? sale.id} · {sale.unit} · {sale.buyers.join(", ")}</option>)}</select></label>
         <label>Data da vistoria<input name="scheduledAt" type="date" defaultValue={todayValue()} required /></label>
-        <div className="form-actions"><button className="button button-primary" disabled={pending} type="submit">Agendar vistoria</button></div>
+        <div className="form-actions"><button className="button button-primary" disabled={pending || !canWrite} type="submit">Agendar vistoria</button></div>
       </form>}
       <div className="data-table-scroll"><table className="data-table"><thead><tr><th>Unidade</th><th>Agendada em</th><th>Resultado</th><th>Ação</th></tr></thead><tbody>
         {workspace.inspections.map((item) => <tr key={item.id}><td><strong>{item.unit}</strong></td><td>{date.format(new Date(item.scheduledAt))}</td><td>{item.outcome ? statusLabel[item.outcome] ?? item.outcome : "Pendente"}</td><td>
-          {!item.outcome && outcomeInspectionId !== item.id && <button className="text-button" disabled={pending} onClick={() => setOutcomeInspectionId(item.id)}>Registrar resultado</button>}
+          {!item.outcome && outcomeInspectionId !== item.id && <button className="text-button" disabled={pending || !canWrite} onClick={() => setOutcomeInspectionId(item.id)}>Registrar resultado</button>}
           {outcomeInspectionId === item.id && <form style={{ display: "grid", gap: 6 }} action={(form) => submitInspectionOutcome(item.id, form)}>
             <select name="outcome" defaultValue="ACCEPTED"><option value="ACCEPTED">Aceita</option><option value="ACCEPTED_WITH_PENDING">Aceita com pendências</option><option value="REJECTED">Rejeitada</option></select>
             <input name="pendingNote" placeholder="Pendência observada (opcional)" />
             <label>Nova vistoria, se necessária<input name="nextInspectionAt" type="date" /></label>
-            <div className="panel-actions"><button className="text-button" type="submit" disabled={pending}>Salvar</button><button className="text-button" type="button" onClick={() => setOutcomeInspectionId(null)}>Cancelar</button></div>
+            <div className="panel-actions"><button className="text-button" type="submit" disabled={pending || !canWrite}>Salvar</button><button className="text-button" type="button" onClick={() => setOutcomeInspectionId(null)}>Cancelar</button></div>
           </form>}
         </td></tr>)}
         {workspace.inspections.length === 0 && <tr><td colSpan={4}>Nenhuma vistoria agendada.</td></tr>}
       </tbody></table></div>
       <div className="scenario-table"><div className="table-row table-head"><span>Unidade vendida</span><span>Contrato</span><span>Entrega</span></div>
-        {workspace.sales.filter((sale) => sale.status === "APPROVED").map((sale) => <div className="table-row" key={`delivery-${sale.id}`}><strong>{sale.unit}</strong><span>{sale.contractNumber ?? "—"}</span><span><div className="panel-actions"><button className="button button-secondary" disabled={pending} onClick={() => previewDelivery(sale)}>Verificar prontidão</button><button className="button button-primary" disabled={pending} onClick={() => runCommercialAction(() => markUnitDeliveredAction(sale.salesUnitId), "Unidade marcada como entregue.")}>Concluir entrega</button></div></span></div>)}
+        {workspace.sales.filter((sale) => sale.status === "APPROVED").map((sale) => <div className="table-row" key={`delivery-${sale.id}`}><strong>{sale.unit}</strong><span>{sale.contractNumber ?? "—"}</span><span><div className="panel-actions"><button className="button button-secondary" disabled={pending} onClick={() => previewDelivery(sale)}>Verificar prontidão</button><button className="button button-primary" disabled={pending || !canApprove} onClick={() => runCommercialAction(() => markUnitDeliveredAction(sale.salesUnitId), "Unidade marcada como entregue.")}>Concluir entrega</button></div></span></div>)}
       </div>
       {deliveryGate && <div className="model-note"><AlertTriangle size={20} /><div style={{ width: "100%" }}><strong>{deliveryGate.unit} · prontidão da entrega: {deliveryGate.overall === "APTO" ? "APTA" : "BLOQUEADA"}</strong><div className="scenario-table" style={{ marginTop: 10 }}><div className="table-row table-head"><span>Gate</span><span>Status</span><span>Motivo</span></div><div className="table-row"><strong>Técnico</strong><span>{deliveryGate.technical.status}</span><span>{deliveryGate.technical.reason}</span></div><div className="table-row"><strong>Jurídico</strong><span>{deliveryGate.legal.status}</span><span>{deliveryGate.legal.reason}</span></div><div className="table-row"><strong>Financeiro</strong><span>{deliveryGate.financial.status}</span><span>{deliveryGate.financial.reason}</span></div></div><div className="panel-actions"><button className="text-button" type="button" onClick={() => setDeliveryGate(null)}>Fechar diagnóstico</button></div></div></div>}
     </article>
 
     <article className="panel">
-      <div className="panel-heading"><div><span className="eyebrow">ATENDIMENTO PÓS-VENDA</span><h2>Solicitações, categoria e histórico</h2></div><button className="button button-secondary" disabled={pending || workspace.sales.every((sale) => sale.status !== "APPROVED")} onClick={() => setShowPostSaleForm((value) => !value)}>{showPostSaleForm ? "Fechar" : "Nova solicitação"}</button></div>
+      <div className="panel-heading"><div><span className="eyebrow">ATENDIMENTO PÓS-VENDA</span><h2>Solicitações, categoria e histórico</h2></div><button className="button button-secondary" disabled={pending || !canWrite || workspace.sales.every((sale) => sale.status !== "APPROVED")} onClick={() => setShowPostSaleForm((value) => !value)}>{showPostSaleForm ? "Fechar" : "Nova solicitação"}</button></div>
       {showPostSaleForm && <form className="form-grid" action={submitPostSale}>
         <label>Venda<select name="saleId" required defaultValue=""><option value="" disabled>Selecione</option>{workspace.sales.filter((sale) => sale.status === "APPROVED").map((sale) => <option key={sale.id} value={sale.id}>{sale.contractNumber ?? sale.id} · {sale.unit} · {sale.buyers.join(", ")}</option>)}</select></label>
         <label>Categoria<select name="category" defaultValue="ASSISTENCIA"><option value="GARANTIA">Garantia</option><option value="ASSISTENCIA">Assistência</option><option value="OCORRENCIA">Ocorrência</option><option value="OUTRO">Outro</option></select></label>
         <label>Prazo SLA<input name="slaDueAt" type="date" /></label>
         <label style={{ gridColumn: "1 / -1" }}>Descrição<textarea name="description" rows={3} required /></label>
-        <div className="form-actions"><button className="button button-primary" disabled={pending} type="submit">Abrir solicitação</button></div>
+        <div className="form-actions"><button className="button button-primary" disabled={pending || !canWrite} type="submit">Abrir solicitação</button></div>
       </form>}
       {workspace.postSaleRequests.map((item) => <div className="model-note" key={item.id}><MessageSquareWarning size={20} /><div style={{ width: "100%" }}><strong>{item.unit} · {item.customer}</strong><p>{item.category.replaceAll("_", " ")} · {item.updates} atualização(ões){item.slaDueAt ? ` · SLA ${date.format(new Date(item.slaDueAt))}` : ""}</p><Status value={item.status} />{item.slaViolated && <span className="negative-value"><AlertTriangle size={14} /> SLA vencido</span>}
-        <div className="panel-actions"><button className="text-button" disabled={pending} onClick={() => setEditingPostSaleId(editingPostSaleId === item.id ? null : item.id)}>{editingPostSaleId === item.id ? "Fechar" : "Atualizar"}</button></div>
+        <div className="panel-actions"><button className="text-button" disabled={pending || !canWrite} onClick={() => setEditingPostSaleId(editingPostSaleId === item.id ? null : item.id)}>{editingPostSaleId === item.id ? "Fechar" : "Atualizar"}</button></div>
         {editingPostSaleId === item.id && <form className="form-grid" action={(form) => submitPostSaleUpdate(item.id, form)}>
           <label style={{ gridColumn: "1 / -1" }}>Atualização<textarea name="note" rows={2} placeholder="Descreva o andamento ou atendimento realizado" /></label>
           <label>Situação<select name="status" defaultValue={item.status}><option value="OPEN">Aberta</option><option value="IN_PROGRESS">Em andamento</option><option value="WAITING_CUSTOMER">Aguardando cliente</option><option value="RESOLVED">Resolvida</option><option value="CLOSED">Encerrada</option></select></label>
-          <div className="form-actions"><button className="button button-primary" type="submit" disabled={pending}>Salvar atualização</button></div>
+          <div className="form-actions"><button className="button button-primary" type="submit" disabled={pending || !canWrite}>Salvar atualização</button></div>
         </form>}
       </div></div>)}
       {workspace.postSaleRequests.length === 0 && <p className="empty-state">Nenhuma solicitação de pós-venda neste empreendimento.</p>}
     </article>
   </>}
 
-    {area === "repasse" && <HandoverOperabilityPanel workspace={workspace} />}
+    {area === "repasse" && <HandoverOperabilityPanel workspace={workspace} canWrite={canWrite} canApprove={canApprove} />}
   </div>;
 }
