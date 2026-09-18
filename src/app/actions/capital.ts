@@ -28,7 +28,7 @@ const errorMessage = (error: unknown) => (error instanceof Error ? error.message
 
 async function run<T>(operation: () => Promise<T>): Promise<ActionResult<T>> {
   try {
-    const data = await operation();
+    const data = JSON.parse(JSON.stringify(await operation())) as T;
     revalidatePath("/capital-funding");
     revalidatePath("/executivo");
     revalidatePath("/acoes");
