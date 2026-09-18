@@ -8,7 +8,7 @@ export async function getProcurementOperabilityMetadata(context: Pick<AuthContex
   });
   if (!project) throw new Error("Empreendimento não encontrado nesta organização.");
 
-  const [quotations, contracts, orders] = await Promise.all([
+  const [quotations, contracts, orders, measurements] = await Promise.all([
     prisma.quotationProcess.findMany({
       where: { organizationId: context.organizationId, projectId },
       include: {
@@ -34,6 +34,12 @@ export async function getProcurementOperabilityMetadata(context: Pick<AuthContex
       include: { supplier: true, items: true },
       orderBy: { createdAt: "desc" },
       take: 100,
+    }),
+    prisma.measurementCertificate.findMany({
+      where: { organizationId: context.organizationId, projectId, status: { in: ["APPROVED", "SENT_TO_FINANCE"] } },
+      select: { id: true, contractId: true, number: true, status: true, netAmount: true, serviceOrderId: true, competenceDate: true },
+      orderBy: [{ competenceDate: "desc" }, { number: "desc" }],
+      take: 200,
     }),
   ]);
 
@@ -90,6 +96,15 @@ export async function getProcurementOperabilityMetadata(context: Pick<AuthContex
         unitPrice: Number(item.unitPrice),
         amount: Number(item.quantity) * Number(item.unitPrice),
       })),
+    })),
+    measurements: measurements.map((measurement) => ({
+      id: measurement.id,
+      contractId: measurement.contractId,
+      number: measurement.number,
+      status: measurement.status,
+      netAmount: Number(measurement.netAmount),
+      serviceOrderId: measurement.serviceOrderId,
+      competenceDate: measurement.competenceDate.toISOString(),
     })),
     contracts: contracts.map((contract) => ({
       id: contract.id,
