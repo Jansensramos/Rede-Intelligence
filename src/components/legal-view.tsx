@@ -8,7 +8,7 @@ type Area = "visao" | "diligencia" | "imovel" | "documentos" | "achados" | "obri
 const areas: Array<{ key: Area; label: string }> = [
   { key: "visao", label: "Visão Geral" }, { key: "diligencia", label: "Diligência" }, { key: "imovel", label: "Imóvel e Matrícula" }, { key: "documentos", label: "Documentos" }, { key: "achados", label: "Achados e Decisão" }, { key: "obrigacoes", label: "Obrigações" }, { key: "licencas", label: "Licenças" }, { key: "contratos", label: "Contratos do Terreno" }, { key: "cronograma", label: "Linha do Tempo" },
 ];
-const date = new Intl.DateTimeFormat("pt-BR");
+const date = new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" });
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const label = (value: string) => value.replaceAll("_", " ");
 const Status = ({ value }: { value: string }) => <span className="status-pill">{label(value)}</span>;

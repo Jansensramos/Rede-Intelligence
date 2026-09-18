@@ -6,7 +6,7 @@ import { closeAccountingPeriod, postAccountingEvent } from "@/application/accoun
 
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 async function run<T>(operation: () => Promise<T>): Promise<Result<T>> {
-  try { const data = await operation(); revalidatePath("/contabilidade-controladoria"); return { ok: true, data }; }
+  try { const data = JSON.parse(JSON.stringify(await operation())) as T; revalidatePath("/contabilidade-controladoria"); return { ok: true, data }; }
   catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Não foi possível concluir a operação contábil." }; }
 }
 

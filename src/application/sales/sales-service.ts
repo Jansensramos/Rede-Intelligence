@@ -752,10 +752,10 @@ export async function evaluatePostSaleSlaBreaches(context: Pick<AuthContext, "or
 // ---------------------------------------------------------------------------
 
 export async function getSalesWorkspace(context: MutationContext, projectId: string, referenceDate: Date = new Date()) {
-  await projectForTenant(context.organizationId, projectId);
+  const project = await projectForTenant(context.organizationId, projectId);
   await releaseExpiredReservations(context, projectId, referenceDate);
 
-  const [units, priceTables, proposals, reservations, sales, leads, commissionPolicies, inspections, postSaleRequests, brokerProfiles, contractTemplates, disbursements, condominiumSetup] = await Promise.all([
+  const [units, priceTables, proposals, reservations, sales, leads, commissionPolicies, inspections, postSaleRequests, brokerProfiles, contractTemplates, disbursements, condominiumSetup, correctionRules, financialInstitutions, bankAccounts, suppliers] = await Promise.all([
     prisma.salesUnit.findMany({ where: { organizationId: context.organizationId, projectId }, include: { priceLines: { include: { priceTable: true } }, blocks: { where: { endedAt: null } } }, orderBy: { code: "asc" }, take: 2000 }),
     prisma.salesPriceTable.findMany({ where: { organizationId: context.organizationId, projectId }, include: { lines: true }, orderBy: { version: "desc" }, take: 50 }),
     prisma.salesProposal.findMany({ where: { organizationId: context.organizationId, projectId }, include: { customer: true, salesUnit: true, broker: true, creditBureauConsultations: { orderBy: { requestedAt: "desc" }, take: 1 } }, orderBy: { createdAt: "desc" }, take: 200 }),
@@ -770,6 +770,15 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
     // Fase 9R — repasse bancário e implantação do condomínio (leitura só de resumo; mutações via `app/actions/handover.ts`).
     prisma.bankFinancingDisbursement.findMany({ where: { organizationId: context.organizationId, sale: { projectId } }, include: { sale: { include: { salesUnit: true } }, financialInstitution: true }, orderBy: { createdAt: "desc" }, take: 200 }),
     prisma.condominiumSetup.findUnique({ where: { projectId }, include: { administratorSupplier: true } }),
+    prisma.correctionRule.findMany({
+      where: { organizationId: context.organizationId, isActive: true },
+      select: { id: true, name: true, indexName: true, periodicity: true, lagMonths: true, interestRate: true, fineRate: true },
+      orderBy: [{ name: "asc" }, { version: "desc" }],
+      take: 100,
+    }),
+    prisma.financialInstitution.findMany({ where: { organizationId: context.organizationId }, select: { id: true, name: true, code: true }, orderBy: { name: "asc" } }),
+    prisma.bankAccount.findMany({ where: { organizationId: context.organizationId, ...(project.companyId ? { companyId: project.companyId } : { projectId }), status: "ACTIVE" }, select: { id: true, agency: true, accountNumber: true, institution: { select: { name: true } } }, orderBy: { createdAt: "asc" } }),
+    prisma.supplier.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" }, take: 500 }),
   ]);
 
   const activeLineByUnit = new Map(units.map((unit) => [unit.id, unit.priceLines.find((line) => line.priceTable.status === "ACTIVE") ?? null]));
@@ -787,7 +796,7 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
   const overdueReceivables = sales.flatMap((sale) => sale.receivableAccounts.flatMap((account) => account.installments)).filter((installment) => installment.dueDate < referenceDate && !["RECEBIDA", "CANCELADA", "RENEGOCIADA"].includes(installment.status));
 
   return {
-    projectId, generatedAt: referenceDate.toISOString(),
+    projectId, currentUserId: context.userId, generatedAt: referenceDate.toISOString(),
     summary: {
       vgvTotal: Number(vgv.total), vgvDisponivel: Number(vgv.disponivel), vgvReservado: Number(vgv.reservado), vgvVendido: Number(vgv.vendido), vgvPermutado: Number(vgv.permutado), vgvDistratado: Number(vgv.distratado), vgvRecebido: Number(vgvReceived), vgvAReceber: Number(vgvToReceive),
       unitsTotal: units.length, unitsAvailable, unitsSold: soldCount, unitsReserved: units.filter((unit) => unit.status === "EM_RESERVA" || unit.status === "RESERVADA").length, unitsBlocked: units.filter((unit) => unit.status === "BLOQUEADA").length, unitsDelivered: units.filter((unit) => unit.status === "ENTREGUE").length, unitsRescinded: units.filter((unit) => unit.status === "DISTRATADA").length,
@@ -804,20 +813,30 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
       const signatureRequest = sale.contract?.signatureRequests[0] ?? null;
       const buyer = sale.parties.find((party) => party.role === "BUYER") ?? sale.parties[0] ?? null;
       return {
-        id: sale.id, unit: sale.salesUnit.code, buyers: sale.parties.map((party) => party.customer.name), buyerCustomerId: buyer?.customerId ?? null, broker: sale.broker?.name ?? null, soldPrice: Number(sale.soldPrice), discountAmount: Number(sale.discountAmount), status: sale.status,
+        id: sale.id, salesUnitId: sale.salesUnitId, unit: sale.salesUnit.code, buyers: sale.parties.map((party) => party.customer.name), buyerCustomerId: buyer?.customerId ?? null,
+        buyerParties: sale.parties.filter((party) => party.role === "BUYER" || party.role === "CO_BUYER").map((party) => ({ customerId: party.customerId, name: party.customer.name, email: party.customer.email, role: party.role })),
+        broker: sale.broker?.name ?? null, soldPrice: Number(sale.soldPrice), discountAmount: Number(sale.discountAmount), status: sale.status,
         contractId: sale.contract?.id ?? null, contractNumber: sale.contract?.number ?? null, contractDocuments: sale.contract?.documents.map((doc) => ({ id: doc.id, kind: doc.kind, status: doc.status, version: doc.version, fileName: doc.fileName })) ?? [],
         signatureStatus: sale.contract?.signatureStatus ?? null,
         signatureRequest: signatureRequest ? { id: signatureRequest.id, status: signatureRequest.status, provider: signatureRequest.provider, signedCount: signatureRequest.parties.filter((party) => party.status === "SIGNED").length, totalParties: signatureRequest.parties.length } : null,
-        installments: sale.paymentPlans.flatMap((plan) => plan.status === "ACTIVE" ? plan.installments : []).length, received: Number(receivedByReceivable(sale.receivableAccounts.flatMap((account) => account.installments))),
+        installments: sale.paymentPlans.flatMap((plan) => plan.status === "ACTIVE" ? plan.installments : []).length,
+        receivableInstallments: sale.receivableAccounts.flatMap((account) => account.installments.map((installment) => ({
+          id: installment.id,
+          number: installment.number,
+          dueDate: installment.dueDate.toISOString(),
+          currentAmount: Number(installment.currentAmount),
+          status: installment.status,
+        }))),
+        received: Number(receivedByReceivable(sale.receivableAccounts.flatMap((account) => account.installments))),
       };
     }),
     leads: leads.map((lead) => ({ id: lead.id, name: lead.name, source: lead.source, stage: lead.stage, brokerId: lead.brokerId })),
     commissionPolicies: commissionPolicies.map((policy) => ({ id: policy.id, triggerEvent: policy.triggerEvent, percentage: Number(policy.percentage), basis: policy.basis })),
     commissions: sales.flatMap((sale) => sale.commissions.map((commission) => ({ id: commission.id, sale: sale.id, broker: commission.broker.name, amount: Number(commission.amount), status: commission.status }))),
-    inspections: inspections.map((inspection) => ({ id: inspection.id, unit: inspection.salesUnit.code, scheduledAt: inspection.scheduledAt.toISOString(), outcome: inspection.outcome })),
+    inspections: inspections.map((inspection) => ({ id: inspection.id, salesUnitId: inspection.salesUnitId, saleId: inspection.saleId, unit: inspection.salesUnit.code, scheduledAt: inspection.scheduledAt.toISOString(), outcome: inspection.outcome })),
     // Fase 9R — supplier/custo/reincidência/SLA vencido (evaluatePostSaleSla, regra pura — nunca persistido).
     postSaleRequests: postSaleRequests.map((request) => ({
-      id: request.id, unit: request.salesUnit.code, customer: request.customer.name, customerId: request.customerId, category: request.category, status: request.status, updates: request.updates.length,
+      id: request.id, salesUnitId: request.salesUnitId, saleId: request.saleId, unit: request.salesUnit.code, customer: request.customer.name, customerId: request.customerId, category: request.category, status: request.status, updates: request.updates.length,
       supplier: request.supplier?.name ?? null, estimatedCost: request.estimatedCost ? Number(request.estimatedCost) : null, actualCost: request.actualCost ? Number(request.actualCost) : null,
       recurrenceOfId: request.recurrenceOfId, slaDueAt: request.slaDueAt?.toISOString() ?? null,
       slaViolated: evaluatePostSaleSla({ slaDueAt: request.slaDueAt, status: request.status, now: referenceDate }).violated,
@@ -833,6 +852,18 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
     } : null,
     brokers: brokerProfiles.map((profile) => ({ id: profile.id, name: profile.supplier.name, creci: profile.creci, defaultCommissionRate: profile.defaultCommissionRate ? Number(profile.defaultCommissionRate) : null })),
     contractTemplates: contractTemplates.map((template) => ({ id: template.id, name: template.name, status: template.status, versions: template.versions.map((version) => ({ id: version.id, version: version.version, status: version.status })) })),
+    correctionRules: correctionRules.map((rule) => ({
+      id: rule.id,
+      name: rule.name,
+      indexName: rule.indexName,
+      periodicity: rule.periodicity,
+      lagMonths: rule.lagMonths,
+      interestRate: rule.interestRate ? Number(rule.interestRate) : null,
+      fineRate: rule.fineRate ? Number(rule.fineRate) : null,
+    })),
+    financialInstitutions: financialInstitutions.map((item) => ({ id: item.id, name: item.name, code: item.code })),
+    bankAccounts: bankAccounts.map((item) => ({ id: item.id, institution: item.institution?.name ?? "Instituição não informada", agency: item.agency, accountNumber: item.accountNumber })),
+    suppliers: suppliers.map((item) => ({ id: item.id, name: item.name })),
     // Entrada para o Cliente 360 (Fase 9K.4B, item 1) — nenhum dado novo: só agrupa por cliente o
     // que este mesmo workspace já buscou (propostas/reservas/vendas/pós-venda), sem consulta extra.
     customers: buildCustomerSummaries(proposals, reservations, sales, postSaleRequests),

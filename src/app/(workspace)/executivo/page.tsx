@@ -5,6 +5,7 @@ import { getDecisionInsights, listSimulableSalesUnits } from "@/application/exec
 import { getProjectClosureOverview } from "@/application/closure/closure-service";
 import { ClosureOperabilityPanel } from "@/components/closure-operability-panel";
 import { GestaoExecutivaView } from "@/components/areas/gestao-executiva-view";
+import { hasProtectedApprovalCapability, hasProtectedWriteCapability } from "@/domain/auth/write-capabilities";
 
 /**
  * Fase 10C.1 — Gestão Executiva permanece como leitura e decisão; o encerramento
@@ -13,6 +14,10 @@ import { GestaoExecutivaView } from "@/components/areas/gestao-executiva-view";
 export default async function ExecutivoPage() {
   const [authContext, context] = await Promise.all([requireAuthContext(), getCurrentOperationalContext()]);
   if (!context.project) return null;
+
+  const canWriteClosure = hasProtectedWriteCapability(authContext.role, "CLOSURE_WRITE");
+  const canApproveClosure = hasProtectedApprovalCapability(authContext.role, "CLOSURE_APPROVE");
+  const canReopenClosure = authContext.role === "OWNER";
 
   const [overview, portfolio, closure] = await Promise.all([
     getExecutiveProjectOverview(authContext, {
@@ -39,6 +44,9 @@ export default async function ExecutivoPage() {
     <ClosureOperabilityPanel
       projectId={context.project.id}
       latest={closure.latest ? { id: closure.latest.id, status: closure.latest.status, version: closure.latest.version } : null}
+      canWrite={canWriteClosure}
+      canApprove={canApproveClosure}
+      canReopen={canReopenClosure}
       gate={{
         overall: closure.gate.overall,
         operational: { status: closure.gate.operational.status },

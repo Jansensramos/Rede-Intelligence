@@ -193,5 +193,10 @@
     "name": "20260911235000_phase_9s_legal_evidence_idempotency",
     "checksum": "3b1b357861a8c5425dda77de96b6616a87a0998cfe94bc8265ce4e31359d3771",
     "windowsChecksum": "d3e3d3523861772a16f4baeff9898137f889050ac8031b73e24b1c915465443f"
+  },
+  {
+    "name": "20260917193000_service_orders",
+    "checksum": "9479ce557d02d4673aa0b84ac1c6d4af2f75868e5de9d562a91982a35753970b",
+    "windowsChecksum": "db1926e5a4685e4e60d3f51f399b8e76106165f100a412dfe772b25e02e8d017"
   }
 ]

@@ -237,7 +237,7 @@ export function GestaoExecutivaView({
             {overview.whatChanged.map((item) => (
               <button key={item.id} className="ds-whatchanged-item" type="button" onClick={() => router.push(item.href)} style={{ textAlign: "left", cursor: "pointer" }}>
                 <strong>{item.label}</strong>
-                <span>{item.detail} {new Date(item.occurredAt).toLocaleString("pt-BR")} · {item.source}</span>
+                <span>{item.detail} {new Date(item.occurredAt).toLocaleString("pt-BR", { timeZone: "UTC" })} · {item.source}</span>
                 {item.beforeAfter && <span>{item.beforeAfter}</span>}
               </button>
             ))}

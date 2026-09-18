@@ -15,7 +15,7 @@
  * /`landWorkspace` já estão carregados — evita reintroduzir o bootstrap de 15 workspaces que a
  * 9K.0 desmontou. Documentado no relatório de entrega da 9K.1.
  */
-import { useMemo, useState } from "react";
+import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, BarChart3, Check, ClipboardCheck, MapPinned, Plus, Settings2 } from "lucide-react";
 import { CashFlowChart } from "@/components/cash-flow-chart";
@@ -26,6 +26,8 @@ import { RedTeamView } from "@/components/red-team-view";
 import { SensitivityView } from "@/components/sensitivity-view";
 import { EmptyState, SectionTitle, Tabs } from "@/components/ui";
 import { createStudyAction, createStudyVersionAction } from "@/app/actions/studies";
+import { createLandStudyForProjectAction } from "@/app/actions/land";
+import styles from "@/components/sales-operability-panel.module.css";
 import { reassessInvestmentCaseAction } from "@/app/actions/investment";
 import { setActiveProjectAction } from "@/app/actions/workspace-context";
 import { analyzeRisk } from "@/domain/risk/rules";
@@ -36,6 +38,7 @@ import type { ProjectAssumptions, ScenarioKey } from "@/domain/financial/types";
 import type { PersistedStudyView } from "@/application/studies/contracts";
 import type { LandWorkspaceView } from "@/domain/land";
 import type { InvestmentCaseWorkspace } from "@/domain/investment";
+import type { MembershipRole } from "@prisma/client";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const compactCurrency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact", maximumFractionDigits: 1 });
@@ -62,7 +65,7 @@ const FUNCOES: { key: Funcao; label: string }[] = [
 
 type EditorMode = "create" | "version";
 
-function AssumptionSummary({ project, onEdit }: { project: ProjectAssumptions; onEdit: () => void }) {
+function AssumptionSummary({ project, onEdit, canWrite }: { project: ProjectAssumptions; onEdit: () => void; canWrite: boolean }) {
   const groups = [
     { title: "Produto", items: [["Terreno", `${number.format(Number(project.landAreaM2))} m²`], ["Unidades", project.units.toString()], ["Área privativa", `${project.privateAreaPerUnitM2} m² / un.`], ["Eficiência", `${project.efficiencyRate}%`], ["Preço", brl(project.unitPrice)]] },
     { title: "Estrutura de custos", items: [["Terreno", brl(project.landPrice)], ["Obra", `${brl(project.constructionCostPerM2)} / m²`], ["Indiretos", `${project.indirectCostsRate}%`], ["Contingência", `${project.contingencyRate}%`], ["Comissão + MKT", `${Number(project.commissionRate) + Number(project.marketingRate)}%`]] },
@@ -71,7 +74,7 @@ function AssumptionSummary({ project, onEdit }: { project: ProjectAssumptions; o
   ];
   return (
     <>
-      <SectionTitle eyebrow="PREMISSAS ATIVAS" title="Uma fonte para todos os cálculos" description="Valores do caso base. Cenários aplicam deltas sem alterar este snapshot." action={<button className="button button-primary" onClick={onEdit}><Settings2 size={16} /> Editar premissas</button>} />
+      <SectionTitle eyebrow="PREMISSAS ATIVAS" title="Uma fonte para todos os cálculos" description="Valores do caso base. Cenários aplicam deltas sem alterar este snapshot." action={<button className="button button-primary" disabled={!canWrite} onClick={onEdit}><Settings2 size={16} /> Editar premissas</button>} />
       <div className="assumption-groups">
         {groups.map((group) => <article className="assumption-card" key={group.title}><h3>{group.title}</h3><dl>{group.items.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></article>)}
       </div>
@@ -84,10 +87,14 @@ export function ViabilidadeWorkspace({
   initialStudy,
   initialLand,
   initialInvestment,
+  canWrite,
+  role,
 }: {
   initialStudy: PersistedStudyView;
   initialLand: LandWorkspaceView | null;
   initialInvestment: InvestmentCaseWorkspace;
+  canWrite: boolean;
+  role: MembershipRole;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -104,6 +111,9 @@ export function ViabilidadeWorkspace({
   const [scenario, setScenario] = useState<ScenarioKey>("base");
   const [editorProject, setEditorProject] = useState<ProjectAssumptions | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>("version");
+  const [landCreateOpen, setLandCreateOpen] = useState(false);
+  const [landFeedback, setLandFeedback] = useState<string | null>(null);
+  const [landPending, startLandTransition] = useTransition();
 
   const results = useMemo(() => calculateAllScenarios(project), [project]);
   const result = results[scenario];
@@ -117,6 +127,36 @@ export function ViabilidadeWorkspace({
     router.replace(`/viabilidade?f=${next}`, { scroll: false });
   }
 
+  function createLand(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    setLandFeedback(null);
+    startLandTransition(async () => {
+      const response = await createLandStudyForProjectAction({
+        projectId: study.projectId,
+        name: String(data.get("name") ?? "").trim(),
+        address: String(data.get("address") ?? "").trim(),
+        number: String(data.get("number") ?? "").trim() || undefined,
+        neighborhood: String(data.get("neighborhood") ?? "").trim(),
+        city: String(data.get("city") ?? "").trim(),
+        state: String(data.get("state") ?? "").trim(),
+        postalCode: String(data.get("postalCode") ?? "").trim() || undefined,
+        latitude: Number(data.get("latitude")),
+        longitude: Number(data.get("longitude")),
+        cadastralIdentifier: String(data.get("cadastralIdentifier") ?? "").trim() || undefined,
+        municipalRegistration: String(data.get("municipalRegistration") ?? "").trim() || undefined,
+        area: Number(data.get("area")),
+        frontage: Number(data.get("frontage")),
+      });
+      if (!response.ok) { setLandFeedback(response.error); return; }
+      setLandWorkspace(response.data);
+      const reassessment = await reassessInvestmentCaseAction(investmentWorkspace.id, study.studyVersionId, response.data.versionId);
+      if (reassessment.ok) setInvestmentWorkspace(reassessment.data);
+      setLandCreateOpen(false);
+      setLandFeedback("Terreno cadastrado e primeiro snapshot urbanístico criado.");
+      router.refresh();
+    });
+  }
   async function saveProject(value: ProjectAssumptions) {
     const isNewProject = editorMode === "create" || !study.studyId;
     const response = isNewProject
@@ -151,12 +191,13 @@ export function ViabilidadeWorkspace({
 
   return (
     <div className="view-stack">
+      {!canWrite && <div className="model-note"><div><strong>Modo de leitura</strong><p>Seu perfil pode consultar a Viabilidade, mas não criar estudos, alterar premissas, cadastrar terrenos ou salvar snapshots.</p></div></div>}
       <SectionTitle
         eyebrow="VIABILIDADE"
         title="Terreno, premissas, cenários e decisão em um só lugar"
         description="Engine, score, sensibilidade, Red Team, comitê, Studio, Data Room, fluxo de caixa e trilha de cálculo — reorganizados, não redesenhados."
         action={
-          <button className="button button-secondary" onClick={() => { setEditorMode("create"); setEditorProject({ ...structuredClone(DEMO_PROJECT), projectName: "Novo empreendimento", city: "", state: "SP", landPrice: "0", financingLimit: "0" }); }}>
+          <button className="button button-secondary" disabled={!canWrite} onClick={() => { setEditorMode("create"); setEditorProject({ ...structuredClone(DEMO_PROJECT), projectName: "Novo empreendimento", city: "", state: "SP", landPrice: "0", financingLimit: "0" }); }}>
             <Plus size={16} /> Novo estudo
           </button>
         }
@@ -173,6 +214,7 @@ export function ViabilidadeWorkspace({
       {funcao === "land" && landWorkspace && (
         <LandIntelligenceView
           initialLand={landWorkspace}
+          canWrite={canWrite}
           onLandChange={(nextLand) => {
             setLandWorkspace(nextLand);
             void reassessInvestmentCaseAction(investmentWorkspace.id, study.studyVersionId, nextLand.versionId).then((response) => {
@@ -183,14 +225,40 @@ export function ViabilidadeWorkspace({
       )}
 
       {funcao === "land" && !landWorkspace && (
-        <EmptyState
-          icon={MapPinned}
-          title="Nenhum terreno vinculado a este empreendimento"
-          description="Este projeto ainda não tem um Land Asset associado. Vincular um terreno a um projeto ainda não é uma ação disponível no produto — fica registrado como pendência para fase futura."
-        />
+        <div className="view-stack">
+          <EmptyState icon={MapPinned} title="Nenhum terreno vinculado a este empreendimento" description="Cadastre o terreno para criar o Land Asset, gerar o primeiro snapshot e iniciar o estudo de potencial construtivo." />
+          <div className="panel-actions"><button className="button button-primary" disabled={!canWrite} onClick={() => setLandCreateOpen(true)}><Plus size={16} /> Cadastrar terreno</button></div>
+          {landFeedback && <div className={styles.error}>{landFeedback}</div>}
+        </div>
       )}
 
-      {funcao === "assumptions" && <AssumptionSummary project={project} onEdit={() => { setEditorMode("version"); setEditorProject(project); }} />}
+      {landCreateOpen && <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !landPending) setLandCreateOpen(false); }}>
+        <div className={styles.modal} role="dialog" aria-modal="true" aria-label="Cadastrar terreno">
+          <div className={styles.modalHeader}><div><h3>Cadastrar terreno</h3><p>Cria o Land Asset deste empreendimento e o primeiro snapshot do estudo urbanístico.</p></div><button className={styles.closeButton} type="button" disabled={landPending} onClick={() => setLandCreateOpen(false)} aria-label="Fechar">×</button></div>
+          <form className={styles.form} onSubmit={createLand}>
+            <div className={styles.formGrid}>
+              <div className={styles.field}><label>Nome do terreno</label><input name="name" required autoFocus placeholder="Ex.: Terreno Rua das Flores" /></div>
+              <div className={styles.field}><label>Área do terreno (m²)</label><input name="area" type="number" min="1" step="0.01" required defaultValue={project.landAreaM2} /></div>
+              <div className={styles.field}><label>Testada (m)</label><input name="frontage" type="number" min="1" step="0.01" required /></div>
+              <div className={styles.field + " " + styles.fieldFull}><label>Endereço</label><input name="address" required /></div>
+              <div className={styles.field}><label>Número</label><input name="number" placeholder="S/N" /></div>
+              <div className={styles.field}><label>Bairro</label><input name="neighborhood" required /></div>
+              <div className={styles.field}><label>Cidade</label><input name="city" required defaultValue={project.city} /></div>
+              <div className={styles.field}><label>UF</label><input name="state" required maxLength={2} defaultValue={project.state} /></div>
+              <div className={styles.field}><label>CEP</label><input name="postalCode" /></div>
+              <div className={styles.field}><label>Latitude</label><input name="latitude" type="number" step="any" required /></div>
+              <div className={styles.field}><label>Longitude</label><input name="longitude" type="number" step="any" required /></div>
+              <div className={styles.field}><label>Identificador cadastral</label><input name="cadastralIdentifier" /></div>
+              <div className={styles.field}><label>Inscrição municipal</label><input name="municipalRegistration" /></div>
+              <div className={styles.field + " " + styles.fieldFull}><span className={styles.help}>O primeiro polígono esquemático será criado pela área e testada informadas. Depois você pode corrigi-lo via GeoJSON no Zoning Lab.</span></div>
+            </div>
+            {landFeedback && <div className={styles.error}>{landFeedback}</div>}
+            <div className={styles.modalActions}><button type="button" className="button button-secondary" disabled={landPending} onClick={() => setLandCreateOpen(false)}>Cancelar</button><button type="submit" className="button button-primary" disabled={landPending || !canWrite}>{landPending ? "Criando..." : "Criar terreno e estudo"}</button></div>
+          </form>
+        </div>
+      </div>}
+
+      {funcao === "assumptions" && <AssumptionSummary project={project} canWrite={canWrite} onEdit={() => { setEditorMode("version"); setEditorProject(project); }} />}
 
       {funcao === "scenarios" && (
         <div className="view-stack">
@@ -231,11 +299,11 @@ export function ViabilidadeWorkspace({
 
       {funcao === "redteam" && <RedTeamView report={study.redTeam} />}
 
-      {funcao === "committee" && <InvestmentSuiteView mode="committee" initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
+      {funcao === "committee" && <InvestmentSuiteView mode="committee" role={role} initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
 
-      {funcao === "studio" && <InvestmentSuiteView mode="studio" initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
+      {funcao === "studio" && <InvestmentSuiteView mode="studio" role={role} initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
 
-      {funcao === "dataroom" && <InvestmentSuiteView mode="dataroom" initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
+      {funcao === "dataroom" && <InvestmentSuiteView mode="dataroom" role={role} initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
 
       {funcao === "cashflow" && (
         <div className="view-stack">

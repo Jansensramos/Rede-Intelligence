@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { UserFacingTextSanitizer } from "@/components/user-facing-text-sanitizer";
 import "./globals.css";
+import "./professional-overrides.css";
+import "./presentation-polish.css";
 
 export const metadata: Metadata = {
   title: "REDE Intelligence",
@@ -9,7 +12,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>
+        {children}
+        <UserFacingTextSanitizer />
+      </body>
     </html>
   );
 }

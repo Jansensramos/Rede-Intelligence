@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { MembershipRole } from "@prisma/client";
+import { hasMarketProductCapability } from "@/domain/market-product";
 import { decideProductScenarioAction, generateProductScenariosAction } from "@/app/actions/market-product";
 import { MarketIntelligenceView } from "@/components/market-intelligence-view";
 import { ProductIntelligenceView } from "@/components/product-intelligence-view";
@@ -17,7 +18,7 @@ import type { MarketProductWorkspaceView } from "@/application/market-product";
 
 type Funcao = "mercado" | "produto" | "macro" | "lancamento";
 
-export function MercadoProdutoWorkspace({ initialWorkspace, role }: { initialWorkspace: MarketProductWorkspaceView; role: MembershipRole }) {
+export function MercadoProdutoWorkspace({ initialWorkspace, role, projectId }: { initialWorkspace: MarketProductWorkspaceView; role: MembershipRole; projectId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [workspace, setWorkspace] = useState(initialWorkspace);
@@ -61,7 +62,7 @@ export function MercadoProdutoWorkspace({ initialWorkspace, role }: { initialWor
             title="Área de influência, demografia, renda, oferta e preços"
             description="Neste terreno e nesta localização: o que o mercado mostra, com proveniência e nível de confiança explícitos."
           />
-          <MarketIntelligenceView workspace={workspace} />
+          <MarketIntelligenceView workspace={workspace} projectId={projectId} canManage={hasMarketProductCapability(role, "MARKET_MANAGE")} onChange={setWorkspace} />
         </>
       )}
 

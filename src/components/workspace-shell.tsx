@@ -1,17 +1,5 @@
 "use client";
 
-/**
- * Shell de navegação por Grandes Áreas (Fase 9K.1). Substitui a sidebar/topbar de
- * `intelligence-workspace.tsx` (mantido em `/legado`, ordem de serviço §13) por navegação real:
- * `<Link>`/rota Next.js em vez de `useState`+troca de `view` — resolve deep-link, refresh, botão
- * voltar do navegador e compartilhamento de URL de graça (ordem de serviço §5).
- *
- * Gestão Executiva (§1) é renderizada primeiro e com destaque visual (`is-primary`, CSS §12).
- * REDE Academy fica deliberadamente por último (§9); REDE Asset também separada da operação (§10);
- * Ajuda tem ponto de entrada fixo no rodapé (§11) — nenhuma delas é construída nesta sprint, só
- * posicionada.
- */
-
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -160,10 +148,10 @@ export function WorkspaceShell({
         </nav>
 
         {canAccessWorkspacePath(context.user.role, "/assistente") && <Link href="/assistente" className="sidebar-module sidebar-ai-live" onClick={() => setSidebarOpen(false)}>
-          <span>COPILOTO ATIVO</span>
+          <span>ASSISTENTE REDE</span>
           <Sparkles size={18} />
-          <div><strong>Pergunte ao REDE</strong><small>Contexto estruturado</small></div>
-          <span className="soon">AI</span>
+          <div><strong>Pergunte à REDE</strong><small>Contexto do empreendimento</small></div>
+          <span className="soon">IA</span>
         </Link>}
 
         <div className="sidebar-footer">
@@ -187,7 +175,6 @@ export function WorkspaceShell({
           </div>
           <div className="topbar-actions">
             {contextualHelp(pathname) && <Link href={`/ajuda#${contextualHelp(pathname)!.id}`}>Ajuda desta tela</Link>}
-            <span className="engine-chip"><i /> ENGINE v1.0</span>
           </div>
         </header>
 

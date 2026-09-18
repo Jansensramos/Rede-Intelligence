@@ -388,6 +388,42 @@ async function main() {
   }
   if (salesPriceTable.status === "DRAFT") salesPriceTable = await activateSalesPriceTable(context, salesPriceTable.id);
 
+  // Mantém estoque demonstrativo suficiente para testes manuais repetidos no localhost.
+  // Não altera unidades já vendidas, reservadas ou bloqueadas; apenas garante novas unidades
+  // disponíveis e suas linhas na tabela ativa existente.
+  const additionalDemoUnits = [
+    { code: "TOR-A-1304", floor: "13", typology: "2 dormitórios", privateAreaM2: "55.4", parkingSpaces: 1, storageUnits: 1, position: "Norte", listPrice: "618000", minimumAuthorizedPrice: "592000" },
+    { code: "TOR-A-1305", floor: "13", typology: "2 dormitórios", privateAreaM2: "55.4", parkingSpaces: 1, storageUnits: 1, position: "Sul", listPrice: "620000", minimumAuthorizedPrice: "594000" },
+    { code: "TOR-A-1401", floor: "14", typology: "2 dormitórios", privateAreaM2: "55.4", parkingSpaces: 1, storageUnits: 1, position: "Leste", listPrice: "625000", minimumAuthorizedPrice: "598000" },
+    { code: "TOR-A-1402", floor: "14", typology: "3 dormitórios", privateAreaM2: "72.1", parkingSpaces: 2, storageUnits: 1, position: "Oeste — vista parque", listPrice: "795000", minimumAuthorizedPrice: "760000" },
+    { code: "TOR-A-1403", floor: "14", typology: "2 dormitórios", privateAreaM2: "55.4", parkingSpaces: 1, storageUnits: 1, position: "Norte", listPrice: "628000", minimumAuthorizedPrice: "600000" },
+  ] as const;
+  for (const demoUnit of additionalDemoUnits) {
+    let unit = await prisma.salesUnit.findUnique({ where: { projectId_code: { projectId: butantaStudy.projectId, code: demoUnit.code } } });
+    if (!unit) unit = await createSalesUnit(context, {
+      projectId: butantaStudy.projectId,
+      companyId: company.id,
+      operatingUnitId: towerAOperatingUnit?.id ?? null,
+      code: demoUnit.code,
+      floor: demoUnit.floor,
+      typology: demoUnit.typology,
+      privateAreaM2: demoUnit.privateAreaM2,
+      parkingSpaces: demoUnit.parkingSpaces,
+      storageUnits: demoUnit.storageUnits,
+      position: demoUnit.position,
+    });
+    await prisma.salesPriceTableLine.upsert({
+      where: { priceTableId_salesUnitId: { priceTableId: salesPriceTable.id, salesUnitId: unit.id } },
+      update: {},
+      create: {
+        priceTableId: salesPriceTable.id,
+        salesUnitId: unit.id,
+        listPrice: demoUnit.listPrice,
+        minimumAuthorizedPrice: demoUnit.minimumAuthorizedPrice,
+      },
+    });
+  }
+
   let broker = await prisma.supplier.findFirst({ where: { organizationId: organization.id, taxId: "111.222.333-44" } });
   if (!broker) broker = await createSupplier(context, { name: "Patrícia Nogueira — Corretora", legalName: "Patrícia Nogueira", taxId: "111.222.333-44", personType: "INDIVIDUAL", email: "patricia.nogueira@corretora.demo" });
   await upsertBrokerProfile(context, { supplierId: broker.id, creci: "SP-123456-F", channel: "Plantão de vendas" });

@@ -390,6 +390,7 @@ export async function getIntegrationsWorkspace(context: Pick<IntegrationContext,
       stale,
       credentialStatus,
       credentialExpiresAt: item.credential?.expiresAt?.toISOString() ?? null,
+      configuration: item.configuration as Record<string, unknown>,
       uiState: classifyInstallationState({ installationStatus: item.status, healthStatus: item.healthStatus, credentialStatus, stale }),
       scope: { level: scopeLevel, groupId: item.economicGroup?.id ?? null, groupName: item.economicGroup?.name ?? null, companyId: item.company?.id ?? null, companyName: item.company?.name ?? null, projectId: item.project?.id ?? null, projectName: item.project?.name ?? null },
     };

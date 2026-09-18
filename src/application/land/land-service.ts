@@ -35,9 +35,31 @@ async function appendLandVersion(
   const previous = study.currentVersionNumber > 0 ? await tx.landStudyVersion.findFirst({ where: { landStudyId: study.id, versionStatus: LandVersionStatus.SNAPSHOT }, orderBy: { versionNumber: "desc" }, select: { snapshot: true } }) : null;
   const versionNumber = study.currentVersionNumber + 1;
   const overrides = update?.parameters;
-  const snapshot = createDemoLandSnapshot(context.organizationId, versionNumber, overrides, update?.product, update?.polygon);
+  const asset = await tx.landAsset.findFirst({ where: { id: study.landAssetId, organizationId: context.organizationId } });
+  if (!asset) throw new Error("Terreno não encontrado nesta organização.");
+  const storedPolygon = asset.polygonGeometry as unknown as import("@/domain/land").PolygonGeometry;
+  const snapshot = createDemoLandSnapshot(context.organizationId, versionNumber, overrides, update?.product, update?.polygon ?? storedPolygon);
   snapshot.landStudyId = study.id;
-  snapshot.landAsset.id = study.landAssetId;
+  snapshot.landAsset = {
+    id: asset.id,
+    organizationId: asset.organizationId,
+    projectId: asset.projectId,
+    name: asset.name,
+    address: asset.address,
+    number: asset.number,
+    neighborhood: asset.neighborhood,
+    city: asset.city,
+    state: asset.state,
+    postalCode: asset.postalCode,
+    latitude: Number(asset.latitude),
+    longitude: Number(asset.longitude),
+    cadastralIdentifier: asset.cadastralIdentifier,
+    municipalRegistration: asset.municipalRegistration,
+    area: Number(asset.area),
+    frontage: Number(asset.frontage),
+    polygon: update?.polygon ?? storedPolygon,
+    sourceId: asset.sourceRef,
+  };
   if (update?.polygon) {
     snapshot.landAsset.polygon = update.polygon;
     snapshot.landAsset.area = polygonArea(update.polygon);
@@ -224,6 +246,82 @@ export async function getLandStudyForOrganization(organizationId: string, landSt
     select: { id: true, versionNumber: true, snapshot: true },
   });
   return version ? toView(version) : null;
+}
+
+export interface CreateLandStudyForProjectInput {
+  projectId: string;
+  name: string;
+  address: string;
+  number?: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  postalCode?: string;
+  latitude: number;
+  longitude: number;
+  cadastralIdentifier?: string;
+  municipalRegistration?: string;
+  area: number;
+  frontage: number;
+}
+
+export async function createLandStudyForProject(
+  context: Pick<AuthContext, "userId" | "organizationId">,
+  input: CreateLandStudyForProjectInput,
+): Promise<LandWorkspaceView> {
+  if (!input.name.trim() || !input.address.trim() || !input.neighborhood.trim() || !input.city.trim()) throw new Error("Preencha os dados básicos do terreno.");
+  if (input.state.trim().length !== 2) throw new Error("Informe a UF com duas letras.");
+  if (!Number.isFinite(input.area) || input.area <= 0) throw new Error("A área do terreno deve ser maior que zero.");
+  if (!Number.isFinite(input.frontage) || input.frontage <= 0) throw new Error("A testada deve ser maior que zero.");
+  if (!Number.isFinite(input.latitude) || input.latitude < -90 || input.latitude > 90) throw new Error("Latitude inválida.");
+  if (!Number.isFinite(input.longitude) || input.longitude < -180 || input.longitude > 180) throw new Error("Longitude inválida.");
+
+  return prisma.$transaction(async (tx) => {
+    const project = await tx.project.findFirst({ where: { id: input.projectId, organizationId: context.organizationId } });
+    if (!project) throw new Error("Empreendimento não encontrado nesta organização.");
+    const existing = await tx.landAsset.findFirst({ where: { organizationId: context.organizationId, projectId: input.projectId } });
+    if (existing) throw new Error("Este empreendimento já possui um terreno vinculado.");
+
+    const depth = input.area / input.frontage;
+    const polygon = {
+      type: "Polygon" as const,
+      coordinates: [
+        { x: 0, y: 0 },
+        { x: input.frontage, y: 0 },
+        { x: input.frontage, y: depth },
+        { x: 0, y: depth },
+      ],
+    };
+    const asset = await tx.landAsset.create({ data: {
+      organizationId: context.organizationId,
+      projectId: input.projectId,
+      name: input.name.trim(),
+      address: input.address.trim(),
+      number: input.number?.trim() || "S/N",
+      neighborhood: input.neighborhood.trim(),
+      city: input.city.trim(),
+      state: input.state.trim().toUpperCase(),
+      postalCode: input.postalCode?.trim() || "",
+      latitude: input.latitude,
+      longitude: input.longitude,
+      cadastralIdentifier: input.cadastralIdentifier?.trim() || null,
+      municipalRegistration: input.municipalRegistration?.trim() || null,
+      area: input.area,
+      frontage: input.frontage,
+      polygonGeometry: json(polygon),
+      sourceRef: "USER_INPUT",
+      createdById: context.userId,
+      updatedById: context.userId,
+    } });
+    const study = await tx.landStudy.create({ data: {
+      organizationId: context.organizationId,
+      landAssetId: asset.id,
+      name: "Estudo preliminar de potencial construtivo",
+      createdById: context.userId,
+      updatedById: context.userId,
+    } });
+    return appendLandVersion(tx, context, study, null, "Criação manual do terreno e primeiro snapshot urbanístico.");
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function createDemoLandStudy(context: Pick<AuthContext, "userId" | "organizationId">): Promise<LandWorkspaceView> {

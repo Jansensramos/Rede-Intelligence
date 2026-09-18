@@ -1,5 +1,9 @@
 [
   {
+    "path": "src/app/actions/accounting.ts",
+    "sha256": "ae4e3264a568de29cf4e5b747306b620aa0fe09bb99870c009283f0229f7ebf6"
+  },
+  {
     "path": "src/app/actions/ai.ts",
     "sha256": "3089c02963a187dc6b49fb44065a94290625a5c650c15b0cc1c7c24e99df9df5"
   },
@@ -9,11 +13,19 @@
   },
   {
     "path": "src/app/actions/authorization.ts",
-    "sha256": "01d2f7da48466a467dcb846453debc78e2b586042b263909699d8342b90579b0"
+    "sha256": "e94a02c81c275e377413f4f720524b87dcaa54539f33593834ce7c87a8a99e4a"
   },
   {
     "path": "src/app/actions/capital.ts",
-    "sha256": "5dbf1d1f2cde36479764738ba975f11564781e7fa7449cf2f4eb8d8c09ae6c24"
+    "sha256": "28a5189bdc960fea952bf3589445f665ce1f43ca2fd097563f5820b8eb1d114a"
+  },
+  {
+    "path": "src/app/actions/closure.ts",
+    "sha256": "4a23dad9d40da8a17f497bb7697c7a9161f3ab3f82f40d93e66e8b33f83460bc"
+  },
+  {
+    "path": "src/app/actions/data-intelligence.ts",
+    "sha256": "2fa0ba4ac92d3b478cfcfa31c3cf641f56a30cf5d24b3886bb716d559b7af723"
   },
   {
     "path": "src/app/actions/design.ts",
@@ -21,7 +33,7 @@
   },
   {
     "path": "src/app/actions/engineering.ts",
-    "sha256": "c4c460903785ce29f6679dd76ce13eb33d1998772722c32beabf41bf5bb9f71d"
+    "sha256": "a89ef7dcff6986745fb33fe3124b7dc4cba28f468fac51cea1e79244b0f6692e"
   },
   {
     "path": "src/app/actions/enterprise-provider.ts",
@@ -37,15 +49,19 @@
   },
   {
     "path": "src/app/actions/financial.ts",
-    "sha256": "e9201fa37aa338c6013799bf1f95720026538a345e6bad278002c72aa5b5ad57"
+    "sha256": "d181ad4e619f6c93daae299bb339ceec96860ab2566f58d5a7a6e124a03e9f02"
   },
   {
     "path": "src/app/actions/google-drive.ts",
     "sha256": "9a3160ca1f72db7c70eb5c4ee0c9c823fe7a460f65d1ce9b0d1f037f3cc1b9ab"
   },
   {
+    "path": "src/app/actions/handover.ts",
+    "sha256": "1811f81401b6ca99a72267e2ec067445eb1cc51d9f676a03c7b36d21d3ad1717"
+  },
+  {
     "path": "src/app/actions/integrations.ts",
-    "sha256": "458fe0fba0b7b17b0b61af2b9073f6f73511d31ad97aca43ec1b86d24aff1153"
+    "sha256": "536731352d553c830355769bc79cff1d457a6c25cb6844b8c714c2cd5a241390"
   },
   {
     "path": "src/app/actions/investment.ts",
@@ -53,27 +69,47 @@
   },
   {
     "path": "src/app/actions/land.ts",
-    "sha256": "af300418f68b5e5efc4620f9bc7b0c3900f7a07fc4be4bb29a905c75ca6ba610"
+    "sha256": "ed76c369851f65c01a749fd0bc21cd79df7a622e3cdccd633185fe976e7f5686"
   },
   {
     "path": "src/app/actions/launch-intelligence.ts",
     "sha256": "95b3f8cd84795db465cb524c5b2a7b092647d52558976141c4a74d639cbe2c6d"
   },
   {
+    "path": "src/app/actions/legal.ts",
+    "sha256": "5765b45e958793aded12cf3bc68a51dac8d7b74b300ac026a33317e713223284"
+  },
+  {
+    "path": "src/app/actions/local-readiness.ts",
+    "sha256": "40d4a41e55c7779bbd056989de07f2bcd3f242b0fb15726808c05a693df0ff74"
+  },
+  {
     "path": "src/app/actions/market-product.ts",
-    "sha256": "034fc7dea1c06532852299b9a3f8829c2ebfc5a0d6cb77ddece3756a1b152b18"
+    "sha256": "4bfe3bf0940e3fa68f4278f78de985fee91c0098b5dd9788c528c78eccb06eea"
   },
   {
     "path": "src/app/actions/operations.ts",
-    "sha256": "6dfcc76bbf0d2c8d23ea0f5a9bbaed1039f18909c20081ab568357b7500305ff"
+    "sha256": "db54ae56f210bd0168c38f306dd4b27a856188b55f8b73b7f5347b90ef68eccb"
+  },
+  {
+    "path": "src/app/actions/people.ts",
+    "sha256": "686509da3abf01b71555b87318070333027ddc9c74c58da5ba3dee8b7fb41694"
   },
   {
     "path": "src/app/actions/procurement.ts",
-    "sha256": "a70c570799c681f6abbcff9fd9ca7e222765a5bf9ae27f094007c7ca87dd3efb"
+    "sha256": "5a8fcd60ba1e7186b43a6f727cacebd4e0863309ce7ad6ffa76bc92fcb50b86c"
+  },
+  {
+    "path": "src/app/actions/sales.ts",
+    "sha256": "efb03bacf2d0315a96b0e219459607e526f865a687ede9a5421bc903f27ed14f"
+  },
+  {
+    "path": "src/app/actions/service-orders.ts",
+    "sha256": "61082f8cd579032bcb37044f9b775f3f1e5efbb341b310f982e899b6317f9fbf"
   },
   {
     "path": "src/app/actions/studies.ts",
-    "sha256": "6af2349d47f298537ff40200547134da8d3a04a4877358bd1235788598bfd957"
+    "sha256": "3687e8ba1d18cf601363b5371439bcf9c66639b9e426f420dab5cb4758a83890"
   },
   {
     "path": "src/app/actions/transactional-email.ts",

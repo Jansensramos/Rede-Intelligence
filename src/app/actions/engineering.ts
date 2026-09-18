@@ -17,15 +17,15 @@ import {
   updateEngineeringOpinionDraft,
 } from "@/application/engineering/engineering-service";
 
-type Result<T> = { ok: true; data: T } | { ok: false; error: string };
+type Result = { ok: true } | { ok: false; error: string };
 const message = (error: unknown) => error instanceof Error ? error.message : "A operação não pôde ser concluída.";
-async function run<T>(operation: () => Promise<T>): Promise<Result<T>> {
+async function run(operation: () => Promise<unknown>): Promise<Result> {
   try {
-    const data = await operation();
+    await operation();
     revalidatePath("/engenharia-obra");
     revalidatePath("/gestao-executiva");
     revalidatePath("/central-acoes");
-    return { ok: true, data };
+    return { ok: true };
   } catch (error) {
     return { ok: false, error: message(error) };
   }

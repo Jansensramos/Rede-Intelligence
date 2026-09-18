@@ -2,19 +2,33 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const expected = {
-  "capital.ts": "CAPITAL_READ", "design.ts": "ENGINEERING_READ", "engineering.ts": "ENGINEERING_READ",
-  "executive-insights.ts": "EXECUTIVE_READ", "financial.ts": "FINANCIAL_READ", "integrations.ts": "INTEGRATIONS_READ",
-  "investment.ts": "EXECUTIVE_READ", "land.ts": "VIABILITY_READ", "launch-intelligence.ts": "MARKET_PRODUCT_READ",
-  "market-product.ts": "MARKET_PRODUCT_READ", "operations.ts": "OPERATIONS_READ", "procurement.ts": "PROCUREMENT_READ",
-  "studies.ts": "VIABILITY_READ",
+  "capital.ts": { read: "CAPITAL_READ", gate: "requireDomainActionContext" },
+  "design.ts": { read: "ENGINEERING_READ", gate: "requireDomainActionContext" },
+  "engineering.ts": { read: "ENGINEERING_READ", gate: "requireDomainActionContext" },
+  "executive-insights.ts": { read: "EXECUTIVE_READ", gate: "requireDomainActionContext" },
+  "financial.ts": { read: "FINANCIAL_READ", gate: "requireDomainWriteContext", write: "FINANCIAL_WRITE", approval: "FINANCIAL_APPROVE" },
+  "integrations.ts": { read: "INTEGRATIONS_READ", gate: "requireDomainActionContext" },
+  "investment.ts": { read: "EXECUTIVE_READ", gate: "requireDomainActionContext" },
+  "land.ts": { read: "VIABILITY_READ", gate: "requireDomainWriteContext", write: "VIABILITY_WRITE" },
+  "launch-intelligence.ts": { read: "MARKET_PRODUCT_READ", gate: "requireDomainActionContext" },
+  "market-product.ts": { read: "MARKET_PRODUCT_READ", gate: "requireDomainActionContext" },
+  "operations.ts": { read: "OPERATIONS_READ", gate: "requireDomainWriteContext", write: "OPERATIONS_WRITE", approval: "OPERATIONS_APPROVE" },
+  "procurement.ts": { read: "PROCUREMENT_READ", gate: "requireDomainWriteContext", write: "PROCUREMENT_WRITE", approval: "PROCUREMENT_APPROVE" },
+  "studies.ts": { read: "VIABILITY_READ", gate: "requireDomainWriteContext", write: "VIABILITY_WRITE" },
 } as const;
 
 describe("matriz arquitetural das Server Actions de domínio", () => {
-  it("mantém um gate server-side explícito em cada módulo auditado", () => {
-    for (const [file, capability] of Object.entries(expected)) {
+  it("mantém gate server-side explícito e capabilities esperadas em cada módulo auditado", () => {
+    for (const [file, contract] of Object.entries(expected)) {
       const source = readFileSync(new URL(file, import.meta.url), "utf8");
-      expect(source, file).toContain("requireDomainActionContext");
-      expect(source, file).toContain(`requireDomainActionContext(\"${capability}\")`);
+      expect(source, file).toContain('from "./authorization"');
+      expect(source, file).toContain(contract.gate);
+      expect(source, file).toContain(`"${contract.read}"`);
+      if ("write" in contract) expect(source, file).toContain(`"${contract.write}"`);
+      if ("approval" in contract) {
+        expect(source, file).toContain("requireDomainApprovalContext");
+        expect(source, file).toContain(`"${contract.approval}"`);
+      }
       expect(source, file).not.toContain('from "@/application/auth/session"');
     }
   });

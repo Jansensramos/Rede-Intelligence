@@ -98,6 +98,7 @@ import { calculateAllScenarios } from "@/domain/financial/engine";
 import { SCENARIOS } from "@/domain/financial/scenarios";
 import type { ProjectAssumptions, ScenarioKey } from "@/domain/financial/types";
 import { analyzeRisk, type FindingSeverity } from "@/domain/risk/rules";
+import { hasProtectedApprovalCapability, hasProtectedWriteCapability } from "@/domain/auth/write-capabilities";
 
 type ViewKey = "overview" | "assumptions" | "land" | "design" | "budget" | "procurement" | "legal" | "financial" | "accounting" | "integrations" | "sales" | "people" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit" | "dataIntelligence" | "marketIntelligence" | "productIntelligence";
 type EditorMode = "create" | "version";
@@ -202,6 +203,13 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState<string | undefined>();
   const [aiOriginModule, setAiOriginModule] = useState<ViewKey>("overview");
+
+  const canMutateDesign = role !== "VIEWER";
+  const canWriteViability = hasProtectedWriteCapability(role, "VIABILITY_WRITE");
+  const canWriteFinancial = hasProtectedWriteCapability(role, "FINANCIAL_WRITE");
+  const canApproveFinancial = hasProtectedApprovalCapability(role, "FINANCIAL_APPROVE");
+  const canWriteCommercial = hasProtectedWriteCapability(role, "COMMERCIAL_WRITE");
+  const canApproveCommercial = hasProtectedApprovalCapability(role, "COMMERCIAL_APPROVE");
 
   const [lazyData, setLazyData] = useState<LazyWorkspaceData>({});
   const [lazyLoaded, setLazyLoaded] = useState<Partial<Record<LazyViewKey, boolean>>>({});
@@ -494,12 +502,12 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
 
           {view === "assumptions" && <AssumptionSummary project={project} onEdit={() => { setEditorMode("version"); setEditorProject(project); }} />}
 
-          {view === "land" && <LandIntelligenceView initialLand={landWorkspace} onLandChange={(nextLand) => { setLandWorkspace(nextLand); void reassessInvestmentCaseAction(investmentWorkspace.id, study.studyVersionId, nextLand.versionId).then((response) => { if (response.ok) setInvestmentWorkspace(response.data); }); }} />}
+          {view === "land" && <LandIntelligenceView initialLand={landWorkspace} canWrite={canWriteViability} onLandChange={(nextLand) => { setLandWorkspace(nextLand); void reassessInvestmentCaseAction(investmentWorkspace.id, study.studyVersionId, nextLand.versionId).then((response) => { if (response.ok) setInvestmentWorkspace(response.data); }); }} />}
 
           {view === "design" && (
             lazyError.design ? <ErrorState message={lazyError.design} onRetry={() => loadLazyView("design")} /> :
             !lazyLoaded.design || !lazyData.design ? <Loading label="Carregando Design Intelligence…" /> :
-            <DesignIntelligenceView initialWorkspace={lazyData.design} onWorkspaceChange={(next) => setLazyData((prev) => ({ ...prev, design: next }))} onAskAI={(prompt) => openAI(prompt)} />
+            <DesignIntelligenceView initialWorkspace={lazyData.design} canMutate={canMutateDesign} onWorkspaceChange={(next) => setLazyData((prev) => ({ ...prev, design: next }))} onAskAI={(prompt) => openAI(prompt)} />
           )}
 
           {view === "budget" && (
@@ -531,7 +539,7 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
             !lazyLoaded.financial || !lazyData.financial ? <Loading label="Carregando Financeiro…" /> : (
               <div className="view-stack">
                 <SectionTitle eyebrow="FINANCEIRO E TESOURARIA" title="Contas a Pagar, Contas a Receber e Caixa" description="Obrigação → conta → parcela → pagamento → conciliação → realizado, rastreável por SPE e centro de custo." />
-                <FinancialView workspace={lazyData.financial} />
+                <FinancialView workspace={lazyData.financial} canWrite={canWriteFinancial} canApprove={canApproveFinancial} />
               </div>
             )
           )}
@@ -596,7 +604,7 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
             !lazyLoaded.sales || !lazyData.sales ? <Loading label="Carregando Vendas e Recebíveis…" /> : (
               <div className="view-stack">
                 <SectionTitle eyebrow="VENDAS, CLIENTES E RECEBÍVEIS" title="Unidade → Tabela → Proposta → Reserva → Venda → Contrato → Recebíveis" description="Estoque, preço, comissão, entrega e pós-venda conectados ao Financeiro (9B) sem financeiro paralelo nem dupla contagem." />
-                <SalesView workspace={lazyData.sales} />
+                <SalesView workspace={lazyData.sales} canWrite={canWriteCommercial} canApprove={canApproveCommercial} />
               </div>
             )
           )}
@@ -622,11 +630,11 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
 
           {view === "redteam" && <RedTeamView report={study.redTeam} />}
 
-          {view === "committee" && <InvestmentSuiteView mode="committee" initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
+          {view === "committee" && <InvestmentSuiteView mode="committee" role={role} initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
 
-          {view === "studio" && <InvestmentSuiteView mode="studio" initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
+          {view === "studio" && <InvestmentSuiteView mode="studio" role={role} initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
 
-          {view === "dataroom" && <InvestmentSuiteView mode="dataroom" initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
+          {view === "dataroom" && <InvestmentSuiteView mode="dataroom" role={role} initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
 
           {view === "ai" && (
             lazyError.ai ? <ErrorState message={lazyError.ai} onRetry={() => loadLazyView("ai")} /> :

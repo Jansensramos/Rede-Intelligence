@@ -5,7 +5,7 @@ import { AlertTriangle, BadgeDollarSign, ClipboardList, FileCheck2, PackageCheck
 import type { ProcurementWorkspaceView } from "@/application/procurement/procurement-service";
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-const date = new Intl.DateTimeFormat("pt-BR");
+const date = new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" });
 type Area = "visao" | "necessidades" | "requisicoes" | "cotacoes" | "fornecedores" | "pedidos" | "contratos" | "medicoes";
 const areas: { key: Area; label: string }[] = [
   { key: "visao", label: "Visão Geral" }, { key: "necessidades", label: "Necessidades" }, { key: "requisicoes", label: "Requisições" }, { key: "cotacoes", label: "Cotações" },

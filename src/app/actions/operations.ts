@@ -20,7 +20,7 @@ type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : "A operação não pôde ser concluída.";
 
 async function run<T>(operation: () => Promise<T>): Promise<ActionResult<T>> {
-  try { const data = await operation(); revalidatePath("/"); return { ok: true, data }; }
+  try { const data = JSON.parse(JSON.stringify(await operation())) as T; revalidatePath("/"); return { ok: true, data }; }
   catch (error) { return { ok: false, error: errorMessage(error) }; }
 }
 
