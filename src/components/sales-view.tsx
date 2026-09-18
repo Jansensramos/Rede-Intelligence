@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, Building2, CalendarClock, HandCoins, Home, MessageSquareWarning, ReceiptText, Users } from "lucide-react";
 import type { SalesWorkspaceView } from "@/application/sales/sales-service";
+import { HandoverOperabilityPanel } from "./handover-operability-panel";
 import {
   approveSalesCommissionAction,
   completeLocalSignatureAction,
@@ -274,10 +275,6 @@ export function SalesView({ workspace }: { workspace: SalesWorkspaceView }) {
     </article>
   </>}
 
-    {area === "repasse" && <><article className="panel"><div className="panel-heading"><div><span className="eyebrow">REPASSE BANCÁRIO</span><h2>Financiamento, FGTS e subsídio do comprador — conciliação com o recebível</h2></div></div><div className="scenario-table"><div className="table-row table-head"><span>Unidade</span><span>Instituição</span><span>Tipo</span><span>Valor esperado</span><span>Valor liberado</span><span>Situação</span></div>{workspace.bankFinancingDisbursements.map((item) => <div className="table-row" key={item.id}><strong>{item.unit}</strong><span>{item.institution}</span><span>{statusLabel[item.disbursementType] ?? item.disbursementType}</span><span>{brl.format(item.expectedAmount)}</span><span>{item.disbursedAmount !== null ? brl.format(item.disbursedAmount) : "—"}</span>{item.status === "DIVERGENT" ? <span className="negative-value"><AlertTriangle size={14} /> {statusLabel[item.status] ?? item.status}</span> : <Status value={item.status} />}</div>)}{workspace.bankFinancingDisbursements.length === 0 && <p className="empty-state">Nenhum repasse bancário registrado neste empreendimento.</p>}</div></article>
-
-    <article className="panel"><div className="panel-heading"><div><span className="eyebrow">CHAVES — CONDOMÍNIO</span><h2>Implantação e transferência de responsabilidade</h2></div></div>{workspace.condominiumSetup ? <div className="model-note"><Building2 size={20} /><div><strong>Administradora: {workspace.condominiumSetup.administrator ?? "não definida"}</strong><p>Constituído em {workspace.condominiumSetup.constitutedAt ? date.format(new Date(workspace.condominiumSetup.constitutedAt)) : "—"} · Transferido em {workspace.condominiumSetup.transferredAt ? date.format(new Date(workspace.condominiumSetup.transferredAt)) : "—"}</p><Status value={workspace.condominiumSetup.status} /></div></div> : <p className="empty-state">Nenhuma implantação de condomínio registrada neste empreendimento.</p>}</article>
-
-    <article className="panel"><div className="panel-heading"><div><span className="eyebrow">ASSISTÊNCIA TÉCNICA</span><h2>Fornecedor responsável, custo, reincidência e SLA</h2></div></div>{workspace.postSaleRequests.map((item) => <div className="model-note" key={item.id}><MessageSquareWarning size={20} /><div><strong>{item.unit} · {item.customer}</strong><p>{item.category.replaceAll("_", " ")} · Fornecedor: {item.supplier ?? "não atribuído"} · Custo: {item.actualCost !== null ? brl.format(item.actualCost) : item.estimatedCost !== null ? `${brl.format(item.estimatedCost)} (estimado)` : "—"}{item.recurrenceOfId && " · Reincidência"}</p><Status value={item.status} />{item.slaViolated && <span className="negative-value"><AlertTriangle size={14} /> SLA vencido</span>}</div></div>)}{workspace.postSaleRequests.length === 0 && <p className="empty-state">Nenhuma solicitação de pós-venda neste empreendimento.</p>}</article></>}
+    {area === "repasse" && <HandoverOperabilityPanel workspace={workspace} />}
   </div>;
 }
