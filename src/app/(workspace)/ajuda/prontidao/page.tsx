@@ -4,7 +4,7 @@ import { LocalOnboarding } from "@/components/local-onboarding";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
-const checkLabels: Record<string, string> = { RUNTIME_CONFIGURATION: "Configuração do ambiente", LOCAL_DATABASE: "Banco local", SESSION_SECRET: "Proteção da sessão", INTEGRATION_SECRET_KEY: "Chave local de evidências", LOCAL_DEPENDENCIES: "Dependências locais", NON_PRODUCTION: "Ambiente de ensaio", MIGRATION_INTEGRITY: "Integridade das migrations", RELEASE_IDENTITY: "Identificação da versão" };
+const checkLabels: Record<string, string> = { RUNTIME_CONFIGURATION: "Configuração do ambiente", LOCAL_DATABASE: "Banco local", SESSION_SECRET: "Proteção da sessão", INTEGRATION_SECRET_KEY: "Chave local de evidências", LOCAL_DEPENDENCIES: "Dependências locais", NON_PRODUCTION: "Ambiente de ensaio", MIGRATION_INTEGRITY: "Integridade das atualizações do banco", RELEASE_IDENTITY: "Identificação da versão" };
 export default async function LocalReadinessPage() {
   const context = await requireDomainActionContext("HELP_READ");
   let report;
@@ -12,7 +12,7 @@ export default async function LocalReadinessPage() {
   catch (error) { if (error instanceof ReadinessAccessError) redirect("/acesso-negado"); return <section className="panel"><h1>Prontidão local indisponível</h1><p>Não foi possível verificar os dados. Nenhum gate foi aprovado.</p></section>; }
   const hasIntegrationAttention = report.metrics.deadLetters > 0 || report.metrics.quarantine > 0 || report.metrics.overdueSeconds > 300;
   const alertLabels: Record<string, string> = {
-    DEAD_LETTER_PENDING: "há mensagens em dead-letter aguardando tratamento",
+    DEAD_LETTER_PENDING: "há falhas de integração aguardando tratamento",
     QUARANTINE_PENDING: "há itens em quarentena aguardando decisão",
     QUEUE_OVERDUE: "há fila de integração com atraso acima de 5 minutos",
   };
