@@ -810,7 +810,9 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
       const signatureRequest = sale.contract?.signatureRequests[0] ?? null;
       const buyer = sale.parties.find((party) => party.role === "BUYER") ?? sale.parties[0] ?? null;
       return {
-        id: sale.id, unit: sale.salesUnit.code, buyers: sale.parties.map((party) => party.customer.name), buyerCustomerId: buyer?.customerId ?? null, broker: sale.broker?.name ?? null, soldPrice: Number(sale.soldPrice), discountAmount: Number(sale.discountAmount), status: sale.status,
+        id: sale.id, unit: sale.salesUnit.code, buyers: sale.parties.map((party) => party.customer.name), buyerCustomerId: buyer?.customerId ?? null,
+        buyerParties: sale.parties.filter((party) => party.role === "BUYER" || party.role === "CO_BUYER").map((party) => ({ customerId: party.customerId, name: party.customer.name, email: party.customer.email, role: party.role })),
+        broker: sale.broker?.name ?? null, soldPrice: Number(sale.soldPrice), discountAmount: Number(sale.discountAmount), status: sale.status,
         contractId: sale.contract?.id ?? null, contractNumber: sale.contract?.number ?? null, contractDocuments: sale.contract?.documents.map((doc) => ({ id: doc.id, kind: doc.kind, status: doc.status, version: doc.version, fileName: doc.fileName })) ?? [],
         signatureStatus: sale.contract?.signatureStatus ?? null,
         signatureRequest: signatureRequest ? { id: signatureRequest.id, status: signatureRequest.status, provider: signatureRequest.provider, signedCount: signatureRequest.parties.filter((party) => party.status === "SIGNED").length, totalParties: signatureRequest.parties.length } : null,
