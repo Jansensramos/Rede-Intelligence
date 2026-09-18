@@ -65,10 +65,18 @@ export class ApprovalAccessDeniedError extends Error {
   constructor() { super("Seu perfil não possui alçada para aprovar esta operação."); }
 }
 
+export function hasProtectedWriteCapability(role: MembershipRole, capability: ProtectedWriteCapability) {
+  return writeMatrix[role].has(capability);
+}
+
+export function hasProtectedApprovalCapability(role: MembershipRole, capability: ProtectedApprovalCapability) {
+  return approvalMatrix[role].has(capability);
+}
+
 export function assertProtectedWriteCapability(role: MembershipRole, capability: ProtectedWriteCapability) {
-  if (!writeMatrix[role].has(capability)) throw new WriteAccessDeniedError();
+  if (!hasProtectedWriteCapability(role, capability)) throw new WriteAccessDeniedError();
 }
 
 export function assertProtectedApprovalCapability(role: MembershipRole, capability: ProtectedApprovalCapability) {
-  if (!approvalMatrix[role].has(capability)) throw new ApprovalAccessDeniedError();
+  if (!hasProtectedApprovalCapability(role, capability)) throw new ApprovalAccessDeniedError();
 }
