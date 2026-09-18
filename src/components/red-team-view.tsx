@@ -40,7 +40,7 @@ function FindingCard({ finding }: { finding: RedTeamFinding }) {
 
 export function RedTeamSummary({ report, onOpen }: { report: RedTeamReport | null; onOpen: () => void }) {
   if (!report) return (
-    <article className="red-team-summary red-team-pending"><ShieldAlert size={21} /><div><span className="eyebrow">REDE RED TEAM</span><h3>Auditoria ainda não executada</h3><p>Crie uma nova versão para gerar a auditoria adversarial determinística.</p></div></article>
+    <article className="red-team-summary red-team-pending"><ShieldAlert size={21} /><div><span className="eyebrow">REVISÃO CRÍTICA</span><h3>Auditoria ainda não executada</h3><p>Crie uma nova versão para gerar a auditoria adversarial determinística.</p></div></article>
   );
   const critical = report.findings.filter((finding) => finding.severity === "CRITICAL").length;
   return (
@@ -57,7 +57,7 @@ export function RedTeamView({ report }: { report: RedTeamReport | null }) {
   const [selectedAgent, setSelectedAgent] = useState<RedTeamAgentKey>("FINANCE_FUNDING");
   const findings = useMemo(() => report ? [...report.findings].sort((left, right) => severityRank[right.severity] - severityRank[left.severity]) : [], [report]);
   if (!report) return (
-    <div className="view-stack"><header className="section-title"><div><span className="eyebrow">REDE RED TEAM</span><h2>Auditoria adversarial</h2><p>Esta versão ainda não possui execução Red Team persistida.</p></div></header><div className="model-note"><ShieldAlert size={20} /><div><strong>Red Team indisponível para este snapshot</strong><p>Salve uma nova versão para executar as validações determinísticas.</p></div></div></div>
+    <div className="view-stack"><header className="section-title"><div><span className="eyebrow">REVISÃO CRÍTICA</span><h2>Auditoria adversarial</h2><p>Esta versão ainda não possui uma revisão crítica registrada.</p></div></header><div className="model-note"><ShieldAlert size={20} /><div><strong>Revisão crítica indisponível para esta versão</strong><p>Salve uma nova versão para executar as validações determinísticas.</p></div></div></div>
   );
   const critical = findings.filter((finding) => finding.severity === "CRITICAL").length;
   const high = findings.filter((finding) => finding.severity === "HIGH").length;
@@ -68,9 +68,9 @@ export function RedTeamView({ report }: { report: RedTeamReport | null }) {
 
   return (
     <div className="view-stack">
-      <header className="section-title"><div><span className="eyebrow">{report.redTeamVersion}</span><h2>Auditoria adversarial</h2><p>Seis perspectivas confrontam o mesmo snapshot; números continuam governados pelo Engine.</p></div></header>
+      <header className="section-title"><div><span className="eyebrow">REVISÃO CRÍTICA</span><h2>Auditoria adversarial</h2><p>Seis perspectivas confrontam a mesma versão; os números continuam governados pelo Motor de Viabilidade.</p></div></header>
 
-      {!report.provider.configured && <div className="red-team-ai-note"><ShieldAlert size={17} /><div><strong>Red Team AI não configurado.</strong><span>As validações determinísticas, cross-reviews e síntese continuam disponíveis.</span></div></div>}
+      {!report.provider.configured && <div className="red-team-ai-note"><ShieldAlert size={17} /><div><strong>Revisão assistida por IA não configurada.</strong><span>As validações determinísticas, revisões cruzadas e síntese continuam disponíveis.</span></div></div>}
 
       <section className="red-team-hero">
         <article className={`red-decision decision-${report.conclusion.decision.toLowerCase()}`}><span>DECISÃO DO CHAIR</span><strong>{decisionLabels[report.conclusion.decision]}</strong><p>{report.conclusion.executiveSummary}</p></article>
