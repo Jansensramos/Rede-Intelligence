@@ -8,13 +8,40 @@ const replacements: Array<[RegExp, string]> = [
   [/\s*\((?:Fase|Phase)\s+\d+[A-Z](?:\.\d+[A-Z]?)?\)/gi, ""],
   [/\s*\(\d+[A-Z](?:\.\d+[A-Z]?)?\)/g, ""],
   [/\b(?:Fase|Phase)\s+\d+[A-Z](?:\.\d+[A-Z]?)?\b/gi, ""],
+  [/\b\d{1,2}[A-Z](?:\.\d+[A-Z]?)?\b/g, ""],
   [/\bleitura direta da\s+\d+[A-Z](?:\.\d+[A-Z]?)?\b/gi, "integrado ao Financeiro"],
+
+  [/\bLearning Loop\b/gi, "Aprendizado com Resultados"],
+  [/\bDecision Engine\b/gi, "Recomendação Estruturada"],
+  [/\bRed Team 2\.0\b/gi, "Revisão Crítica"],
+  [/\bRed Team\b/gi, "Revisão Crítica"],
+  [/\bAutopilot\b/gi, "Recomendações Assistidas"],
+  [/\bInvestment Committee\b/gi, "Análise Multidisciplinar"],
+  [/\bTool Layer\b/gi, "Camada de Evidências"],
+  [/\bContext Engine\b/gi, "Contexto de Análise"],
+  [/\bAI Gateway\b/gi, "Conexão de Inteligência"],
+  [/\bProvider de IA\b/gi, "Provedor de inteligência"],
+  [/\bProvider comercial\b/gi, "Provedor comercial"],
+  [/\bprovider\b/gi, "provedor"],
+  [/\bData Room\b/gi, "Sala de Documentos"],
+  [/\bDesign Intelligence\b/gi, "Inteligência de Projetos"],
+  [/\bMarket Intelligence\b/gi, "Inteligência de Mercado"],
+  [/\bProduct Intelligence\b/gi, "Inteligência de Produto"],
+  [/\bScore\b/g, "Índice"],
+  [/\bBenchmark(?:s)?\b/gi, "Comparativos"],
+  [/\bReady\b/g, "Pronto"],
+  [/\bWaiting Data\b/gi, "Aguardando dados"],
+  [/\bExternal Dependency\b/gi, "Dependência externa"],
 ];
 
 function cleanText(value: string) {
   let next = value;
   for (const [pattern, replacement] of replacements) next = next.replace(pattern, replacement);
-  return next.replace(/[ \t]{2,}/g, " ").replace(/[ \t]+([,.;:])/g, "$1");
+  return next
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+([,.;:])/g, "$1")
+    .replace(/\s+·\s*$/g, "")
+    .trimEnd();
 }
 
 function sanitize(root: ParentNode) {
