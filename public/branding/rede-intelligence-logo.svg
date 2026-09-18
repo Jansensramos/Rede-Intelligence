@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 360" role="img" aria-labelledby="title desc">
+  <title id="title">REDE Intelligence</title>
+  <desc id="desc">Marca REDE Intelligence em azul profundo e dourado.</desc>
+  <defs>
+    <linearGradient id="blue" x1="0" x2="1">
+      <stop offset="0" stop-color="#0b3471"/>
+      <stop offset="1" stop-color="#082b61"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 18)">
+    <path d="M42 46h146c102 0 164 58 164 140 0 55-28 98-78 121l93 0 80 0-135-166c-10 3-22 5-36 5h-78V289H42V46Zm78 60v119h74c47 0 75-22 75-59s-28-60-75-60h-74Z" fill="url(#blue)"/>
+    <rect x="42" y="245" width="97" height="11" fill="#c9921d"/>
+    <rect x="42" y="267" width="97" height="11" fill="#c9921d"/>
+    <rect x="42" y="289" width="97" height="11" fill="#c9921d"/>
+    <rect x="42" y="322" width="55" height="0" fill="#0b3471"/>
+    <text x="396" y="210" fill="url(#blue)" font-family="Georgia, 'Times New Roman', serif" font-size="164" font-weight="700" letter-spacing="10">EDE</text>
+    <text x="398" y="286" fill="#c9921d" font-family="Georgia, 'Times New Roman', serif" font-size="58" font-weight="600" letter-spacing="5">INTELLIGENCE</text>
+    <g transform="translate(1007 244) rotate(45)">
+      <rect x="0" y="0" width="23" height="23" fill="#c9921d"/>
+      <rect x="29" y="0" width="23" height="23" fill="none" stroke="#0b3471" stroke-width="6"/>
+      <rect x="0" y="29" width="23" height="23" fill="none" stroke="#0b3471" stroke-width="6"/>
+      <rect x="29" y="29" width="23" height="23" fill="#c9921d"/>
+    </g>
+  </g>
+</svg>
