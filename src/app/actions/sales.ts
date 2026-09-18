@@ -16,6 +16,12 @@ import {
   releaseSalesReservation,
   renegotiateSalesPaymentPlan,
   rescindSale,
+  scheduleInspection,
+  recordInspectionOutcome,
+  markUnitDelivered,
+  createPostSaleRequest,
+  addPostSaleUpdate,
+  transitionPostSaleRequest,
 } from "@/application/sales/sales-service";
 import { ensureDefaultContractTemplate, generateContractDocument } from "@/application/sales/contract-service";
 import { completeMockSignatureRequest, prepareSignatureRequest, sendSignatureRequest } from "@/application/sales/signature-service";
@@ -79,4 +85,29 @@ export async function createSalesCommissionAction(input: Parameters<typeof creat
 export async function approveSalesCommissionAction(commissionId: string) {
   const ctx = await approve();
   return run(() => approveSalesCommission(ctx, commissionId));
+}
+
+export async function scheduleInspectionAction(input: Omit<Parameters<typeof scheduleInspection>[1], "responsibleId">) {
+  const ctx = await write();
+  return run(() => scheduleInspection(ctx, { ...input, responsibleId: ctx.userId }));
+}
+export async function recordInspectionOutcomeAction(input: Parameters<typeof recordInspectionOutcome>[1]) {
+  const ctx = await write();
+  return run(() => recordInspectionOutcome(ctx, input));
+}
+export async function markUnitDeliveredAction(salesUnitId: string) {
+  const ctx = await approve();
+  return run(() => markUnitDelivered(ctx, salesUnitId));
+}
+export async function createPostSaleRequestAction(input: Parameters<typeof createPostSaleRequest>[1]) {
+  const ctx = await write();
+  return run(() => createPostSaleRequest(ctx, input));
+}
+export async function addPostSaleUpdateAction(input: Parameters<typeof addPostSaleUpdate>[1]) {
+  const ctx = await write();
+  return run(() => addPostSaleUpdate(ctx, input));
+}
+export async function transitionPostSaleRequestAction(input: Parameters<typeof transitionPostSaleRequest>[1]) {
+  const ctx = await write();
+  return run(() => transitionPostSaleRequest(ctx, input));
 }
