@@ -5,16 +5,26 @@ import { requireDomainApprovalContext, requireDomainWriteContext } from "./autho
 import { createCustomer } from "@/application/financial-ops/financial-service";
 import {
   approveSale,
+  activateSalesPriceTable,
+  assignPostSaleSupplier,
+  blockSalesUnit,
   confirmSalesReservation,
+  upsertBrokerProfile,
   convertSalesLead,
   createSale,
   createSalesLead,
+  createSalesPriceTable,
+  createSalesUnit,
   createSalesProposal,
   createSalesCommission,
+  createSalesCommissionPolicy,
   approveSalesCommission,
   createSalesReservation,
   releaseSalesReservation,
   renegotiateSalesPaymentPlan,
+  setPostSaleCost,
+  markPostSaleRecurrence,
+  unblockSalesUnit,
   rescindSale,
   scheduleInspection,
   recordInspectionOutcome,
@@ -110,4 +120,45 @@ export async function addPostSaleUpdateAction(input: Parameters<typeof addPostSa
 export async function transitionPostSaleRequestAction(input: Parameters<typeof transitionPostSaleRequest>[1]) {
   const ctx = await write();
   return run(() => transitionPostSaleRequest(ctx, input));
+}
+
+export async function createSalesUnitAction(input: Parameters<typeof createSalesUnit>[1]) {
+  const ctx = await write();
+  return run(() => createSalesUnit(ctx, input));
+}
+export async function blockSalesUnitAction(input: Omit<Parameters<typeof blockSalesUnit>[1], "responsibleId">) {
+  const ctx = await write();
+  return run(() => blockSalesUnit(ctx, { ...input, responsibleId: ctx.userId }));
+}
+export async function unblockSalesUnitAction(blockId: string) {
+  const ctx = await write();
+  return run(() => unblockSalesUnit(ctx, blockId));
+}
+export async function createSalesPriceTableAction(input: Omit<Parameters<typeof createSalesPriceTable>[1], "responsibleId">) {
+  const ctx = await write();
+  return run(() => createSalesPriceTable(ctx, { ...input, responsibleId: ctx.userId }));
+}
+export async function activateSalesPriceTableAction(priceTableId: string) {
+  const ctx = await approve();
+  return run(() => activateSalesPriceTable(ctx, priceTableId));
+}
+export async function createBrokerProfileAction(input: Parameters<typeof upsertBrokerProfile>[1]) {
+  const ctx = await write();
+  return run(() => upsertBrokerProfile(ctx, input));
+}
+export async function createSalesCommissionPolicyAction(input: Parameters<typeof createSalesCommissionPolicy>[1]) {
+  const ctx = await approve();
+  return run(() => createSalesCommissionPolicy(ctx, input));
+}
+export async function assignPostSaleSupplierAction(input: Parameters<typeof assignPostSaleSupplier>[1]) {
+  const ctx = await write();
+  return run(() => assignPostSaleSupplier(ctx, input));
+}
+export async function setPostSaleCostAction(input: Parameters<typeof setPostSaleCost>[1]) {
+  const ctx = await write();
+  return run(() => setPostSaleCost(ctx, input));
+}
+export async function markPostSaleRecurrenceAction(input: Parameters<typeof markPostSaleRecurrence>[1]) {
+  const ctx = await write();
+  return run(() => markPostSaleRecurrence(ctx, input));
 }

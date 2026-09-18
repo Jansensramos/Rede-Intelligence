@@ -42,6 +42,258 @@ export async function recordLegalDecision(context: AuthContext, diligenceCaseId:
   return decision;
 }
 
+
+export async function createLegalDocumentRequest(context: AuthContext, diligenceCaseId: string, input: {
+  code: string;
+  documentType: string;
+  title: string;
+  dueAt?: Date | null;
+}) {
+  assertMutable(context);
+  const diligence = await prisma.legalDueDiligenceCase.findFirst({ where: { id: diligenceCaseId, organizationId: context.organizationId } });
+  if (!diligence) throw new Error("Diligência não encontrada nesta organização.");
+  const record = await prisma.legalDocumentRequest.create({
+    data: {
+      diligenceCaseId: diligence.id,
+      code: input.code.trim(),
+      documentType: input.documentType.trim(),
+      title: input.title.trim(),
+      status: "REQUESTED",
+      requestedAt: new Date(),
+      dueAt: input.dueAt ?? null,
+      responsibleId: context.userId,
+      createdById: context.userId,
+      updatedById: context.userId,
+    },
+  });
+  await prisma.auditLog.create({ data: audit(context, diligence.projectId, "LEGAL_DOCUMENT_REQUEST_CREATED", "LegalDocumentRequest", record.id, { code: record.code, dueAt: record.dueAt?.toISOString() ?? null }) });
+  return record;
+}
+
+export async function updateLegalDocumentRequestStatus(context: AuthContext, requestId: string, status: "REQUESTED" | "RECEIVED" | "UNDER_REVIEW" | "COMPLIANT" | "NON_COMPLIANT" | "WAIVED" | "EXPIRED" | "RESOLVED" | "CANCELLED") {
+  assertMutable(context);
+  const request = await prisma.legalDocumentRequest.findFirst({ where: { id: requestId, diligenceCase: { organizationId: context.organizationId } }, include: { diligenceCase: true } });
+  if (!request) throw new Error("Pedido documental não encontrado nesta organização.");
+  const updated = await prisma.legalDocumentRequest.update({
+    where: { id: request.id },
+    data: { status, receivedAt: status === "RECEIVED" ? new Date() : request.receivedAt, updatedById: context.userId },
+  });
+  await prisma.auditLog.create({ data: audit(context, request.diligenceCase.projectId, "LEGAL_DOCUMENT_REQUEST_STATUS_CHANGED", "LegalDocumentRequest", request.id, { from: request.status, to: status }) });
+  return updated;
+}
+
+export async function createLegalFinding(context: AuthContext, diligenceCaseId: string, input: {
+  code: string;
+  category: string;
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  title: string;
+  description: string;
+  recommendation: string;
+  targetDate?: Date | null;
+}) {
+  assertMutable(context);
+  const diligence = await prisma.legalDueDiligenceCase.findFirst({ where: { id: diligenceCaseId, organizationId: context.organizationId } });
+  if (!diligence) throw new Error("Diligência não encontrada nesta organização.");
+  const record = await prisma.legalFinding.create({
+    data: {
+      diligenceCaseId: diligence.id,
+      code: input.code.trim(),
+      category: input.category.trim(),
+      severity: input.severity,
+      title: input.title.trim(),
+      description: input.description.trim(),
+      evidence: json([]),
+      recommendation: input.recommendation.trim(),
+      status: "UNDER_REVIEW",
+      ownerId: context.userId,
+      targetDate: input.targetDate ?? null,
+      createdById: context.userId,
+      updatedById: context.userId,
+    },
+  });
+  await prisma.auditLog.create({ data: audit(context, diligence.projectId, "LEGAL_FINDING_CREATED", "LegalFinding", record.id, { code: record.code, severity: record.severity }) });
+  return record;
+}
+
+export async function updateLegalFindingStatus(context: AuthContext, findingId: string, status: "UNDER_REVIEW" | "COMPLIANT" | "NON_COMPLIANT" | "WAIVED" | "RESOLVED" | "CANCELLED") {
+  assertMutable(context);
+  const finding = await prisma.legalFinding.findFirst({ where: { id: findingId, diligenceCase: { organizationId: context.organizationId } }, include: { diligenceCase: true } });
+  if (!finding) throw new Error("Achado jurídico não encontrado nesta organização.");
+  const updated = await prisma.legalFinding.update({ where: { id: finding.id }, data: { status, resolvedAt: status === "RESOLVED" ? new Date() : null, updatedById: context.userId } });
+  await prisma.auditLog.create({ data: audit(context, finding.diligenceCase.projectId, "LEGAL_FINDING_STATUS_CHANGED", "LegalFinding", finding.id, { from: finding.status, to: status }) });
+  return updated;
+}
+
+export async function createLegalLicense(context: AuthContext, input: {
+  projectId: string;
+  code: string;
+  type: string;
+  title: string;
+  authority: string;
+  processNumber?: string | null;
+  expiresAt?: Date | null;
+  renewalLeadDays?: number;
+}) {
+  assertMutable(context);
+  await projectForTenant(context.organizationId, input.projectId);
+  const record = await prisma.legalLicense.create({
+    data: {
+      organizationId: context.organizationId,
+      projectId: input.projectId,
+      code: input.code.trim(),
+      type: input.type.trim(),
+      title: input.title.trim(),
+      authority: input.authority.trim(),
+      processNumber: input.processNumber?.trim() || null,
+      status: "IN_PREPARATION",
+      expiresAt: input.expiresAt ?? null,
+      renewalLeadDays: Math.max(0, Math.trunc(input.renewalLeadDays ?? 90)),
+      provenance: "USER_CONFIRMED",
+      responsibleId: context.userId,
+      createdById: context.userId,
+      updatedById: context.userId,
+    },
+  });
+  await prisma.auditLog.create({ data: audit(context, input.projectId, "LEGAL_LICENSE_CREATED", "LegalLicense", record.id, { code: record.code, authority: record.authority }) });
+  return record;
+}
+
+export async function updateLegalLicenseStatus(context: AuthContext, licenseId: string, status: "NOT_STARTED" | "IN_PREPARATION" | "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "APPROVED_WITH_CONDITIONS" | "REJECTED" | "SUSPENDED" | "EXPIRED" | "RENEWAL_REQUIRED") {
+  assertMutable(context);
+  const license = await prisma.legalLicense.findFirst({ where: { id: licenseId, organizationId: context.organizationId } });
+  if (!license) throw new Error("Licença não encontrada nesta organização.");
+  const now = new Date();
+  const updated = await prisma.legalLicense.update({
+    where: { id: license.id },
+    data: {
+      status,
+      issuedAt: ["APPROVED", "APPROVED_WITH_CONDITIONS"].includes(status) && !license.issuedAt ? now : license.issuedAt,
+      validFrom: ["APPROVED", "APPROVED_WITH_CONDITIONS"].includes(status) && !license.validFrom ? now : license.validFrom,
+      updatedById: context.userId,
+    },
+  });
+  await prisma.auditLog.create({ data: audit(context, license.projectId, "LEGAL_LICENSE_STATUS_CHANGED", "LegalLicense", license.id, { from: license.status, to: status }) });
+  return updated;
+}
+
+export async function createLegalAuthorityProcess(context: AuthContext, input: {
+  projectId: string;
+  code: string;
+  authority: string;
+  processNumber: string;
+  subject: string;
+  expectedDecisionAt?: Date | null;
+}) {
+  assertMutable(context);
+  await projectForTenant(context.organizationId, input.projectId);
+  const record = await prisma.legalAuthorityProcess.create({
+    data: {
+      organizationId: context.organizationId,
+      projectId: input.projectId,
+      code: input.code.trim(),
+      authority: input.authority.trim(),
+      processNumber: input.processNumber.trim(),
+      subject: input.subject.trim(),
+      status: "IN_PREPARATION",
+      expectedDecisionAt: input.expectedDecisionAt ?? null,
+      movements: json([]),
+      provenance: "USER_CONFIRMED",
+      responsibleId: context.userId,
+      createdById: context.userId,
+      updatedById: context.userId,
+    },
+  });
+  await prisma.auditLog.create({ data: audit(context, input.projectId, "LEGAL_AUTHORITY_PROCESS_CREATED", "LegalAuthorityProcess", record.id, { code: record.code, processNumber: record.processNumber }) });
+  return record;
+}
+
+export async function updateLegalAuthorityProcessStatus(context: AuthContext, processId: string, status: "IN_PREPARATION" | "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "APPROVED_WITH_CONDITIONS" | "REJECTED" | "SUSPENDED" | "EXPIRED" | "RENEWAL_REQUIRED") {
+  assertMutable(context);
+  const process = await prisma.legalAuthorityProcess.findFirst({ where: { id: processId, organizationId: context.organizationId } });
+  if (!process) throw new Error("Processo administrativo não encontrado nesta organização.");
+  const now = new Date();
+  const updated = await prisma.legalAuthorityProcess.update({
+    where: { id: process.id },
+    data: {
+      status,
+      submittedAt: status === "SUBMITTED" && !process.submittedAt ? now : process.submittedAt,
+      lastMovementAt: now,
+      movements: json([...(Array.isArray(process.movements) ? process.movements : []), { at: now.toISOString(), status, actorId: context.userId }]),
+      updatedById: context.userId,
+    },
+  });
+  await prisma.auditLog.create({ data: audit(context, process.projectId, "LEGAL_AUTHORITY_PROCESS_STATUS_CHANGED", "LegalAuthorityProcess", process.id, { from: process.status, to: status }) });
+  return updated;
+}
+
+export async function createLegalObligation(context: AuthContext, input: {
+  projectId: string;
+  code: string;
+  type: string;
+  title: string;
+  description: string;
+  criticality: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  dueAt: Date;
+  amount?: number | null;
+  supplierId?: string | null;
+  companyId?: string | null;
+}) {
+  assertMutable(context);
+  await projectForTenant(context.organizationId, input.projectId);
+  if (input.supplierId && !(await prisma.supplier.findFirst({ where: { id: input.supplierId, organizationId: context.organizationId } }))) throw new Error("Favorecido não pertence à organização.");
+  if (input.companyId && !(await prisma.company.findFirst({ where: { id: input.companyId, organizationId: context.organizationId } }))) throw new Error("Empresa não pertence à organização.");
+  const record = await prisma.legalObligation.create({
+    data: {
+      organizationId: context.organizationId,
+      projectId: input.projectId,
+      code: input.code.trim(),
+      type: input.type.trim(),
+      title: input.title.trim(),
+      description: input.description.trim(),
+      criticality: input.criticality,
+      status: "ACTIVE",
+      dueAt: input.dueAt,
+      amount: input.amount ?? null,
+      supplierId: input.supplierId ?? null,
+      companyId: input.companyId ?? null,
+      provenance: "USER_CONFIRMED",
+      sourceRef: "USER_INPUT",
+      responsibleId: context.userId,
+      createdById: context.userId,
+      updatedById: context.userId,
+    },
+  });
+  await prisma.auditLog.create({ data: audit(context, input.projectId, "LEGAL_OBLIGATION_CREATED", "LegalObligation", record.id, { code: record.code, dueAt: record.dueAt.toISOString(), amount: record.amount?.toString() ?? null }) });
+  return record;
+}
+
+export async function updateLegalObligationStatus(context: AuthContext, obligationId: string, status: "ACTIVE" | "DUE_SOON" | "OVERDUE" | "FULFILLED" | "WAIVED" | "CANCELLED") {
+  if (["WAIVED", "CANCELLED"].includes(status)) assertApprover(context); else assertMutable(context);
+  const obligation = await prisma.legalObligation.findFirst({ where: { id: obligationId, organizationId: context.organizationId } });
+  if (!obligation) throw new Error("Obrigação jurídica não encontrada nesta organização.");
+  const updated = await prisma.legalObligation.update({ where: { id: obligation.id }, data: { status, fulfilledAt: status === "FULFILLED" ? new Date() : null, updatedById: context.userId } });
+  await prisma.auditLog.create({ data: audit(context, obligation.projectId, "LEGAL_OBLIGATION_STATUS_CHANGED", "LegalObligation", obligation.id, { from: obligation.status, to: status }) });
+  return updated;
+}
+
+export async function acknowledgeLegalAlert(context: AuthContext, alertId: string) {
+  assertMutable(context);
+  const alert = await prisma.legalAlert.findFirst({ where: { id: alertId, organizationId: context.organizationId } });
+  if (!alert) throw new Error("Alerta jurídico não encontrado nesta organização.");
+  const updated = await prisma.legalAlert.update({ where: { id: alert.id }, data: { status: "ACKNOWLEDGED", acknowledgedAt: new Date() } });
+  await prisma.auditLog.create({ data: audit(context, alert.projectId, "LEGAL_ALERT_ACKNOWLEDGED", "LegalAlert", alert.id, { status: updated.status }) });
+  return updated;
+}
+
+export async function resolveLegalAlert(context: AuthContext, alertId: string) {
+  assertMutable(context);
+  const alert = await prisma.legalAlert.findFirst({ where: { id: alertId, organizationId: context.organizationId } });
+  if (!alert) throw new Error("Alerta jurídico não encontrado nesta organização.");
+  const updated = await prisma.legalAlert.update({ where: { id: alert.id }, data: { status: "RESOLVED", resolvedAt: new Date() } });
+  await prisma.auditLog.create({ data: audit(context, alert.projectId, "LEGAL_ALERT_RESOLVED", "LegalAlert", alert.id, { status: updated.status }) });
+  return updated;
+}
+
 export async function refreshLegalDeadlines(context: Pick<AuthContext, "organizationId">, projectId: string, today = new Date()) {
   await projectForTenant(context.organizationId, projectId);
   const [policy, obligations, licenses] = await Promise.all([
@@ -98,7 +350,7 @@ export async function reverseLegalFinancialEvent(context: AuthContext, legalObli
 export async function getLegalWorkspace(context: Pick<AuthContext, "organizationId">, projectId: string, referenceDate = new Date()) {
   await projectForTenant(context.organizationId, projectId);
   await refreshLegalDeadlines(context, projectId, referenceDate);
-  const [cases, registrations, municipalRecords, obligations, alerts, licenses, processes, timeline, contracts] = await Promise.all([
+  const [cases, registrations, municipalRecords, obligations, alerts, licenses, processes, timeline, contracts, suppliers, companies] = await Promise.all([
     prisma.legalDueDiligenceCase.findMany({ where: { organizationId: context.organizationId, projectId }, include: { checklistItems: true, documentRequests: true, findings: true, decisions: { orderBy: { version: "desc" }, take: 1 }, parties: true }, orderBy: { updatedAt: "desc" }, take: 50 }),
     prisma.legalAssetRegistration.findMany({ where: { organizationId: context.organizationId, landAsset: { projectId } }, orderBy: [{ registrationNumber: "asc" }, { version: "desc" }], take: 100 }),
     prisma.municipalPropertyRecord.findMany({ where: { organizationId: context.organizationId, landAsset: { projectId } }, orderBy: [{ fiscalYear: "desc" }, { version: "desc" }], take: 100 }),
@@ -108,11 +360,13 @@ export async function getLegalWorkspace(context: Pick<AuthContext, "organization
     prisma.legalAuthorityProcess.findMany({ where: { organizationId: context.organizationId, projectId }, orderBy: { updatedAt: "desc" }, take: 100 }),
     prisma.legalTimelineEvent.findMany({ where: { organizationId: context.organizationId, projectId }, orderBy: { plannedAt: "asc" }, take: 200 }),
     prisma.operationalContract.findMany({ where: { organizationId: context.organizationId, projectId, type: "ACQUISITION" }, include: { supplier: true, legalConditions: true, legalGuarantees: true }, take: 50 }),
+    prisma.supplier.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" }, take: 500 }),
+    prisma.company.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE" }, select: { id: true, name: true, type: true }, orderBy: { name: "asc" }, take: 200 }),
   ]);
   const checklist = cases.flatMap((item) => item.checklistItems);
   const findings = cases.flatMap((item) => item.findings);
   const readiness = legalReadiness({ checklist, findings, obligations });
-  return plain({ projectId, generatedAt: referenceDate.toISOString(), summary: { readiness, openAlerts: alerts.length, criticalFindings: findings.filter((item) => item.severity === "CRITICAL" && item.status !== "RESOLVED").length, pendingDocuments: cases.flatMap((item) => item.documentRequests).filter((item) => !["COMPLIANT", "WAIVED", "RESOLVED"].includes(item.status)).length, overdueObligations: obligations.filter((item) => item.status === "OVERDUE").length, scheduleBlockers: timeline.filter((item) => item.blocksSchedule && item.status !== "RESOLVED").length }, cases, registrations, municipalRecords, obligations, alerts, licenses, processes, timeline, contracts });
+  return plain({ projectId, generatedAt: referenceDate.toISOString(), suppliers, companies, summary: { readiness, openAlerts: alerts.length, criticalFindings: findings.filter((item) => item.severity === "CRITICAL" && item.status !== "RESOLVED").length, pendingDocuments: cases.flatMap((item) => item.documentRequests).filter((item) => !["COMPLIANT", "WAIVED", "RESOLVED"].includes(item.status)).length, overdueObligations: obligations.filter((item) => item.status === "OVERDUE").length, scheduleBlockers: timeline.filter((item) => item.blocksSchedule && item.status !== "RESOLVED").length }, cases, registrations, municipalRecords, obligations, alerts, licenses, processes, timeline, contracts });
 }
 
 export type LegalWorkspaceView = Awaited<ReturnType<typeof getLegalWorkspace>>;

@@ -1,7 +1,7 @@
 "use server";
 
-import { requireDomainActionContext } from "./authorization";
-const requireAuthContext = () => requireDomainActionContext("MARKET_PRODUCT_READ");
+import { requireDomainWriteContext } from "./authorization";
+const requireAuthContext = () => requireDomainWriteContext("MARKET_PRODUCT_READ", "MARKET_PRODUCT_WRITE");
 import {
   buildMarketProductWorkspaceView,
   decideProductScenario,

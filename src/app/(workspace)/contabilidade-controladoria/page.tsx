@@ -2,6 +2,7 @@ import { requireAuthContext } from "@/application/auth/session";
 import { getAccountingWorkspace } from "@/application/accounting/accounting-service";
 import { getCurrentOperationalContext } from "@/application/workspace/current-context";
 import { AccountingOperabilityPanel } from "@/components/accounting-operability-panel";
+import { AccountingGovernanceOperabilityPanel } from "@/components/accounting-governance-operability-panel";
 import { AccountingView } from "@/components/accounting-view";
 import { SectionTitle } from "@/components/ui";
 
@@ -19,6 +20,7 @@ export default async function ContabilidadeControladoriaPage() {
         description="Competência e caixa separados, partidas dobradas, estoque, tributos e consolidação sem criar uma segunda verdade financeira."
       />
       <AccountingOperabilityPanel workspace={workspace} />
+      <AccountingGovernanceOperabilityPanel workspace={workspace} />
       <AccountingView workspace={workspace} />
     </div>
   );

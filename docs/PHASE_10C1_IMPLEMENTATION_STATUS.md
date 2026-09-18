@@ -48,17 +48,19 @@ VIEWER e REVIEWER não recebem escrita genérica. OWNER/ADMIN recebem escrita e 
 6. Preservação da Central de Ações/Minha Rotina como read models transversais, evitando uma segunda fonte de verdade.
 7. Preservação do Assistente/Tool Layer da IA como read-only.
 
-## Itens que NÃO devem ser falsamente tratados como concluídos
+## Fechamento das lacunas de superfície — 18/09/2026
 
-A 10C.1 não cria operações de domínio inexistentes só para colocar um botão na tela. Onde o backend ainda não possui uma mutation segura, a lacuna precisa ser implementada no service/schema antes da UI. Os principais pontos para evolução incremental são:
+As lacunas de operabilidade registradas na versão de 17/09 foram tratadas sem criar domínios paralelos:
 
-- Jurídico: CRUD especializado de achados, pedidos de documento, licenças, processos e obrigações quando o domínio expuser mutations correspondentes;
-- Comercial: aprofundar unidades/tabelas/comissões/pós-venda/inspeções em superfícies humanas adicionais, embora os services já possuam parte desses fluxos;
-- Pessoas: expor vínculos, alocações, custos e evidências adicionais já suportados pelo service;
-- Contabilidade: ampliar reversões, reabertura e conciliações na superfície conforme necessidade operacional;
-- Mercado ao vivo: depende de conectores/fontes reais; não criar entrada manual que finja dado de mercado integrado.
+- **Jurídico:** pedidos documentais, achados, licenças, processos, obrigações e alertas passaram a possuir superfícies humanas conectadas às entidades e services existentes.
+- **Comercial:** cadastro de unidades, bloqueios, tabelas de preço versionadas, corretores, comissões, vistorias, entrega e pós-venda foram ampliados na operação humana.
+- **Pessoas:** vínculos profissionais, alocações e custos do vínculo foram expostos sobre o backend já existente.
+- **Contabilidade:** estornos, reaberturas e conciliações passaram a possuir superfície humana com segregação e auditoria.
+- **Mercado & Produto:** mutações passaram a exigir explicitamente `MARKET_PRODUCT_WRITE`. Mercado ao vivo continua corretamente condicionado a fonte/conector real.
 
-Esses itens não impedem a existência de operação humana nos departamentos, mas impedem classificar a 10C.1 como **produção final** sem a auditoria de jornada completa e a validação de CI.
+Não foi criada entrada manual que se apresente como dado externo integrado. Provider de IA, fonte de mercado ao vivo, adapters externos do Operator e validação com dados reais são ativação de ambiente/integradores, não uma justificativa para fabricar funcionalidade.
+
+A integração cognitiva 10D–10J também foi conectada ao Assistente e à Gestão Executiva, com Comitê Cognitivo, Red Team, proposta explicável, decisão humana, histórico auditável e linha do tempo do empreendimento.
 
 ## Critério de fechamento técnico
 
@@ -69,4 +71,4 @@ Antes de encerrar a fase:
 3. testar VIEWER sem escrita;
 4. testar tenant/project isolation;
 5. percorrer a jornada estudo → obra/suprimentos → financeiro → comercial → jurídico/pessoas → contabilidade → encerramento;
-6. registrar no documento principal qualquer lacuna remanescente descoberta pela jornada.
+6. registrar no documento principal qualquer lacuna remanescente descoberta pela jornada.\n\nA evidência de fechamento do código está consolidada em `docs/FINAL_PRODUCT_READINESS_2026-09-18.md`. O smoke test em ambiente final permanece obrigatório antes da classificação do ambiente como produção operacional.

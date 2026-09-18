@@ -5,6 +5,7 @@ import { getDecisionInsights, listSimulableSalesUnits } from "@/application/exec
 import { getProjectClosureOverview } from "@/application/closure/closure-service";
 import { ClosureOperabilityPanel } from "@/components/closure-operability-panel";
 import { GestaoExecutivaView } from "@/components/areas/gestao-executiva-view";
+import { ExecutiveCognitiveTimeline } from "@/components/executive-cognitive-timeline";
 import { hasProtectedApprovalCapability, hasProtectedWriteCapability } from "@/domain/auth/write-capabilities";
 
 /**
@@ -41,6 +42,7 @@ export default async function ExecutivoPage() {
   ]);
 
   return <div className="view-stack">
+    <ExecutiveCognitiveTimeline projectId={context.project.id} />
     <ClosureOperabilityPanel
       projectId={context.project.id}
       latest={closure.latest ? { id: closure.latest.id, status: closure.latest.status, version: closure.latest.version } : null}

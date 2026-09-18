@@ -35,6 +35,25 @@ async function assertTenantScope(context: Pick<AccountingContext, "organizationI
   return { company, project };
 }
 
+async function assertSegregatedAccountingApprover(
+  context: AccountingContext,
+  userId: string,
+  allowedRoles: Array<"OWNER" | "ADMIN" | "REVIEWER">,
+) {
+  if (userId === context.userId) throw new Error("A operação exige aprovação segregada.");
+  const membership = await prisma.organizationMembership.findFirst({
+    where: {
+      organizationId: context.organizationId,
+      userId,
+      isActive: true,
+      role: { in: allowedRoles },
+      user: { isActive: true },
+    },
+  });
+  if (!membership) throw new Error("Aprovador não possui vínculo ativo e alçada compatível nesta organização.");
+  return membership;
+}
+
 const audit = (context: AccountingContext, projectId: string | null, action: string, entityType: string, entityId: string, before?: unknown, after?: unknown) => ({
   organizationId: context.organizationId,
   userId: context.userId,
@@ -180,7 +199,7 @@ export async function reverseAccountingEntry(context: AccountingContext, entryId
     prisma.accountingPeriod.findFirst({ where: { id: input.periodId, organizationId: context.organizationId } }),
   ]);
   if (!original || !period) throw new Error("Lançamento ou período de estorno não encontrado nesta organização.");
-  if (input.approvedById === context.userId) throw new Error("O estorno exige aprovação segregada.");
+  await assertSegregatedAccountingApprover(context, input.approvedById, ["OWNER", "ADMIN", "REVIEWER"]);
   assertPeriodAllowsPosting(period.status, period.referenceMonth, period.referenceMonth);
   const reversed = reversePostingLines(original.lines.map((line) => ({ accountId: line.accountId, side: line.side, amount: line.amount, history: `Estorno: ${input.reason}` })));
   const total = assertBalancedEntry(reversed);
@@ -235,7 +254,8 @@ export async function reopenAccountingPeriod(context: AccountingContext, periodI
   requireCapability(context, "ACCOUNTING_REOPEN");
   const period = await prisma.accountingPeriod.findFirst({ where: { id: periodId, organizationId: context.organizationId, status: "CLOSED" } });
   if (!period) throw new Error("Período fechado não encontrado nesta organização.");
-  if (!reason.trim() || authorizedById === context.userId || authorizedById === period.closedById) throw new Error("Reabertura exige motivo e autorização segregada.");
+  if (!reason.trim() || authorizedById === period.closedById) throw new Error("Reabertura exige motivo e autorização segregada.");
+  await assertSegregatedAccountingApprover(context, authorizedById, ["OWNER", "ADMIN"]);
   const reopened = await prisma.accountingPeriod.update({ where: { id: period.id }, data: { status: "REOPENED", reopenedById: authorizedById, reopenedAt: new Date(), reopeningReason: reason.trim(), updatedById: context.userId } });
   await prisma.auditLog.create({ data: audit(context, null, "ACCOUNTING_PERIOD_REOPENED", "AccountingPeriod", period.id, { status: period.status }, { status: reopened.status, authorizedById, reason }) });
   return reopened;
@@ -251,11 +271,11 @@ export async function createAccountingReconciliation(context: AccountingContext,
   return prisma.accountingReconciliation.create({ data: { organizationId: context.organizationId, companyId: period.companyId, projectId: input.projectId ?? null, periodId: period.id, reconciliationType: input.type, status: result.status, sourceAmount: result.source, ledgerAmount: result.ledger, differenceAmount: result.difference, material: result.material, evidence: json(input.evidence), createdById: context.userId, items: { create: [{ sourceType: input.sourceType, sourceId: input.sourceId, sourceAmount: result.source, ledgerAmount: result.ledger, differenceAmount: result.difference }] } }, include: { items: true } });
 }
 
-export async function getAccountingWorkspace(context: Pick<AccountingContext, "organizationId" | "role">, projectId: string) {
+export async function getAccountingWorkspace(context: Pick<AccountingContext, "organizationId" | "role"> & { userId?: string }, projectId: string) {
   requireCapability(context, "ACCOUNTING_VIEW");
   const project = await prisma.project.findFirst({ where: { id: projectId, organizationId: context.organizationId } });
   if (!project) throw new Error("Empreendimento não encontrado nesta organização.");
-  const [charts, periods, events, entries, pools, allocationRuns, revenueRuns, regimes, assessments, reconciliations, consolidationRuns, budget, contracts, measurements, payables] = await Promise.all([
+  const [charts, periods, events, entries, pools, allocationRuns, revenueRuns, regimes, assessments, reconciliations, consolidationRuns, budget, contracts, measurements, payables, approvers] = await Promise.all([
     prisma.chartOfAccounts.findMany({ where: { organizationId: context.organizationId }, include: { versions: { include: { accounts: true, assignments: true }, orderBy: { version: "desc" } } }, take: 20 }),
     prisma.accountingPeriod.findMany({ where: { organizationId: context.organizationId }, include: { snapshots: true }, orderBy: { referenceMonth: "desc" }, take: 60 }),
     prisma.accountingEvent.findMany({ where: { organizationId: context.organizationId, OR: [{ projectId }, { projectId: null }] }, orderBy: { occurredAt: "desc" }, take: 100 }),
@@ -271,6 +291,17 @@ export async function getAccountingWorkspace(context: Pick<AccountingContext, "o
     prisma.operationalContract.findMany({ where: { organizationId: context.organizationId, projectId, status: "ACTIVE" } }),
     prisma.measurementCertificate.findMany({ where: { organizationId: context.organizationId, projectId, status: { in: ["APPROVED", "SENT_TO_FINANCE"] } } }),
     prisma.payableAccount.findMany({ where: { organizationId: context.organizationId, projectId }, include: { installments: { include: { payments: true } } } }),
+    prisma.organizationMembership.findMany({
+      where: {
+        organizationId: context.organizationId,
+        isActive: true,
+        role: { in: ["OWNER", "ADMIN", "REVIEWER"] },
+        ...(context.userId ? { userId: { not: context.userId } } : {}),
+      },
+      include: { user: { select: { id: true, name: true, email: true, isActive: true } } },
+      orderBy: [{ role: "asc" }, { createdAt: "asc" }],
+      take: 100,
+    }),
   ]);
   const posted = entries.filter((entry) => ["POSTED", "REVERSED"].includes(entry.status));
   const accounted = posted.reduce((sum, entry) => sum + Number(entry.totalDebit), 0);
@@ -282,12 +313,13 @@ export async function getAccountingWorkspace(context: Pick<AccountingContext, "o
   return {
     projectId,
     generatedAt: new Date().toISOString(),
-    permissions: { canPost: hasAccountingCapability(context.role, "ACCOUNTING_ENTRY_POST"), canClose: hasAccountingCapability(context.role, "ACCOUNTING_CLOSE"), canManageTax: hasAccountingCapability(context.role, "TAX_MANAGE"), canConsolidate: hasAccountingCapability(context.role, "CONSOLIDATION_MANAGE") },
+    permissions: { canPost: hasAccountingCapability(context.role, "ACCOUNTING_ENTRY_POST"), canReverse: hasAccountingCapability(context.role, "ACCOUNTING_REVERSE"), canClose: hasAccountingCapability(context.role, "ACCOUNTING_CLOSE"), canReopen: hasAccountingCapability(context.role, "ACCOUNTING_REOPEN"), canReconcile: hasAccountingCapability(context.role, "ACCOUNTING_ENTRY_REVIEW"), canManageTax: hasAccountingCapability(context.role, "TAX_MANAGE"), canConsolidate: hasAccountingCapability(context.role, "CONSOLIDATION_MANAGE") },
+    approvers: approvers.filter((item) => item.user.isActive).map((item) => ({ userId: item.user.id, name: item.user.name, email: item.user.email, role: item.role })),
     summary: { recognizedRevenue, managerialRevenue: recognizedRevenue, accountedCost: recognizedCost, grossMargin: recognizedRevenue - recognizedCost, operatingResult: recognizedRevenue - recognizedCost, inventory, taxesDue, provisions: await prisma.accountingProvision.count({ where: { organizationId: context.organizationId, OR: [{ projectId }, { projectId: null }], status: "ACTIVE" } }), openPeriods: periods.filter((item) => item.status !== "CLOSED").length, divergences: reconciliations.filter((item) => item.status === "DIVERGENT").length, unclassifiedEvents: events.filter((item) => item.status === "PENDING_MAPPING").length },
     chart: charts.flatMap((chart) => chart.versions.map((version) => ({ id: version.id, chart: chart.name, version: version.version, status: version.status, accounts: version.accounts.map((account) => ({ id: account.id, code: account.code, name: account.name, category: account.category, normalBalance: account.normalBalance, posting: account.isPosting })) }))),
     periods: periods.map((period) => ({ id: period.id, companyId: period.companyId, referenceMonth: period.referenceMonth.toISOString(), status: period.status, closedAt: period.closedAt?.toISOString() ?? null, snapshot: period.snapshots.length > 0 })),
     events: events.map((event) => ({ id: event.id, sourceModule: event.sourceModule, sourceType: event.sourceType, sourceId: event.sourceId, eventType: event.eventType, status: event.status, competenceDate: event.competenceDate.toISOString(), grossAmount: Number(event.grossAmount), netAmount: Number(event.netAmount), economicIdentityKey: event.economicIdentityKey })),
-    entries: entries.map((entry) => ({ id: entry.id, entryNumber: entry.entryNumber, description: entry.description, accountingDate: entry.accountingDate.toISOString(), competenceDate: entry.competenceDate.toISOString(), status: entry.status, totalDebit: Number(entry.totalDebit), totalCredit: Number(entry.totalCredit), source: entry.event ? `${entry.event.sourceModule} · ${entry.event.sourceType} · ${entry.event.sourceId}` : "Lançamento manual", lines: entry.lines.map((line) => ({ id: line.id, accountCode: line.account.code, accountName: line.account.name, side: line.side, amount: Number(line.amount), history: line.history })) })),
+    entries: entries.map((entry) => ({ id: entry.id, periodId: entry.periodId, entryNumber: entry.entryNumber, description: entry.description, accountingDate: entry.accountingDate.toISOString(), competenceDate: entry.competenceDate.toISOString(), status: entry.status, totalDebit: Number(entry.totalDebit), totalCredit: Number(entry.totalCredit), source: entry.event ? `${entry.event.sourceModule} · ${entry.event.sourceType} · ${entry.event.sourceId}` : "Lançamento manual", lines: entry.lines.map((line) => ({ id: line.id, accountCode: line.account.code, accountName: line.account.name, side: line.side, amount: Number(line.amount), history: line.history })) })),
     trialBalance: calculateTrialBalance(charts.flatMap((chart) => chart.versions[0]?.accounts ?? []).filter((account) => account.isPosting).map((account) => { const lines = entries.flatMap((entry) => entry.lines).filter((line) => line.accountId === account.id); return { accountId: account.id, code: account.code, name: account.name, normalBalance: account.normalBalance, openingBalance: 0, debit: lines.filter((line) => line.side === "DEBIT").reduce((sum, line) => sum + Number(line.amount), 0), credit: lines.filter((line) => line.side === "CREDIT").reduce((sum, line) => sum + Number(line.amount), 0) }; })),
     inventory: { pools: pools.map((pool) => ({ id: pool.id, code: pool.code, name: pool.name, category: pool.category, totalAmount: Number(pool.totalAmount), movements: pool.movements.length })), allocations: allocationRuns.map((run) => ({ id: run.id, pool: run.pool.name, criterion: run.criterion, sourceAmount: Number(run.sourceAmount), allocatedAmount: Number(run.allocatedAmount), residualAmount: Number(run.residualAmount), proofZero: run.proofZero, units: run.lines.length })) },
     revenue: revenueRuns.map((run) => ({ id: run.id, cutoffDate: run.cutoffDate.toISOString(), policyId: run.policyId, vgv: Number(run.totalVgv), receivable: Number(run.totalReceivable), cash: Number(run.totalCash), revenue: Number(run.recognizedRevenue), cost: Number(run.recognizedCost), margin: Number(run.recognizedRevenue) - Number(run.recognizedCost) })),

@@ -1,44 +1,57 @@
-# Roadmap
+# Roadmap — REDE Intelligence
 
-## Fase 0 — Fundação
+Atualizado em 18/09/2026.
 
-- decisões, modelo e fórmulas documentados;
-- monólito modular e tokens visuais;
-- esquema Prisma e contratos tipados.
+## Estado consolidado
 
-## Fase 1 — REDE Engine v1
+| Fase | Escopo | Estado |
+| --- | --- | --- |
+| 0–8 | Fundação, Engine, inteligência imobiliária, Studio, dados e BIM/Design | Concluído no código |
+| 9A–9S | Operação empresarial, financeiro, suprimentos, jurídico, comercial, pessoas, contabilidade, integrações, produção, entrega e encerramento | Concluído no código |
+| 10A | AI Gateway | Concluído |
+| 10B | Context Engine | Concluído |
+| 10C | Tool Layer | Concluído |
+| 10C.1 | Operabilidade humana transversal | Fechamento técnico em validação final |
+| 10D | Agent Framework | Concluído |
+| 10E | Red Team 2.0 | Concluído |
+| 10F | Decision Engine | Concluído |
+| 10G | Investment Committee | Concluído |
+| 10H | REDE Operator | Framework concluído; adapters externos dependem dos sistemas alvo |
+| 10I | Autopilot | Concluído em modos seguros OFF/ADVISORY/ASSISTED |
+| 10J | Learning Loop | Motor concluído; maturação depende de histórico real |
 
-- fluxo editável e cálculo mensal;
-- cenários padrão;
-- dashboard, riscos objetivos e trilha de cálculo;
-- testes unitários, typecheck, lint e build.
+## Fechamento da 10C.1
 
-## Próximos incrementos recomendados
+A rodada final fecha as lacunas de superfície que ainda estavam registradas:
 
-### 1. Persistência e governança
+- governança cognitiva visível na Gestão Executiva;
+- jurídico especializado;
+- estoque, preço, comissão, vistoria e pós-venda comercial;
+- vínculos, alocações e custos de pessoas;
+- estorno, reabertura e conciliação contábil;
+- gate explícito de escrita em Mercado & Produto.
 
-Conectar PostgreSQL, autenticação, papéis, isolamento por empresa, versionamento de premissas e auditoria persistida.
+O fechamento técnico está condicionado ao CI integral verde e aos gates descritos em
+`docs/FINAL_PRODUCT_READINESS_2026-09-18.md`.
 
-### 2. Fidelidade financeira
+## Próxima etapa após o fechamento das fases
 
-Parcelamento de terreno, permutas, curva de obra configurável, inflação/indexadores, distrato, inadimplência, cronograma de financiamento e repasse.
+Não há nova fase numerada interna definida neste roadmap. O próximo ciclo é de **ativação de produção e evolução baseada em uso real**, incluindo:
 
-### 3. Sensibilidade
+- configurar provider comercial de IA quando houver credenciais e política de custo aprovadas;
+- conectar fontes de mercado contratadas;
+- criar adapters do REDE Operator somente para sistemas externos reais e autorizados;
+- executar smoke test em ambiente final;
+- acumular previsto × realizado e decisões para maturar o Learning Loop;
+- priorizar novas capacidades a partir de operação real, não por expansão artificial de escopo.
 
-Matriz automática, tornado chart e limites de viabilidade por variável.
+## Gates permanentes de qualidade
 
-### 4. REDE Score
+Nenhum incremento é promovido quando:
 
-Política versionada, pesos configuráveis, evidências e justificativa reproduzível. Validar pesos com decisões históricas antes de uso institucional.
-
-### 5. Red Team
-
-Expandir regras determinísticas; só então acoplar agentes especializados via interface de provedor, com aprovação humana.
-
-### 6. REDE Studio e Data
-
-Gerar outputs a partir de snapshots aprovados e capturar previsto × realizado com evidências.
-
-## Gates de qualidade
-
-Nenhuma fase avança se fórmulas críticas não tiverem testes, se o snapshot não for rastreável ou se a interface não distinguir premissa, cálculo e inferência.
+- fórmulas críticas não possuem testes;
+- evidência e snapshot não são rastreáveis;
+- premissa, cálculo e inferência não estão distinguidos;
+- uma mutação material contorna RBAC, segregação ou auditoria;
+- dado externo é apresentado como integrado sem fonte real;
+- uma automação executa ato material sem a aprovação exigida pelo domínio.

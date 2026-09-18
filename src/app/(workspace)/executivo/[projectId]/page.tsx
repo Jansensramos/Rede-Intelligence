@@ -4,6 +4,7 @@ import { resolveOperationalContext } from "@/application/workspace/operational-c
 import { getExecutiveProjectOverview, getExecutivePortfolioOverview } from "@/application/executive/executive-service";
 import { getDecisionInsights, listSimulableSalesUnits } from "@/application/executive-insights/executive-insights-service";
 import { GestaoExecutivaView } from "@/components/areas/gestao-executiva-view";
+import { ExecutiveCognitiveTimeline } from "@/components/executive-cognitive-timeline";
 
 /**
  * Fase 9K.2 — Central Executiva do Empreendimento (plano §AH), rota de drill-down a partir da
@@ -37,5 +38,5 @@ export default async function ExecutivoProjectPage({ params }: { params: Promise
     listSimulableSalesUnits(authContext, context.project.id),
   ]);
 
-  return <GestaoExecutivaView overview={overview} portfolio={portfolio} insights={insights} simulableUnits={simulableUnits} />;
+  return <div className="view-stack">\n    <ExecutiveCognitiveTimeline projectId={context.project.id} />\n    <GestaoExecutivaView overview={overview} portfolio={portfolio} insights={insights} simulableUnits={simulableUnits} />\n  </div>;
 }

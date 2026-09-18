@@ -82,6 +82,14 @@ export async function createEmploymentRelationship(context: PeopleContext, input
     prisma.personProfile.findFirst({ where: { id: input.personId, organizationId: context.organizationId } }),
   ]);
   if (!company || !person) throw new Error("Empresa ou perfil profissional não pertence à organização.");
+  if (input.departmentId) {
+    const department = await prisma.department.findFirst({ where: { id: input.departmentId, organizationId: context.organizationId, OR: [{ companyId: input.companyId }, { companyId: null }] } });
+    if (!department) throw new Error("Departamento não pertence à organização/empresa informada.");
+  }
+  if (input.positionId) {
+    const position = await prisma.position.findFirst({ where: { id: input.positionId, organizationId: context.organizationId } });
+    if (!position || (input.departmentId && position.departmentId && position.departmentId !== input.departmentId)) throw new Error("Cargo não pertence ao contexto informado.");
+  }
   if (input.managerId) await relationshipForTenant(context, input.managerId);
   const relationship = await prisma.employmentRelationship.create({ data: { organizationId: context.organizationId, companyId: input.companyId, personId: input.personId, positionId: input.positionId ?? null, departmentId: input.departmentId ?? null, managerId: input.managerId ?? null, type: input.type, startDate: input.startDate, endDate: input.endDate ?? null, weeklyHours: input.weeklyHours ?? null, createdById: context.userId, updatedById: context.userId } });
   await prisma.auditLog.create({ data: audit(context, null, "EMPLOYMENT_RELATIONSHIP_CREATED", "EmploymentRelationship", relationship.id, undefined, { personId: person.id, companyId: company.id, type: relationship.type }) });
@@ -91,6 +99,16 @@ export async function createEmploymentRelationship(context: PeopleContext, input
 export async function createWorkAllocation(context: PeopleContext, input: { projectId: string; relationshipId: string; teamId?: string | null; costCenterId?: string | null; economicItemId?: string | null; scheduleActivityId?: string | null; criterion: "PERCENTAGE" | "HOURS" | "FIXED_AMOUNT"; allocationRate?: number | null; allocatedHours?: number | null; allocatedAmount?: number | null; startDate: Date; endDate?: Date | null; overAllocationJustification?: string | null }) {
   requireCapability(context, "ALLOCATION_MANAGE");
   await Promise.all([projectForTenant(context, input.projectId), relationshipForTenant(context, input.relationshipId)]);
+  const [team, costCenter, economicItem, scheduleActivity] = await Promise.all([
+    input.teamId ? prisma.team.findFirst({ where: { id: input.teamId, organizationId: context.organizationId, OR: [{ projectId: input.projectId }, { projectId: null }] } }) : null,
+    input.costCenterId ? prisma.costCenter.findFirst({ where: { id: input.costCenterId, organizationId: context.organizationId, OR: [{ projectId: input.projectId }, { projectId: null }] } }) : null,
+    input.economicItemId ? prisma.economicItem.findFirst({ where: { id: input.economicItemId, organizationId: context.organizationId, projectId: input.projectId } }) : null,
+    input.scheduleActivityId ? prisma.scheduleActivity.findFirst({ where: { id: input.scheduleActivityId, schedule: { organizationId: context.organizationId, projectId: input.projectId } } }) : null,
+  ]);
+  if (input.teamId && !team) throw new Error("Equipe não pertence ao empreendimento/organização.");
+  if (input.costCenterId && !costCenter) throw new Error("Centro de custo não pertence ao empreendimento/organização.");
+  if (input.economicItemId && !economicItem) throw new Error("Item econômico não pertence ao empreendimento.");
+  if (input.scheduleActivityId && !scheduleActivity) throw new Error("Atividade de cronograma não pertence ao empreendimento.");
   assertValidDateRange(input.startDate, input.endDate);
   const existing = await prisma.workAllocation.findMany({ where: { organizationId: context.organizationId, relationshipId: input.relationshipId, startDate: { lte: input.endDate ?? new Date("9999-12-31") }, OR: [{ endDate: null }, { endDate: { gte: input.startDate } }] } });
   const capacity = assertAllocationCapacity(existing.map((item) => ({ criterion: item.criterion, allocationRate: item.allocationRate, allocatedHours: item.allocatedHours, justification: item.overAllocationJustification })), { criterion: input.criterion, allocationRate: input.allocationRate, allocatedHours: input.allocatedHours, justification: input.overAllocationJustification });
@@ -320,7 +338,7 @@ export async function getPeoplePerformanceWorkspace(context: Pick<PeopleContext,
   const project = await prisma.project.findFirst({ where: { id: projectId, organizationId: context.organizationId } });
   if (!project) throw new Error("Empreendimento não encontrado nesta organização.");
   const canViewCompensation = hasPeopleCapability(context.role, "COMPENSATION_READ");
-  const [departments, positions, relationships, teams, allocations, adminPlans, runs, variances, policies, simulations] = await Promise.all([
+  const [departments, positions, relationships, teams, allocations, adminPlans, runs, variances, policies, simulations, profiles, companies, costCenters] = await Promise.all([
     prisma.department.findMany({ where: { organizationId: context.organizationId, isActive: true }, orderBy: { code: "asc" } }),
     prisma.position.findMany({ where: { organizationId: context.organizationId, isActive: true }, include: { department: true }, orderBy: { code: "asc" } }),
     prisma.employmentRelationship.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE" }, include: { person: true, position: true, department: true, company: true, costSnapshots: { orderBy: { referenceMonth: "desc" }, take: 1 } }, orderBy: { person: { fullName: "asc" } }, take: 500 }),
@@ -331,6 +349,9 @@ export async function getPeoplePerformanceWorkspace(context: Pick<PeopleContext,
     prisma.performanceVarianceCase.findMany({ where: { organizationId: context.organizationId, projectId }, include: { investigation: { include: { hypotheses: { include: { evidence: true } }, causeAllocations: true, dependencies: true, actions: { include: { evidence: true } } } } }, orderBy: { updatedAt: "desc" }, take: 100 }),
     prisma.incentivePolicy.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE" }, orderBy: { version: "desc" }, take: 20 }),
     prisma.incentiveSimulation.findMany({ where: { organizationId: context.organizationId, projectId }, include: { validatedSaving: true, policy: true, allocations: true }, orderBy: { createdAt: "desc" }, take: 50 }),
+    prisma.personProfile.findMany({ where: { organizationId: context.organizationId }, select: { id: true, fullName: true, preferredName: true, email: true }, orderBy: { fullName: "asc" }, take: 1000 }),
+    prisma.company.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE" }, select: { id: true, name: true, type: true }, orderBy: { name: "asc" }, take: 200 }),
+    prisma.costCenter.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE", OR: [{ projectId }, { projectId: null }] }, select: { id: true, code: true, name: true, projectId: true }, orderBy: { code: "asc" }, take: 500 }),
   ]);
   const people = relationships.map((item) => ({ id: item.person.id, relationshipId: item.id, name: item.person.preferredName ?? item.person.fullName, company: item.company.name, department: item.department?.name ?? "Sem departamento", position: item.position?.title ?? "Sem cargo", relationshipType: item.type, weeklyHours: item.weeklyHours ? Number(item.weeklyHours) : null, monthlyCost: canViewCompensation && item.costSnapshots[0] ? Number(item.costSnapshots[0].totalCost) : null, compensationRestricted: !canViewCompensation }));
   const activeActions = variances.flatMap((item) => item.investigation?.actions ?? []).filter((item) => !["VERIFIED", "CANCELLED"].includes(item.status));
@@ -338,9 +359,26 @@ export async function getPeoplePerformanceWorkspace(context: Pick<PeopleContext,
   return {
     projectId,
     generatedAt: new Date().toISOString(),
-    permissions: { canViewCompensation, canManagePeople: hasPeopleCapability(context.role, "PEOPLE_MANAGE"), canAnalyze: hasPeopleCapability(context.role, "EFFICIENCY_ANALYZE"), canManageRootCause: hasPeopleCapability(context.role, "ROOT_CAUSE_MANAGE"), canApproveAction: hasPeopleCapability(context.role, "ACTION_APPROVE"), canVerifyAction: hasPeopleCapability(context.role, "ACTION_VERIFY"), canSimulateIncentive: hasPeopleCapability(context.role, "INCENTIVE_SIMULATE") },
+    permissions: { canViewCompensation, canManageCompensation: hasPeopleCapability(context.role, "COMPENSATION_MANAGE"), canManageAllocations: hasPeopleCapability(context.role, "ALLOCATION_MANAGE"), canManagePeople: hasPeopleCapability(context.role, "PEOPLE_MANAGE"), canAnalyze: hasPeopleCapability(context.role, "EFFICIENCY_ANALYZE"), canManageRootCause: hasPeopleCapability(context.role, "ROOT_CAUSE_MANAGE"), canApproveAction: hasPeopleCapability(context.role, "ACTION_APPROVE"), canVerifyAction: hasPeopleCapability(context.role, "ACTION_VERIFY"), canSimulateIncentive: hasPeopleCapability(context.role, "INCENTIVE_SIMULATE") },
     summary: { people: people.length, departments: departments.length, positions: positions.length, teams: teams.length, allocations: allocations.length, activeVarianceCases: variances.filter((item) => !["CLOSED"].includes(item.status)).length, activeActions: activeActions.length, totalMonthlyCost },
     people,
+    workforce: {
+      profiles: profiles.map((item) => ({ id: item.id, name: item.preferredName ?? item.fullName, email: item.email })),
+      companies,
+      costCenters,
+      relationships: relationships.map((item) => ({
+        id: item.id,
+        personId: item.personId,
+        person: item.person.preferredName ?? item.person.fullName,
+        companyId: item.companyId,
+        company: item.company.name,
+        positionId: item.positionId,
+        departmentId: item.departmentId,
+        type: item.type,
+        startDate: item.startDate.toISOString(),
+        weeklyHours: item.weeklyHours ? Number(item.weeklyHours) : null,
+      })),
+    },
     departments: departments.map((item) => ({ id: item.id, code: item.code, name: item.name, parentId: item.parentId })),
     positions: positions.map((item) => ({ id: item.id, code: item.code, title: item.title, department: item.department?.name ?? null })),
     teams: teams.map((item) => ({ id: item.id, code: item.code, name: item.name, type: item.type, members: item.memberships.map((membership) => membership.relationship.person.preferredName ?? membership.relationship.person.fullName) })),

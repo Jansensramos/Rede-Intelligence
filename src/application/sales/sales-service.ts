@@ -73,6 +73,11 @@ async function projectForTenant(organizationId: string, projectId: string) {
   if (!project) throw new Error("Empreendimento não encontrado nesta organização.");
   return project;
 }
+async function companyForTenant(organizationId: string, companyId: string) {
+  const company = await prisma.company.findFirst({ where: { id: companyId, organizationId } });
+  if (!company) throw new Error("Empresa não encontrada nesta organização.");
+  return company;
+}
 async function customerForTenant(organizationId: string, customerId: string) {
   const customer = await prisma.customer.findFirst({ where: { id: customerId, organizationId } });
   if (!customer) throw new Error("Cliente não encontrado nesta organização.");
@@ -111,8 +116,10 @@ async function recordApproval(tx: Prisma.TransactionClient, context: AuthContext
 export async function createSalesUnit(context: AuthContext, raw: CreateSalesUnitInput) {
   assertMutable(context);
   const input = createSalesUnitSchema.parse(raw);
-  await projectForTenant(context.organizationId, input.projectId);
-  if (input.detectedUnitId && !(await prisma.detectedUnit.findUnique({ where: { id: input.detectedUnitId } }))) throw new Error("Unidade detectada (BIM/Design) não encontrada.");
+  const project = await projectForTenant(context.organizationId, input.projectId);
+  await companyForTenant(context.organizationId, input.companyId);
+  if (project.companyId && project.companyId !== input.companyId) throw new Error("A empresa informada não é a empresa do empreendimento.");
+  if (input.detectedUnitId && !(await prisma.detectedUnit.findFirst({ where: { id: input.detectedUnitId, revision: { package: { organizationId: context.organizationId, projectId: input.projectId } } } }))) throw new Error("Unidade detectada (BIM/Design) não encontrada neste empreendimento.");
   const unit = await prisma.salesUnit.create({ data: { organizationId: context.organizationId, projectId: input.projectId, companyId: input.companyId, operatingUnitId: input.operatingUnitId ?? null, detectedUnitId: input.detectedUnitId ?? null, code: input.code, floor: input.floor ?? null, typology: input.typology, privateAreaM2: input.privateAreaM2, totalAreaM2: input.totalAreaM2 ?? null, parkingSpaces: input.parkingSpaces, storageUnits: input.storageUnits, position: input.position ?? null, characteristics: input.characteristics ? json(input.characteristics) : undefined, createdById: context.userId } });
   await prisma.auditLog.create({ data: audit(context, input.projectId, "SALES_UNIT_CREATED", "SalesUnit", unit.id, { code: unit.code }) });
   return unit;
@@ -153,7 +160,9 @@ export async function unblockSalesUnit(context: AuthContext, blockId: string) {
 export async function createSalesPriceTable(context: AuthContext, raw: CreateSalesPriceTableInput) {
   assertMutable(context);
   const input = createSalesPriceTableSchema.parse(raw);
-  await projectForTenant(context.organizationId, input.projectId);
+  const project = await projectForTenant(context.organizationId, input.projectId);
+  await companyForTenant(context.organizationId, input.companyId);
+  if (project.companyId && project.companyId !== input.companyId) throw new Error("A empresa informada não é a empresa do empreendimento.");
   const units = await prisma.salesUnit.findMany({ where: { id: { in: input.lines.map((line) => line.salesUnitId) }, organizationId: context.organizationId, projectId: input.projectId } });
   if (units.length !== new Set(input.lines.map((line) => line.salesUnitId)).size) throw new Error("Uma ou mais unidades não pertencem a este empreendimento.");
   const last = await prisma.salesPriceTable.findFirst({ where: { projectId: input.projectId }, orderBy: { version: "desc" } });
@@ -204,6 +213,7 @@ export async function upsertBrokerProfile(context: AuthContext, raw: CreateBroke
   const input = createBrokerProfileSchema.parse(raw);
   const supplier = await prisma.supplier.findFirst({ where: { id: input.supplierId, organizationId: context.organizationId } });
   if (!supplier) throw new Error("Fornecedor (corretor/imobiliária) não encontrado nesta organização.");
+  if (input.parentAgencyId && !(await prisma.brokerProfile.findFirst({ where: { id: input.parentAgencyId, organizationId: context.organizationId } }))) throw new Error("Imobiliária matriz não encontrada nesta organização.");
   const profile = await prisma.brokerProfile.upsert({
     where: { supplierId: input.supplierId },
     update: { creci: input.creci ?? null, parentAgencyId: input.parentAgencyId ?? null, defaultCommissionRate: input.defaultCommissionRate ?? null, channel: input.channel ?? null },
@@ -499,6 +509,7 @@ export async function createSalesCommission(context: AuthContext, raw: CreateSal
   if (!sale) throw new Error("Venda aprovada não encontrada nesta organização.");
   const broker = await prisma.supplier.findFirst({ where: { id: input.brokerId, organizationId: context.organizationId } });
   if (!broker) throw new Error("Corretor/imobiliária não encontrado nesta organização.");
+  if (input.policyId && !(await prisma.salesCommissionPolicy.findFirst({ where: { id: input.policyId, organizationId: context.organizationId, OR: [{ projectId: sale.projectId }, { projectId: null }] } }))) throw new Error("Política de comissão não encontrada para este empreendimento.");
   const amount = engine.calculateCommissionAmount(input.basis, input.percentage, sale.soldPrice);
   const commission = await prisma.salesCommission.create({ data: { saleId: sale.id, brokerId: broker.id, policyId: input.policyId ?? null, basis: input.basis, percentage: input.percentage, amount, triggerEvent: input.triggerEvent, createdById: context.userId } });
   await prisma.auditLog.create({ data: audit(context, sale.projectId, "SALES_COMMISSION_CREATED", "SalesCommission", commission.id, { amount: amount.toString() }) });
@@ -796,7 +807,7 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
   const overdueReceivables = sales.flatMap((sale) => sale.receivableAccounts.flatMap((account) => account.installments)).filter((installment) => installment.dueDate < referenceDate && !["RECEBIDA", "CANCELADA", "RENEGOCIADA"].includes(installment.status));
 
   return {
-    projectId, currentUserId: context.userId, generatedAt: referenceDate.toISOString(),
+    projectId, companyId: project.companyId, currentUserId: context.userId, generatedAt: referenceDate.toISOString(),
     summary: {
       vgvTotal: Number(vgv.total), vgvDisponivel: Number(vgv.disponivel), vgvReservado: Number(vgv.reservado), vgvVendido: Number(vgv.vendido), vgvPermutado: Number(vgv.permutado), vgvDistratado: Number(vgv.distratado), vgvRecebido: Number(vgvReceived), vgvAReceber: Number(vgvToReceive),
       unitsTotal: units.length, unitsAvailable, unitsSold: soldCount, unitsReserved: units.filter((unit) => unit.status === "EM_RESERVA" || unit.status === "RESERVADA").length, unitsBlocked: units.filter((unit) => unit.status === "BLOQUEADA").length, unitsDelivered: units.filter((unit) => unit.status === "ENTREGUE").length, unitsRescinded: units.filter((unit) => unit.status === "DISTRATADA").length,
@@ -805,7 +816,7 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
       pendingCommissions: sales.flatMap((sale) => sale.commissions).filter((commission) => commission.status === "PENDING").length, overdueReceivables: overdueReceivables.length, overdueReceivablesAmount: Number(engine.money(overdueReceivables.reduce((sum, item) => sum.add(item.currentAmount), new Prisma.Decimal(0)))),
       openPostSaleRequests: postSaleRequests.filter((item) => !["RESOLVED", "CLOSED"].includes(item.status)).length,
     },
-    units: units.map((unit) => ({ id: unit.id, code: unit.code, floor: unit.floor, typology: unit.typology, privateAreaM2: Number(unit.privateAreaM2), status: unit.status, listPrice: activeLineByUnit.get(unit.id) ? Number(activeLineByUnit.get(unit.id)!.listPrice) : null, pricePerM2: activeLineByUnit.get(unit.id) ? Number(engine.pricePerM2(activeLineByUnit.get(unit.id)!.listPrice, unit.privateAreaM2)) : null, activeBlock: unit.blocks[0] ? { origin: unit.blocks[0].origin, reason: unit.blocks[0].reason } : null })),
+    units: units.map((unit) => ({ id: unit.id, code: unit.code, floor: unit.floor, typology: unit.typology, privateAreaM2: Number(unit.privateAreaM2), status: unit.status, listPrice: activeLineByUnit.get(unit.id) ? Number(activeLineByUnit.get(unit.id)!.listPrice) : null, pricePerM2: activeLineByUnit.get(unit.id) ? Number(engine.pricePerM2(activeLineByUnit.get(unit.id)!.listPrice, unit.privateAreaM2)) : null, activeBlock: unit.blocks[0] ? { id: unit.blocks[0].id, origin: unit.blocks[0].origin, reason: unit.blocks[0].reason } : null })),
     priceTables: priceTables.map((table) => ({ id: table.id, version: table.version, status: table.status, validFrom: table.validFrom.toISOString(), lines: table.lines.length })),
     proposals: proposals.map((proposal) => ({ id: proposal.id, unit: proposal.salesUnit.code, customer: proposal.customer.name, customerId: proposal.customerId, broker: proposal.broker?.name ?? null, proposedPrice: Number(proposal.proposedPrice), discountAmount: Number(proposal.discountAmount), validUntil: proposal.validUntil.toISOString(), status: proposal.status, creditConsultation: proposal.creditBureauConsultations[0] ? { status: proposal.creditBureauConsultations[0].status, result: proposal.creditBureauConsultations[0].result, cpfMasked: proposal.creditBureauConsultations[0].cpfMasked, requestedAt: proposal.creditBureauConsultations[0].requestedAt.toISOString() } : null })),
     reservations: reservations.map((reservation) => ({ id: reservation.id, unit: reservation.salesUnit.code, customer: reservation.customer.name, customerId: reservation.customerId, expiresAt: reservation.expiresAt.toISOString(), status: reservation.status, expired: engine.isReservationExpired(reservation.expiresAt, reservation.status, referenceDate) })),
@@ -850,7 +861,7 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
       id: condominiumSetup.id, status: condominiumSetup.status, administrator: condominiumSetup.administratorSupplier?.name ?? null,
       constitutedAt: condominiumSetup.constitutedAt?.toISOString() ?? null, transferredAt: condominiumSetup.transferredAt?.toISOString() ?? null,
     } : null,
-    brokers: brokerProfiles.map((profile) => ({ id: profile.id, name: profile.supplier.name, creci: profile.creci, defaultCommissionRate: profile.defaultCommissionRate ? Number(profile.defaultCommissionRate) : null })),
+    brokers: brokerProfiles.map((profile) => ({ id: profile.id, supplierId: profile.supplierId, name: profile.supplier.name, creci: profile.creci, defaultCommissionRate: profile.defaultCommissionRate ? Number(profile.defaultCommissionRate) : null })),
     contractTemplates: contractTemplates.map((template) => ({ id: template.id, name: template.name, status: template.status, versions: template.versions.map((version) => ({ id: version.id, version: version.version, status: version.status })) })),
     correctionRules: correctionRules.map((rule) => ({
       id: rule.id,
