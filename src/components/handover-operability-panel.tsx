@@ -16,10 +16,31 @@ import {
   setPostSaleCostAction,
   transitionCondominiumSetupAction,
 } from "@/app/actions/handover";
-import { Status, statusLabel } from "./sales-view";
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const date = new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" });
+const statusLabel: Record<string, string> = {
+  PENDING: "Pendente",
+  REQUESTED: "Solicitado",
+  DISBURSED: "Liberado pelo banco",
+  RECONCILED: "Conciliado",
+  DIVERGENT: "Divergente",
+  CANCELLED: "Cancelado",
+  PLANNED: "Planejada",
+  IN_PROGRESS: "Em andamento",
+  IMPLEMENTED: "Implantado",
+  OPEN: "Aberta",
+  WAITING_CUSTOMER: "Aguardando cliente",
+  RESOLVED: "Resolvida",
+  CLOSED: "Encerrada",
+  FINANCING: "Financiamento",
+  FGTS: "FGTS",
+  SUBSIDY: "Subsídio",
+  OTHER: "Outro",
+};
+function Status({ value }: { value: string }) {
+  return <span className="status-pill">{statusLabel[value] ?? value.replaceAll("_", " ")}</span>;
+}
 
 export function HandoverOperabilityPanel({ workspace }: { workspace: SalesWorkspaceView }) {
   const router = useRouter();
