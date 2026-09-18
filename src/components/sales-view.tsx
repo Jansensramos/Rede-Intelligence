@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, Building2, CalendarClock, HandCoins, Home, MessageSquareWarning, ReceiptText, Users } from "lucide-react";
 import type { SalesWorkspaceView } from "@/application/sales/sales-service";
+import { getUnitDeliveryReadinessAction } from "@/app/actions/handover";
 import { HandoverOperabilityPanel } from "./handover-operability-panel";
 import {
   approveSalesCommissionAction,
@@ -81,6 +82,14 @@ export function SalesView({ workspace }: { workspace: SalesWorkspaceView }) {
   const [showPostSaleForm, setShowPostSaleForm] = useState(false);
   const [outcomeInspectionId, setOutcomeInspectionId] = useState<string | null>(null);
   const [editingPostSaleId, setEditingPostSaleId] = useState<string | null>(null);
+  const [deliveryGate, setDeliveryGate] = useState<{
+    salesUnitId: string;
+    unit: string;
+    overall: "APTO" | "BLOQUEADO";
+    technical: { status: string; reason: string };
+    legal: { status: string; reason: string };
+    financial: { status: string; reason: string };
+  } | null>(null);
   const approvedTemplateVersion = workspace.contractTemplates
     .flatMap((template) => template.versions.map((version) => ({ ...version, templateName: template.name })))
     .find((version) => version.status === "APPROVED") ?? null;
@@ -138,6 +147,29 @@ export function SalesView({ workspace }: { workspace: SalesWorkspaceView }) {
       slaDueAt: form.get("slaDueAt") ? new Date(`${form.get("slaDueAt")}T12:00:00.000Z`) : null,
     }), "Solicitação de pós-venda criada.");
     setShowPostSaleForm(false);
+  };
+
+  const previewDelivery = (sale: SalesWorkspaceView["sales"][number]) => {
+    startTransition(async () => {
+      setFeedback(null);
+      const result = await getUnitDeliveryReadinessAction(sale.salesUnitId);
+      if (!result.ok) {
+        setFeedback(result.error ?? "Não foi possível avaliar a prontidão da entrega.");
+        return;
+      }
+      if (!result.data) {
+        setFeedback("A venda aprovada da unidade não foi encontrada para avaliar a entrega.");
+        return;
+      }
+      setDeliveryGate({
+        salesUnitId: sale.salesUnitId,
+        unit: sale.unit,
+        overall: result.data.overall,
+        technical: result.data.technical,
+        legal: result.data.legal,
+        financial: result.data.financial,
+      });
+    });
   };
 
   const submitPostSaleUpdate = (requestId: string, form: FormData) => {
@@ -250,8 +282,9 @@ export function SalesView({ workspace }: { workspace: SalesWorkspaceView }) {
         {workspace.inspections.length === 0 && <tr><td colSpan={4}>Nenhuma vistoria agendada.</td></tr>}
       </tbody></table></div>
       <div className="scenario-table"><div className="table-row table-head"><span>Unidade vendida</span><span>Contrato</span><span>Entrega</span></div>
-        {workspace.sales.filter((sale) => sale.status === "APPROVED").map((sale) => <div className="table-row" key={`delivery-${sale.id}`}><strong>{sale.unit}</strong><span>{sale.contractNumber ?? "—"}</span><span><button className="button button-primary" disabled={pending} onClick={() => runCommercialAction(() => markUnitDeliveredAction(sale.salesUnitId), "Unidade marcada como entregue.")}>Concluir entrega</button></span></div>)}
+        {workspace.sales.filter((sale) => sale.status === "APPROVED").map((sale) => <div className="table-row" key={`delivery-${sale.id}`}><strong>{sale.unit}</strong><span>{sale.contractNumber ?? "—"}</span><span><div className="panel-actions"><button className="button button-secondary" disabled={pending} onClick={() => previewDelivery(sale)}>Verificar prontidão</button><button className="button button-primary" disabled={pending} onClick={() => runCommercialAction(() => markUnitDeliveredAction(sale.salesUnitId), "Unidade marcada como entregue.")}>Concluir entrega</button></div></span></div>)}
       </div>
+      {deliveryGate && <div className="model-note"><AlertTriangle size={20} /><div style={{ width: "100%" }}><strong>{deliveryGate.unit} · prontidão da entrega: {deliveryGate.overall === "APTO" ? "APTA" : "BLOQUEADA"}</strong><div className="scenario-table" style={{ marginTop: 10 }}><div className="table-row table-head"><span>Gate</span><span>Status</span><span>Motivo</span></div><div className="table-row"><strong>Técnico</strong><span>{deliveryGate.technical.status}</span><span>{deliveryGate.technical.reason}</span></div><div className="table-row"><strong>Jurídico</strong><span>{deliveryGate.legal.status}</span><span>{deliveryGate.legal.reason}</span></div><div className="table-row"><strong>Financeiro</strong><span>{deliveryGate.financial.status}</span><span>{deliveryGate.financial.reason}</span></div></div><div className="panel-actions"><button className="text-button" type="button" onClick={() => setDeliveryGate(null)}>Fechar diagnóstico</button></div></div></div>}
     </article>
 
     <article className="panel">
