@@ -38,6 +38,7 @@ import type { ProjectAssumptions, ScenarioKey } from "@/domain/financial/types";
 import type { PersistedStudyView } from "@/application/studies/contracts";
 import type { LandWorkspaceView } from "@/domain/land";
 import type { InvestmentCaseWorkspace } from "@/domain/investment";
+import type { MembershipRole } from "@prisma/client";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const compactCurrency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact", maximumFractionDigits: 1 });
@@ -87,11 +88,13 @@ export function ViabilidadeWorkspace({
   initialLand,
   initialInvestment,
   canWrite,
+  role,
 }: {
   initialStudy: PersistedStudyView;
   initialLand: LandWorkspaceView | null;
   initialInvestment: InvestmentCaseWorkspace;
   canWrite: boolean;
+  role: MembershipRole;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -296,11 +299,11 @@ export function ViabilidadeWorkspace({
 
       {funcao === "redteam" && <RedTeamView report={study.redTeam} />}
 
-      {funcao === "committee" && <InvestmentSuiteView mode="committee" initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
+      {funcao === "committee" && <InvestmentSuiteView mode="committee" role={role} initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
 
-      {funcao === "studio" && <InvestmentSuiteView mode="studio" initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
+      {funcao === "studio" && <InvestmentSuiteView mode="studio" role={role} initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
 
-      {funcao === "dataroom" && <InvestmentSuiteView mode="dataroom" initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
+      {funcao === "dataroom" && <InvestmentSuiteView mode="dataroom" role={role} initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
 
       {funcao === "cashflow" && (
         <div className="view-stack">
