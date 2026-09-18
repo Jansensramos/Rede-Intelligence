@@ -17,7 +17,7 @@ import {
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : "Não foi possível concluir a operação de Pessoas.";
 async function run<T>(op: () => Promise<T>): Promise<Result<T>> {
-  try { const data = await op(); revalidatePath("/pessoas"); revalidatePath("/acoes"); return { ok: true, data }; }
+  try { const data = JSON.parse(JSON.stringify(await op())) as T; revalidatePath("/pessoas"); revalidatePath("/acoes"); return { ok: true, data }; }
   catch (error) { return { ok: false, error: errorMessage(error) }; }
 }
 const write = () => requireDomainWriteContext("PEOPLE_READ", "PEOPLE_WRITE");
