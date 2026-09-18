@@ -6,7 +6,9 @@ import Link from "next/link";
 import { AlertTriangle, Building2, CalendarClock, HandCoins, Home, MessageSquareWarning, ReceiptText, Users } from "lucide-react";
 import type { SalesWorkspaceView } from "@/application/sales/sales-service";
 import {
+  approveSalesCommissionAction,
   completeLocalSignatureAction,
+  createSalesCommissionAction,
   ensureDefaultContractTemplateAction,
   generateContractDocumentAction,
   startLocalSignatureAction,
@@ -145,7 +147,15 @@ export function SalesView({ workspace }: { workspace: SalesWorkspaceView }) {
       })}</tbody></table></div>
     </article></>}
 
-    {area === "comissoes" && <article className="panel"><div className="panel-heading"><div><span className="eyebrow">CORRETAGEM</span><h2>Comissões — obrigação gerada exatamente uma vez</h2></div></div><div className="scenario-table"><div className="table-row table-head"><span>Corretor</span><span>Venda</span><span>Valor</span><span>Situação</span></div>{workspace.commissions.map((item) => <div className="table-row" key={item.id}><strong>{item.broker}</strong><span>{item.sale}</span><span>{brl.format(item.amount)}</span><Status value={item.status} /></div>)}</div></article>}
+    {area === "comissoes" && <article className="panel">
+      <div className="panel-heading"><div><span className="eyebrow">CORRETAGEM</span><h2>Comissões — obrigação gerada exatamente uma vez</h2><p>Crie a comissão da venda assinada e aprove para gerar a obrigação no Financeiro.</p></div></div>
+      <div className="scenario-table">
+        <div className="table-row table-head"><span>Corretor</span><span>Venda</span><span>Valor</span><span>Situação</span><span>Ação</span></div>
+        {workspace.commissions.map((item) => <div className="table-row" key={item.id}><strong>{item.broker}</strong><span>{item.sale}</span><span>{brl.format(item.amount)}</span><Status value={item.status} /><span>{item.status === "PENDING" ? <button className="button button-primary" disabled={pending} onClick={() => runCommercialAction(() => approveSalesCommissionAction(item.id), "Comissão aprovada e obrigação financeira gerada.")}>Aprovar comissão</button> : "—"}</span></div>)}
+        {workspace.sales.filter((sale) => sale.status === "APPROVED" && !workspace.commissions.some((commission) => commission.sale === sale.id)).map((sale) => <div className="table-row" key={`eligible-${sale.id}`}><strong>{workspace.brokers[0]?.name ?? "Sem corretor cadastrado"}</strong><span>{sale.contractNumber ?? sale.id} · {sale.unit}</span><span>{workspace.brokers[0] ? brl.format(sale.soldPrice * 0.04) : "—"}</span><span>Não criada</span><span>{workspace.brokers[0] ? <button className="button button-secondary" disabled={pending} onClick={() => runCommercialAction(() => createSalesCommissionAction({ saleId: sale.id, brokerId: workspace.brokers[0].id, basis: "SOLD_PRICE", percentage: "0.04", triggerEvent: "SIGNATURE" }), "Comissão de 4% criada para a venda.")}>Criar comissão 4%</button> : "Cadastre um corretor"}</span></div>)}
+        {workspace.commissions.length === 0 && workspace.sales.every((sale) => sale.status !== "APPROVED") && <p className="empty-state">Nenhuma venda aprovada disponível para comissão.</p>}
+      </div>
+    </article>}
 
     {area === "posvenda" && <><article className="panel"><div className="panel-heading"><div><span className="eyebrow">VISTORIA</span><h2>Entrega e vistoria de unidades</h2></div></div><div className="scenario-table"><div className="table-row table-head"><span>Unidade</span><span>Agendada em</span><span>Resultado</span></div>{workspace.inspections.map((item) => <div className="table-row" key={item.id}><strong>{item.unit}</strong><span>{date.format(new Date(item.scheduledAt))}</span><span>{item.outcome ? statusLabel[item.outcome] ?? item.outcome : "Pendente"}</span></div>)}</div></article>
     <article className="panel"><div className="panel-heading"><div><span className="eyebrow">ATENDIMENTO PÓS-VENDA</span><h2>Solicitações, categoria e histórico</h2></div></div>{workspace.postSaleRequests.map((item) => <div className="model-note" key={item.id}><MessageSquareWarning size={20} /><div><strong>{item.unit} · {item.customer}</strong><p>{item.category.replaceAll("_", " ")} · {item.updates} atualização(ões)</p><Status value={item.status} /></div></div>)}</article></>}
