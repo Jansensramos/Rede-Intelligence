@@ -23,7 +23,7 @@ const CLOSURE_STATUS: Record<string, string> = { DRAFT: "Em preparação", FINAL
 const GATE_STATUS: Record<string, string> = { READY: "Apto", NOT_READY: "Pendente", PENDING: "Pendente", BLOCKED: "Bloqueado", OK: "Apto", APTO: "Apto", INAPTO: "Pendente" };
 const gateLabel = (value: string) => GATE_STATUS[value] ?? value.replaceAll("_", " ");
 
-export function ClosureOperabilityPanel({ projectId, latest, gate }: { projectId: string; latest: LatestClosure; gate: Gate }) {
+export function ClosureOperabilityPanel({ projectId, latest, gate, canWrite, canApprove, canReopen }: { projectId: string; latest: LatestClosure; gate: Gate; canWrite: boolean; canApprove: boolean; canReopen: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [modal, setModal] = useState<ModalState>(null);
@@ -80,10 +80,11 @@ export function ClosureOperabilityPanel({ projectId, latest, gate }: { projectId
   };
 
   return <section className="panel">
+    {!canWrite && !canApprove && <div className="model-note"><div><strong>Modo de leitura</strong><p>Seu perfil pode consultar o encerramento, mas não preparar, distribuir, aprovar ou reabrir resultados.</p></div></div>}
     <div className="panel-heading"><div><span className="eyebrow">ENCERRAMENTO DO EMPREENDIMENTO</span><h2>Fechamento e distribuição de resultados</h2><p>Consolide as pendências operacionais, contratuais, jurídicas, financeiras e contábeis antes do encerramento definitivo.</p></div><div className="panel-actions">
-      {!latest && <button className="button button-primary" disabled={pending} onClick={() => run(() => prepareProjectClosureResultAction({ projectId }), "Preparação do encerramento iniciada.")}><Archive size={15}/> Preparar encerramento</button>}
-      {latest?.status === "DRAFT" && <><button className="button button-secondary" disabled={pending} onClick={() => setModal({ type: "distribution" })}><WalletCards size={15}/> Nova distribuição</button><button className="button button-secondary" disabled={pending} onClick={openApproveDistribution}>Aprovar distribuição</button><button className="button button-primary" disabled={pending || gate.overall !== "APTO"} onClick={() => run(() => approveProjectClosureResultAction({ closureResultId: latest.id }), "Encerramento aprovado.")}><CheckCircle2 size={15}/> Aprovar encerramento</button></>}
-      {latest?.status === "FINAL" && <button className="button button-secondary" disabled={pending} onClick={() => setModal({ type: "reopen" })}><RotateCcw size={15}/> Reabrir</button>}
+      {!latest && <button className="button button-primary" disabled={pending || !canWrite} onClick={() => run(() => prepareProjectClosureResultAction({ projectId }), "Preparação do encerramento iniciada.")}><Archive size={15}/> Preparar encerramento</button>}
+      {latest?.status === "DRAFT" && <><button className="button button-secondary" disabled={pending || !canWrite} onClick={() => setModal({ type: "distribution" })}><WalletCards size={15}/> Nova distribuição</button><button className="button button-secondary" disabled={pending || !canApprove} onClick={openApproveDistribution}>Aprovar distribuição</button><button className="button button-primary" disabled={pending || !canApprove || gate.overall !== "APTO"} onClick={() => run(() => approveProjectClosureResultAction({ closureResultId: latest.id }), "Encerramento aprovado.")}><CheckCircle2 size={15}/> Aprovar encerramento</button></>}
+      {latest?.status === "FINAL" && <button className="button button-secondary" disabled={pending || !canReopen} onClick={() => setModal({ type: "reopen" })}><RotateCcw size={15}/> Reabrir</button>}
     </div></div>
     {feedback && <div className={feedback.type === "error" ? styles.error : styles.success}>{feedback.text}</div>}
     <div className="scenario-deltas"><span>Situação geral: <strong>{gateLabel(gate.overall)}</strong></span><span>Operacional: {gateLabel(gate.operational.status)}</span><span>Contratual: {gateLabel(gate.contractual.status)}</span><span>Jurídico: {gateLabel(gate.legal.status)}</span><span>Financeiro: {gateLabel(gate.financial.status)}</span><span>Contábil: {gateLabel(gate.accounting.status)}</span>{latest && <span>Versão: {latest.version} · {CLOSURE_STATUS[latest.status] ?? gateLabel(latest.status)}</span>}</div>
