@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { requireDomainActionContext } from "./authorization";
 const requireAuthContext = () => requireDomainActionContext("INTEGRATIONS_READ");
-import { decideIntegrationConflict, getIntegrationsWorkspace, reprocessQuarantineItem } from "@/application/integrations/integrations-service";
+import { createConnectorInstallation, decideIntegrationConflict, getIntegrationsWorkspace, reprocessQuarantineItem, storeInstallationCredential } from "@/application/integrations/integrations-service";
 import { enqueueJob } from "@/application/integrations/job-runner";
 import { prisma } from "@/infrastructure/database/prisma";
-import { configureClicksignInstallation } from "@/application/sales/clicksign-service";
+import { CLICKSIGN_DEFINITION_CODE, configureClicksignInstallation } from "@/application/sales/clicksign-service";
 
 type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 const message = (error: unknown) => (error instanceof Error ? error.message : "Não foi possível concluir a operação de integrações.");
@@ -59,4 +59,45 @@ export async function syncMockDriveInstallationAction(projectId: string, install
 export async function configureClicksignInstallationAction(installationId: string, input: { mode: "DISABLED" | "MOCK" | "REAL"; signatureEnvelopeEnabled: boolean; environment: "SANDBOX" | "PRODUCTION"; baseUrl: string; timeoutMs?: number }) {
   const context = await requireAuthContext();
   return run(() => configureClicksignInstallation(context, installationId, input));
+}
+
+export async function createClicksignInstallationAction(projectId: string, name = "Clicksign") {
+  const context = await requireAuthContext();
+  return run(async () => {
+    const created = await createConnectorInstallation(context, {
+      connectorDefinitionCode: CLICKSIGN_DEFINITION_CODE,
+      name,
+      direction: "BIDIRECTIONAL",
+      projectId,
+      configuration: {
+        mode: "DISABLED",
+        signatureEnvelopeEnabled: false,
+        environment: "SANDBOX",
+        baseUrl: "https://sandbox.clicksign.com",
+        timeoutMs: 15000,
+      },
+    });
+    return { installationId: created.id, workspace: await getIntegrationsWorkspace(context, projectId) };
+  });
+}
+
+export async function storeClicksignCredentialAction(projectId: string, installationId: string, input: { accessToken: string; webhookSecret: string }) {
+  const context = await requireAuthContext();
+  return run(async () => {
+    if (!input.accessToken.trim() || !input.webhookSecret.trim()) throw new Error("Informe o token de acesso e o segredo do webhook.");
+    await storeInstallationCredential(context, installationId, {
+      method: "API_KEY",
+      secret: JSON.stringify({ accessToken: input.accessToken.trim(), webhookSecret: input.webhookSecret.trim() }),
+      scopes: ["signature:write", "signature:read", "webhook:receive"],
+    });
+    return getIntegrationsWorkspace(context, projectId);
+  });
+}
+
+export async function configureClicksignForProjectAction(projectId: string, installationId: string, input: { mode: "DISABLED" | "MOCK" | "REAL"; signatureEnvelopeEnabled: boolean; environment: "SANDBOX" | "PRODUCTION"; baseUrl: string; timeoutMs?: number }) {
+  const context = await requireAuthContext();
+  return run(async () => {
+    await configureClicksignInstallation(context, installationId, input);
+    return getIntegrationsWorkspace(context, projectId);
+  });
 }
