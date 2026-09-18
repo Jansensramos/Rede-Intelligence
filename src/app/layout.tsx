@@ -4,6 +4,7 @@ import "./globals.css";
 import "./professional-overrides.css";
 import "./presentation-polish.css";
 import "./cognitive-product.css";
+import "./product-theme.css";
 
 export const metadata: Metadata = {
   title: "REDE Intelligence",
