@@ -796,7 +796,7 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
   const overdueReceivables = sales.flatMap((sale) => sale.receivableAccounts.flatMap((account) => account.installments)).filter((installment) => installment.dueDate < referenceDate && !["RECEBIDA", "CANCELADA", "RENEGOCIADA"].includes(installment.status));
 
   return {
-    projectId, generatedAt: referenceDate.toISOString(),
+    projectId, currentUserId: context.userId, generatedAt: referenceDate.toISOString(),
     summary: {
       vgvTotal: Number(vgv.total), vgvDisponivel: Number(vgv.disponivel), vgvReservado: Number(vgv.reservado), vgvVendido: Number(vgv.vendido), vgvPermutado: Number(vgv.permutado), vgvDistratado: Number(vgv.distratado), vgvRecebido: Number(vgvReceived), vgvAReceber: Number(vgvToReceive),
       unitsTotal: units.length, unitsAvailable, unitsSold: soldCount, unitsReserved: units.filter((unit) => unit.status === "EM_RESERVA" || unit.status === "RESERVADA").length, unitsBlocked: units.filter((unit) => unit.status === "BLOQUEADA").length, unitsDelivered: units.filter((unit) => unit.status === "ENTREGUE").length, unitsRescinded: units.filter((unit) => unit.status === "DISTRATADA").length,
