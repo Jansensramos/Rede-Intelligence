@@ -1,6 +1,6 @@
 # Fase 10C.1 — Status de Implementação Transversal
 
-Data: 17/09/2026
+Data: 18/09/2026
 Branch: `codex/fase-10c1-operabilidade-humana`
 
 ## Princípio
@@ -34,7 +34,7 @@ VIEWER e REVIEWER não recebem escrita genérica. OWNER/ADMIN recebem escrita e 
 | Inteligência de Dados | Operacional de governança | inicialização de contratos/métricas e atualização completa de fatos, benchmarks, previsto x realizado, qualidade e carteira pela UI; métricas derivadas não são editáveis manualmente |
 | Central de Ações | Fonte transversal, não CRUD paralelo | por arquitetura é um read model de ações/exceções originadas nos domínios; correção/decisão deve ocorrer na fonte para não criar segunda verdade |
 | Minha Rotina | Fonte transversal, não CRUD paralelo | reutiliza Central de Ações e organiza o que o usuário precisa tratar; a ação material ocorre no domínio de origem |
-| Assistente | Somente leitura/recomendação | intencional nesta fase; nenhuma escrita autônoma de IA foi habilitada |
+| Assistente | Operacional com governança cognitiva | Comitê Cognitivo conectado à Tool Layer; agentes, Red Team e Decision Engine produzem proposta; decisão material permanece humana e auditável |
 | Asset / Academy / Ajuda | Fora de CRUD operacional | conteúdo/ecossistema; não foram artificialmente transformados em módulos transacionais |
 | Encerramento | Operacional | preparação, distribuição, aprovação, gates e reabertura expostos na Gestão Executiva com segregação de função preservada |
 
@@ -46,7 +46,10 @@ VIEWER e REVIEWER não recebem escrita genérica. OWNER/ADMIN recebem escrita e 
 4. Matriz explícita de `WRITE` e `APPROVE`, separada das capabilities de leitura.
 5. Encerramento final com gates operacional, contratual, jurídico, financeiro e contábil visíveis na UI.
 6. Preservação da Central de Ações/Minha Rotina como read models transversais, evitando uma segunda fonte de verdade.
-7. Preservação do Assistente/Tool Layer da IA como read-only.
+7. Preservação do Tool Layer da IA como read-only; Comitê Cognitivo conectado ao produto sem bypass da camada de evidência.
+8. Histórico auditável das rodadas cognitivas e decisão humana.
+9. Linha do tempo cognitiva na Gestão Executiva.
+10. Learning Loop 10J conectado a avaliações reais de previsto × realizado (`ForecastEvaluation`).
 
 ## Itens que NÃO devem ser falsamente tratados como concluídos
 
@@ -58,7 +61,7 @@ A 10C.1 não cria operações de domínio inexistentes só para colocar um botã
 - Contabilidade: ampliar reversões, reabertura e conciliações na superfície conforme necessidade operacional;
 - Mercado ao vivo: depende de conectores/fontes reais; não criar entrada manual que finja dado de mercado integrado.
 
-Esses itens não impedem a existência de operação humana nos departamentos, mas impedem classificar a 10C.1 como **produção final** sem a auditoria de jornada completa e a validação de CI.
+Esses itens deixam de ser bloqueadores da linha numerada: são evoluções incrementais de superfície. A classificação como **produção real integral** continua condicionada à auditoria de jornada completa, aos dados reais e às integrações/credenciais do ambiente.
 
 ## Critério de fechamento técnico
 
@@ -69,4 +72,8 @@ Antes de encerrar a fase:
 3. testar VIEWER sem escrita;
 4. testar tenant/project isolation;
 5. percorrer a jornada estudo → obra/suprimentos → financeiro → comercial → jurídico/pessoas → contabilidade → encerramento;
-6. registrar no documento principal qualquer lacuna remanescente descoberta pela jornada.
+6. registrar no documento principal qualquer lacuna remanescente descoberta pela jornada;
+7. executar Comitê Cognitivo e registrar decisão humana;
+8. validar histórico na Gestão Executiva;
+9. validar pelo menos uma avaliação previsto × realizado no Learning Loop quando houver dado real;
+10. validar provider e conectores somente quando credenciais reais estiverem configuradas.
