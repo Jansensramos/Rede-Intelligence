@@ -16,6 +16,7 @@ export default async function EngenhariaObraPage() {
   const [authContext, context] = await Promise.all([requireAuthContext(), getCurrentOperationalContext()]);
   if (!context.project) return null;
   const projectId = context.project.id;
+  const canMutateDesign = authContext.role !== "VIEWER";
   const canWriteOperations = hasProtectedWriteCapability(authContext.role, "OPERATIONS_WRITE");
   const canApproveOperations = hasProtectedApprovalCapability(authContext.role, "OPERATIONS_APPROVE");
 
@@ -35,7 +36,7 @@ export default async function EngenhariaObraPage() {
   return (
     <Suspense fallback={<Loading label="Carregando Engenharia e Obra…" />}>
       {/* Fechamento 9K.1: `key` por projeto — ver comentário em viabilidade/page.tsx. */}
-      <EngenhariaObraWorkspace key={projectId} initialDesign={design} initialBudget={budget} operations={operations} engineering={engineering} canWriteOperations={canWriteOperations} canApproveOperations={canApproveOperations} />
+      <EngenhariaObraWorkspace key={projectId} initialDesign={design} initialBudget={budget} operations={operations} engineering={engineering} canMutateDesign={canMutateDesign} canWriteOperations={canWriteOperations} canApproveOperations={canApproveOperations} />
     </Suspense>
   );
 }
