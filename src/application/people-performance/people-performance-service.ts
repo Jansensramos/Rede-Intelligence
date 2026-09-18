@@ -341,7 +341,7 @@ export async function getPeoplePerformanceWorkspace(context: Pick<PeopleContext,
   return {
     projectId,
     generatedAt: new Date().toISOString(),
-    permissions: { canViewCompensation, canManagePeople: hasPeopleCapability(context.role, "PEOPLE_MANAGE"), canAnalyze: hasPeopleCapability(context.role, "EFFICIENCY_ANALYZE"), canManageRootCause: hasPeopleCapability(context.role, "ROOT_CAUSE_MANAGE"), canApproveAction: hasPeopleCapability(context.role, "ACTION_APPROVE"), canVerifyAction: hasPeopleCapability(context.role, "ACTION_VERIFY"), canSimulateIncentive: hasPeopleCapability(context.role, "INCENTIVE_SIMULATE") },
+    permissions: { canViewCompensation, canManageCompensation: hasPeopleCapability(context.role, "COMPENSATION_MANAGE"), canManageAllocations: hasPeopleCapability(context.role, "ALLOCATION_MANAGE"), canManagePeople: hasPeopleCapability(context.role, "PEOPLE_MANAGE"), canAnalyze: hasPeopleCapability(context.role, "EFFICIENCY_ANALYZE"), canManageRootCause: hasPeopleCapability(context.role, "ROOT_CAUSE_MANAGE"), canApproveAction: hasPeopleCapability(context.role, "ACTION_APPROVE"), canVerifyAction: hasPeopleCapability(context.role, "ACTION_VERIFY"), canSimulateIncentive: hasPeopleCapability(context.role, "INCENTIVE_SIMULATE") },
     summary: { people: people.length, departments: departments.length, positions: positions.length, teams: teams.length, allocations: allocations.length, activeVarianceCases: variances.filter((item) => !["CLOSED"].includes(item.status)).length, activeActions: activeActions.length, totalMonthlyCost },
     people,
     workforce: {
