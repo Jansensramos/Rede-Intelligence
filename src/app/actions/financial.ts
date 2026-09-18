@@ -29,9 +29,11 @@ import {
 type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : "A operação financeira não pôde ser concluída.");
 
+const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
 async function run<T>(operation: () => Promise<T>): Promise<ActionResult<T>> {
   try {
-    const data = await operation();
+    const data = plain(await operation());
     revalidatePath("/");
     return { ok: true, data };
   } catch (error) {
