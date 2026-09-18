@@ -1,7 +1,7 @@
 "use server";
 
-import { requireAuthContext } from "@/application/auth/session";
 import { assertAiUse, isAiAccessDeniedError } from "@/application/ai-gateway/rbac";
+import { requireDomainActionContext } from "./authorization";
 import {
   createExistingToolLayerPort,
   planAutopilot,
@@ -27,7 +27,7 @@ export async function runCognitiveReviewAction(input: {
   objective: string;
 }) {
   try {
-    const context = await requireAuthContext();
+    const context = await requireDomainActionContext("AI_READ");
     assertAiUse(context);
 
     const objective = input.objective.trim();
