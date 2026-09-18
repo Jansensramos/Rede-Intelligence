@@ -822,7 +822,7 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
         installments: sale.paymentPlans.flatMap((plan) => plan.status === "ACTIVE" ? plan.installments : []).length,
         receivableInstallments: sale.receivableAccounts.flatMap((account) => account.installments.map((installment) => ({
           id: installment.id,
-          number: installment.installmentNumber,
+          number: installment.number,
           dueDate: installment.dueDate.toISOString(),
           currentAmount: Number(installment.currentAmount),
           status: installment.status,
