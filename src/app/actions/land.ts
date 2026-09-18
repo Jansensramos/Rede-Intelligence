@@ -3,7 +3,7 @@
 import { requireDomainWriteContext } from "./authorization";
 const requireAuthContext = () => requireDomainWriteContext("VIABILITY_READ", "VIABILITY_WRITE");
 import type { LandActionResult } from "@/application/land/contracts";
-import { saveUrbanScenarioSnapshot } from "@/application/land/land-service";
+import { createLandStudyForProject, saveUrbanScenarioSnapshot, type CreateLandStudyForProjectInput } from "@/application/land/land-service";
 import { urbanScenarioUpdateSchema, type UrbanScenarioUpdateInput } from "@/domain/land";
 
 export async function saveUrbanScenarioAction(raw: UrbanScenarioUpdateInput): Promise<LandActionResult> {
@@ -14,5 +14,15 @@ export async function saveUrbanScenarioAction(raw: UrbanScenarioUpdateInput): Pr
     return { ok: true, data: await saveUrbanScenarioSnapshot(context, parsed.data) };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Não foi possível salvar o snapshot urbanístico." };
+  }
+}
+
+
+export async function createLandStudyForProjectAction(input: CreateLandStudyForProjectInput): Promise<LandActionResult> {
+  try {
+    const context = await requireAuthContext();
+    return { ok: true, data: await createLandStudyForProject(context, input) };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Não foi possível cadastrar o terreno." };
   }
 }
