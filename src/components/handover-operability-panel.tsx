@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Building2, Landmark, MessageSquareWarning } from "lucide-react";
+import { AlertTriangle, Building2, MessageSquareWarning } from "lucide-react";
 import type { SalesWorkspaceView } from "@/application/sales/sales-service";
 import {
   assignPostSaleSupplierAction,
@@ -90,7 +90,7 @@ export function HandoverOperabilityPanel({ workspace }: { workspace: SalesWorksp
     }), "Liberação bancária registrada.");
   }
 
-  function reconcile(disbursementId: string, saleId: string, form: FormData) {
+  function reconcile(disbursementId: string, form: FormData) {
     run(() => reconcileBankFinancingDisbursementAction({
       disbursementId,
       installmentId: String(form.get("installmentId")),
@@ -185,7 +185,7 @@ export function HandoverOperabilityPanel({ workspace }: { workspace: SalesWorksp
               {item.status !== "RECONCILED" && item.status !== "CANCELLED" && <button className="text-button" disabled={pending} onClick={() => setCancelId(cancelId === item.id ? null : item.id)}>Cancelar</button>}
             </div>
             {receivedId === item.id && <form className="form-grid" action={(form) => recordReceived(item.id, form)}><label>Valor liberado<input name="disbursedAmount" type="number" min="0.01" step="0.01" defaultValue={item.expectedAmount} required /></label><label>Data<input name="disbursedAt" type="date" defaultValue={today()} required /></label><label>Referência<input name="bankReference" /></label><div className="form-actions"><button className="button button-primary" type="submit" disabled={pending}>Registrar</button></div></form>}
-            {reconcileId === item.id && sale && <form className="form-grid" action={(form) => reconcile(item.id, item.saleId, form)}><label>Parcela do recebível<select name="installmentId" defaultValue="" required><option value="" disabled>Selecione</option>{sale.receivableInstallments.filter((installment) => !["RECEBIDA","CANCELADA","RENEGOCIADA"].includes(installment.status)).map((installment) => <option key={installment.id} value={installment.id}>Parcela {installment.number} · {date.format(new Date(installment.dueDate))} · {brl.format(installment.currentAmount)}</option>)}</select></label><label>Conta de destino<select name="bankAccountId" defaultValue="" required><option value="" disabled>Selecione</option>{workspace.bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.institution} · ag. {account.agency} · {account.accountNumber}</option>)}</select></label><label>Referência<input name="referenceNumber" /></label><div className="form-actions"><button className="button button-primary" type="submit" disabled={pending}>Conciliar</button></div></form>}
+            {reconcileId === item.id && sale && <form className="form-grid" action={(form) => reconcile(item.id, form)}><label>Parcela do recebível<select name="installmentId" defaultValue="" required><option value="" disabled>Selecione</option>{sale.receivableInstallments.filter((installment) => !["RECEBIDA","CANCELADA","RENEGOCIADA"].includes(installment.status)).map((installment) => <option key={installment.id} value={installment.id}>Parcela {installment.number} · {date.format(new Date(installment.dueDate))} · {brl.format(installment.currentAmount)}</option>)}</select></label><label>Conta de destino<select name="bankAccountId" defaultValue="" required><option value="" disabled>Selecione</option>{workspace.bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.institution} · ag. {account.agency} · {account.accountNumber}</option>)}</select></label><label>Referência<input name="referenceNumber" /></label><div className="form-actions"><button className="button button-primary" type="submit" disabled={pending}>Conciliar</button></div></form>}
             {cancelId === item.id && <form className="form-grid" action={(form) => cancel(item.id, form)}><label>Motivo<input name="reason" required /></label><div className="form-actions"><button className="button button-secondary" type="submit" disabled={pending}>Confirmar cancelamento</button></div></form>}
           </td></tr>;
         })}
