@@ -1,9 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, Building2, CalendarClock, HandCoins, Home, MessageSquareWarning, ReceiptText, Users } from "lucide-react";
 import type { SalesWorkspaceView } from "@/application/sales/sales-service";
+import {
+  completeLocalSignatureAction,
+  ensureDefaultContractTemplateAction,
+  generateContractDocumentAction,
+  startLocalSignatureAction,
+} from "@/app/actions/sales";
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const brlPrecise = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -57,7 +64,27 @@ function Metrics({ workspace }: { workspace: SalesWorkspaceView }) {
 }
 
 export function SalesView({ workspace }: { workspace: SalesWorkspaceView }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [feedback, setFeedback] = useState<string | null>(null);
   const [area, setArea] = useState<Area>("visao");
+  const approvedTemplateVersion = workspace.contractTemplates
+    .flatMap((template) => template.versions.map((version) => ({ ...version, templateName: template.name })))
+    .find((version) => version.status === "APPROVED") ?? null;
+
+  const runCommercialAction = (op: () => Promise<{ ok: boolean; error?: string }>, success: string) => {
+    setFeedback(null);
+    startTransition(async () => {
+      const result = await op();
+      if (!result.ok) {
+        setFeedback(result.error ?? "Não foi possível concluir a operação.");
+        return;
+      }
+      setFeedback(success);
+      router.refresh();
+    });
+  };
+
   return <div className="view-stack">
     <div className="scenario-switch" aria-label="Áreas Comerciais">{areas.map((item) => <button key={item.key} className={area === item.key ? "is-active" : ""} onClick={() => setArea(item.key)}>{item.label}</button>)}</div>
 
@@ -84,9 +111,39 @@ export function SalesView({ workspace }: { workspace: SalesWorkspaceView }) {
 
     {area === "fechamento360" && <><article className="panel"><div className="panel-heading"><div><span className="eyebrow">CRÉDITO</span><h2>Consulta de crédito por proposta (CPF mascarado — nunca decide a venda sozinha)</h2></div></div><div className="scenario-table"><div className="table-row table-head"><span>Unidade</span><span>Cliente</span><span>CPF</span><span>Resultado</span><span>Consultado em</span></div>{workspace.proposals.filter((item) => item.creditConsultation).map((item) => <div className="table-row" key={item.id}><strong>{item.unit}</strong><span><CustomerLink customerId={item.customerId} name={item.customer} /></span><span>{item.creditConsultation!.cpfMasked}</span><span className={item.creditConsultation!.result ? { positive: "positive-value", negative: "negative-value", neutral: undefined }[creditResultTone[item.creditConsultation!.result] ?? "neutral"] : undefined}>{item.creditConsultation!.result ? statusLabel[item.creditConsultation!.result] ?? item.creditConsultation!.result : statusLabel[item.creditConsultation!.status] ?? item.creditConsultation!.status}</span><span>{date.format(new Date(item.creditConsultation!.requestedAt))}</span></div>)}{workspace.proposals.every((item) => !item.creditConsultation) && <p className="empty-state">Nenhuma consulta de crédito registrada neste empreendimento.</p>}</div></article>
 
-    <article className="panel"><div className="panel-heading"><div><span className="eyebrow">MODELO CONTRATUAL</span><h2>Modelos por empreendimento e versões aprovadas</h2></div></div><div className="scenario-table"><div className="table-row table-head"><span>Modelo</span><span>Situação</span><span>Versões</span></div>{workspace.contractTemplates.map((template) => <div className="table-row" key={template.id}><strong>{template.name}</strong><Status value={template.status} /><span>{template.versions.map((version) => `v${version.version} (${statusLabel[version.status] ?? version.status})`).join(", ") || "—"}</span></div>)}{workspace.contractTemplates.length === 0 && <p className="empty-state">Nenhum modelo contratual cadastrado neste empreendimento.</p>}</div></article>
+    <article className="panel">
+      <div className="panel-heading">
+        <div><span className="eyebrow">MODELO CONTRATUAL</span><h2>Modelos por empreendimento e versões aprovadas</h2></div>
+        {!approvedTemplateVersion && <button className="button button-primary" disabled={pending} onClick={() => runCommercialAction(() => ensureDefaultContractTemplateAction(workspace.projectId), "Modelo contratual padrão criado e aprovado.")}>{pending ? "Processando..." : "Criar modelo padrão"}</button>}
+      </div>
+      {feedback && <div className="model-note"><div><strong>{feedback}</strong></div></div>}
+      <div className="scenario-table"><div className="table-row table-head"><span>Modelo</span><span>Situação</span><span>Versões</span></div>{workspace.contractTemplates.map((template) => <div className="table-row" key={template.id}><strong>{template.name}</strong><Status value={template.status} /><span>{template.versions.map((version) => `v${version.version} (${statusLabel[version.status] ?? version.status})`).join(", ") || "—"}</span></div>)}{workspace.contractTemplates.length === 0 && <p className="empty-state">Nenhum modelo contratual cadastrado neste empreendimento. Use “Criar modelo padrão” para iniciar o fluxo.</p>}</div>
+    </article>
 
-    <article className="panel"><div className="panel-heading"><div><span className="eyebrow">CONTRATO → DOCUMENTO → ASSINATURA</span><h2>Documento gerado, storage privado e situação de assinatura por venda</h2></div></div><div className="data-table-scroll"><table className="data-table"><thead><tr><th>Contrato</th><th>Unidade</th><th>Documentos</th><th>Provider</th><th>Assinatura</th><th>Signatários</th></tr></thead><tbody>{workspace.sales.filter((item) => item.contractId).map((item) => <tr key={item.id}><td><strong>{item.contractNumber ?? "—"}</strong></td><td>{item.unit}</td><td>{item.contractDocuments.length ? item.contractDocuments.map((doc) => statusLabel[doc.kind] ?? doc.kind).join(", ") : "—"}</td><td>{item.signatureRequest?.provider ?? "—"}</td><td>{item.signatureRequest ? <Status value={item.signatureRequest.status} /> : <span className="empty-state">Não iniciada</span>}</td><td>{item.signatureRequest ? `${item.signatureRequest.signedCount}/${item.signatureRequest.totalParties}` : "—"}</td></tr>)}</tbody></table></div></article></>}
+    <article className="panel">
+      <div className="panel-heading"><div><span className="eyebrow">CONTRATO → DOCUMENTO → ASSINATURA</span><h2>Documento gerado, storage privado e situação de assinatura por venda</h2><p>No localhost, a assinatura pode ser simulada para validar o ciclo completo sem enviar nada a um provedor externo.</p></div></div>
+      <div className="data-table-scroll"><table className="data-table"><thead><tr><th>Contrato</th><th>Unidade</th><th>Documentos</th><th>Provider</th><th>Assinatura</th><th>Signatários</th><th>Ação</th></tr></thead><tbody>{workspace.sales.filter((item) => item.contractId).map((item) => {
+        const generatedDocument = item.contractDocuments.find((doc) => doc.kind === "MODEL_RENDER") ?? null;
+        return <tr key={item.id}>
+          <td><strong>{item.contractNumber ?? "—"}</strong></td>
+          <td>{item.unit}</td>
+          <td>{item.contractDocuments.length ? item.contractDocuments.map((doc) => statusLabel[doc.kind] ?? doc.kind).join(", ") : "—"}</td>
+          <td>{item.signatureRequest?.provider ?? "—"}</td>
+          <td>{item.signatureRequest ? <Status value={item.signatureRequest.status} /> : <span className="empty-state">Não iniciada</span>}</td>
+          <td>{item.signatureRequest ? `${item.signatureRequest.signedCount}/${item.signatureRequest.totalParties}` : "—"}</td>
+          <td><div className="panel-actions">
+            {!generatedDocument && <button className="button button-secondary" disabled={pending || !approvedTemplateVersion} onClick={() => approvedTemplateVersion && runCommercialAction(() => generateContractDocumentAction(item.contractId!, approvedTemplateVersion.id), "Documento contratual gerado.")}>{approvedTemplateVersion ? "Gerar documento" : "Crie o modelo"}</button>}
+            {generatedDocument && !item.signatureRequest && <button className="button button-secondary" disabled={pending || item.buyerParties.length === 0} onClick={() => runCommercialAction(() => startLocalSignatureAction({
+              contractId: item.contractId!,
+              documentId: generatedDocument.id,
+              parties: item.buyerParties.map((party) => ({ customerId: party.customerId, displayName: party.name, email: party.email ?? undefined, role: party.role })),
+            }), "Assinatura local iniciada.")}>Iniciar assinatura local</button>}
+            {item.signatureRequest?.provider === "MOCK" && ["PREPARADO", "ENVIADO", "AGUARDANDO_ASSINATURAS"].includes(item.signatureRequest.status) && <button className="button button-primary" disabled={pending} onClick={() => runCommercialAction(() => completeLocalSignatureAction(item.signatureRequest!.id), "Assinatura local concluída e documento final gerado.")}>Concluir assinatura</button>}
+            {item.signatureRequest?.status === "ASSINADO" && <span className="positive-value">Fluxo concluído</span>}
+          </div></td>
+        </tr>;
+      })}</tbody></table></div>
+    </article></>}
 
     {area === "comissoes" && <article className="panel"><div className="panel-heading"><div><span className="eyebrow">CORRETAGEM</span><h2>Comissões — obrigação gerada exatamente uma vez</h2></div></div><div className="scenario-table"><div className="table-row table-head"><span>Corretor</span><span>Venda</span><span>Valor</span><span>Situação</span></div>{workspace.commissions.map((item) => <div className="table-row" key={item.id}><strong>{item.broker}</strong><span>{item.sale}</span><span>{brl.format(item.amount)}</span><Status value={item.status} /></div>)}</div></article>}
 
