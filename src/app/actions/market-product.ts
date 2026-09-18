@@ -104,3 +104,22 @@ export async function registerMarketInventorySnapshotAction(raw: IngestMarketInv
     return { ok: false, error: error instanceof Error ? error.message : "Não foi possível registrar o estoque observado." };
   }
 }
+
+export async function createDefaultMarketAreaAction(projectId: string, input: {
+  name: string;
+  type: "RADIUS" | "NEIGHBORHOOD" | "MUNICIPALITY" | "CUSTOM_POLYGON" | "ISOCHRONE";
+  centerLatitude: number;
+  centerLongitude: number;
+  radiusMeters?: number;
+  neighborhood?: string;
+  city: string;
+  state: string;
+}): Promise<MarketProductActionResult> {
+  try {
+    const context = await requireAuthContext();
+    await getOrCreateDefaultMarketArea(context, { ...input, projectId }, { isDemo: false });
+    return { ok: true, data: buildMarketProductWorkspaceView(await getMarketProductWorkspace(context, projectId)) };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Não foi possível criar a área de mercado." };
+  }
+}
