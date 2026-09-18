@@ -18,7 +18,7 @@ import type { MarketProductWorkspaceView } from "@/application/market-product";
 
 type Funcao = "mercado" | "produto" | "macro" | "lancamento";
 
-export function MercadoProdutoWorkspace({ initialWorkspace, role }: { initialWorkspace: MarketProductWorkspaceView; role: MembershipRole }) {
+export function MercadoProdutoWorkspace({ initialWorkspace, role, projectId }: { initialWorkspace: MarketProductWorkspaceView; role: MembershipRole; projectId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [workspace, setWorkspace] = useState(initialWorkspace);
@@ -62,7 +62,7 @@ export function MercadoProdutoWorkspace({ initialWorkspace, role }: { initialWor
             title="Área de influência, demografia, renda, oferta e preços"
             description="Neste terreno e nesta localização: o que o mercado mostra, com proveniência e nível de confiança explícitos."
           />
-          <MarketIntelligenceView workspace={workspace} canManage={hasMarketProductCapability(role, "MARKET_MANAGE")} onChange={setWorkspace} />
+          <MarketIntelligenceView workspace={workspace} projectId={projectId} canManage={hasMarketProductCapability(role, "MARKET_MANAGE")} onChange={setWorkspace} />
         </>
       )}
 
