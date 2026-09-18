@@ -630,11 +630,11 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
 
           {view === "redteam" && <RedTeamView report={study.redTeam} />}
 
-          {view === "committee" && <InvestmentSuiteView mode="committee" initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
+          {view === "committee" && <InvestmentSuiteView mode="committee" role={role} initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
 
-          {view === "studio" && <InvestmentSuiteView mode="studio" initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
+          {view === "studio" && <InvestmentSuiteView mode="studio" role={role} initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
 
-          {view === "dataroom" && <InvestmentSuiteView mode="dataroom" initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
+          {view === "dataroom" && <InvestmentSuiteView mode="dataroom" role={role} initialWorkspace={investmentWorkspace} onWorkspaceChange={setInvestmentWorkspace} />}
 
           {view === "ai" && (
             lazyError.ai ? <ErrorState message={lazyError.ai} onRetry={() => loadLazyView("ai")} /> :
