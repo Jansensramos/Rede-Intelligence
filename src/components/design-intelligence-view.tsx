@@ -87,7 +87,7 @@ function EvidenceList({ evidence }: { evidence: DesignEvidence[] }) {
   return <div className="design-evidence-list">{evidence.map((item) => <div key={item.ref}><CheckCircle2 size={13} /><span><strong>{item.label}</strong><small>{item.ref} · {item.method} · {confidenceLabel(item.confidence)}</small></span></div>)}</div>;
 }
 
-export function DesignIntelligenceView({ initialWorkspace, onWorkspaceChange, onAskAI }: { initialWorkspace: DesignWorkspaceView; onWorkspaceChange: (workspace: DesignWorkspaceView) => void; onAskAI: (prompt: string) => void }) {
+export function DesignIntelligenceView({ initialWorkspace, onWorkspaceChange, onAskAI, canMutate = true }: { initialWorkspace: DesignWorkspaceView; onWorkspaceChange: (workspace: DesignWorkspaceView) => void; onAskAI: (prompt: string) => void; canMutate?: boolean }) {
   const [workspace, setWorkspace] = useState(initialWorkspace);
   const [tab, setTab] = useState<DesignTab>("dashboard");
   const [selectedFileId, setSelectedFileId] = useState(initialWorkspace?.files?.[0]?.id ?? "");
