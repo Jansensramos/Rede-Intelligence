@@ -27,7 +27,7 @@ const OBLIGATION_STATUS: Record<string, string> = {
   DRAFT: "Rascunho", ACTIVE: "Ativa", DUE_SOON: "Vence em breve", OVERDUE: "Vencida", FULFILLED: "Cumprida", WAIVED: "Dispensada", CANCELLED: "Cancelada",
 };
 
-export function LegalOperabilityPanel({ workspace }: { workspace: LegalWorkspaceView }) {
+export function LegalOperabilityPanel({ workspace, canWrite, canApprove }: { workspace: LegalWorkspaceView; canWrite: boolean; canApprove: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [modal, setModal] = useState<ModalState>(null);
@@ -70,11 +70,12 @@ export function LegalOperabilityPanel({ workspace }: { workspace: LegalWorkspace
   };
 
   return <section className="panel">
-    <div className="panel-heading"><div><span className="eyebrow">JURÍDICO</span><h2>Operações jurídicas</h2><p>Abra diligências, registre decisões e acompanhe obrigações com reflexo financeiro.</p></div><button className="button button-primary" disabled={pending} onClick={() => setModal({ type: "diligence" })}><FilePlus2 size={16}/> Nova diligência</button></div>
+    {!canWrite && !canApprove && <div className="model-note"><div><strong>Modo de leitura</strong><p>Seu perfil pode consultar o Jurídico, mas não alterar nem aprovar registros.</p></div></div>}
+    <div className="panel-heading"><div><span className="eyebrow">JURÍDICO</span><h2>Operações jurídicas</h2><p>Abra diligências, registre decisões e acompanhe obrigações com reflexo financeiro.</p></div><button className="button button-primary" disabled={pending || !canWrite} onClick={() => setModal({ type: "diligence" })}><FilePlus2 size={16}/> Nova diligência</button></div>
     {feedback && <div className={feedback.type === "error" ? styles.error : styles.success}>{feedback.text}</div>}
     <div className="data-table-scroll"><table className="data-table"><thead><tr><th>Tipo</th><th>Registro</th><th>Situação</th><th>Ação</th></tr></thead><tbody>
-      {workspace.cases.filter((item) => item.status !== "COMPLETED").slice(0,10).map((item) => <tr key={item.id}><td>Diligência</td><td><strong>{item.code} · {item.title}</strong></td><td>{DILIGENCE_STATUS[item.status] ?? item.status}</td><td><button className="button button-secondary" disabled={pending} onClick={() => setModal({ type: "decision", caseId: item.id, label: `${item.code} · ${item.title}` })}><Gavel size={15}/> Registrar decisão</button></td></tr>)}
-      {workspace.obligations.slice(0,10).map((item) => { const processed = item.financialEvents?.some((event) => event.status === "PROCESSED"); const label = `${item.code} · ${item.title}`; return <tr key={item.id}><td>Obrigação</td><td><strong>{label}</strong></td><td>{OBLIGATION_STATUS[item.status] ?? item.status}</td><td>{processed ? <button className="button button-secondary" disabled={pending} onClick={() => setModal({ type: "reverse", obligationId: item.id, label })}><RotateCcw size={15}/> Reverter financeiro</button> : <button className="button button-secondary" disabled={pending || !item.amount} onClick={() => run(() => sendLegalObligationToFinanceAction(item.id), "Obrigação enviada ao Financeiro.")}><Landmark size={15}/> Enviar ao Financeiro</button>}</td></tr>})}
+      {workspace.cases.filter((item) => item.status !== "COMPLETED").slice(0,10).map((item) => <tr key={item.id}><td>Diligência</td><td><strong>{item.code} · {item.title}</strong></td><td>{DILIGENCE_STATUS[item.status] ?? item.status}</td><td><button className="button button-secondary" disabled={pending || !canApprove} onClick={() => setModal({ type: "decision", caseId: item.id, label: `${item.code} · ${item.title}` })}><Gavel size={15}/> Registrar decisão</button></td></tr>)}
+      {workspace.obligations.slice(0,10).map((item) => { const processed = item.financialEvents?.some((event) => event.status === "PROCESSED"); const label = `${item.code} · ${item.title}`; return <tr key={item.id}><td>Obrigação</td><td><strong>{label}</strong></td><td>{OBLIGATION_STATUS[item.status] ?? item.status}</td><td>{processed ? <button className="button button-secondary" disabled={pending || !canApprove} onClick={() => setModal({ type: "reverse", obligationId: item.id, label })}><RotateCcw size={15}/> Reverter financeiro</button> : <button className="button button-secondary" disabled={pending || !canApprove || !item.amount} onClick={() => run(() => sendLegalObligationToFinanceAction(item.id), "Obrigação enviada ao Financeiro.")}><Landmark size={15}/> Enviar ao Financeiro</button>}</td></tr>})}
       {workspace.cases.length === 0 && workspace.obligations.length === 0 && <tr><td colSpan={4}>Nenhum registro jurídico. Use “Nova diligência” para iniciar.</td></tr>}
     </tbody></table></div>
 
