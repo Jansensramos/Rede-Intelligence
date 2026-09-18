@@ -13,8 +13,8 @@ import { EmptyState, SectionTitle } from "@/components/ui";
 export default function AssetPage() {
   return (
     <div className="view-stack">
-      <SectionTitle eyebrow="ECOSSISTEMA REDE" title="REDE Asset" description="Oportunidades de negócio do ecossistema REDE Asset, com contato direto com a equipe REDE." />
-      <EmptyState icon={Wallet} title="REDE Asset chega em breve" description="Nenhuma oportunidade publicada ainda. Esta área não implementa marketplace, funding ou lógica regulatória de valores mobiliários nesta sprint.">
+      <SectionTitle eyebrow="ECOSSISTEMA REDE" title="REDE Ativos" description="Oportunidades e ativos do ecossistema REDE, com contato direto com a equipe." />
+      <EmptyState icon={Wallet} title="REDE Ativos chega em breve" description="Nenhuma oportunidade publicada ainda. Esta área está reservada para futuras oportunidades e ativos do ecossistema.">
         <button className="button button-secondary" disabled title="Em breve" type="button">
           Falar com a equipe REDE (em breve)
         </button>
