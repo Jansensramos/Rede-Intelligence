@@ -14,7 +14,7 @@ import type { ExecutiveException } from "@/domain/workspace/exceptions";
 import type { OperationalAction } from "@/domain/workspace/operational-live";
 
 const compactCurrency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact", maximumFractionDigits: 1 });
-const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" });
 
 function formatDate(iso: string | null | undefined) {
   return iso ? dateFormatter.format(new Date(iso)) : "—";
@@ -64,6 +64,7 @@ export function ActionsTable({ actions, responsibleNames, emptyMessage }: { acti
     { key: "evidence", header: "Evidência", priority: "optional", align: "left", render: (row) => (row.evidence.length > 0 ? row.evidence.join(", ") : "—") },
     { key: "status", header: "Status", priority: "default", align: "left", render: (row) => STATUS_LABELS[row.status] },
     { key: "resolvedAt", header: "Concluída em", priority: "optional", render: (row) => formatDate(row.resolvedAt) },
+    { key: "open", header: "Abrir", priority: "essential", align: "left", render: (row) => <button type="button" className="text-button" onClick={(event) => { event.stopPropagation(); router.push(row.href); }}>Abrir origem</button> },
   ];
 
   return <DataTable columns={columns} rows={actions} rowKey={(row) => row.id} onRowClick={(row) => router.push(row.href)} emptyMessage={emptyMessage} />;
