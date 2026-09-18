@@ -27,6 +27,7 @@ import {
   rejectFundingProposalAction,
   requestFundingDisbursementAction,
   rescheduleFundingDebtServiceAction,
+  scheduleFundingDisbursementAction,
   reviseFundingProposalAction,
   submitFundingProposalAction,
   updateFundingConditionStatusAction,
@@ -350,6 +351,7 @@ export function CapitalFundingView({
   const [versionConditions, setVersionConditions] = useState<ConditionRow[]>([]);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [confirmingDisbursementId, setConfirmingDisbursementId] = useState<string | null>(null);
+  const [planningDisbursementFor, setPlanningDisbursementFor] = useState<string | null>(null);
   const [evaluatingCovenantId, setEvaluatingCovenantId] = useState<string | null>(null);
   const [updatingConditionId, setUpdatingConditionId] = useState<string | null>(null);
   const [conditionEvidence, setConditionEvidence] = useState("");
@@ -397,6 +399,17 @@ export function CapitalFundingView({
   async function submitReject(proposal: ClientProposal, form: FormData) {
     await withFeedback(() => rejectFundingProposalAction(proposal.id, String(form.get("reason"))), () => "Proposta rejeitada.");
     setRejectingId(null);
+  }
+
+  async function submitScheduleDisbursement(proposal: ClientProposal, form: FormData) {
+    const nextSequence = proposal.disbursements.reduce((max, item) => Math.max(max, item.sequence), 0) + 1;
+    await withFeedback(() => scheduleFundingDisbursementAction({
+      proposalId: proposal.id,
+      sequence: nextSequence,
+      expectedDate: new Date(`${form.get("expectedDate")}T00:00:00.000Z`),
+      expectedAmount: String(form.get("expectedAmount")),
+    }), () => "Novo desembolso planejado.");
+    setPlanningDisbursementFor(null);
   }
 
   async function submitConfirmDisbursement(disbursementId: string, form: FormData) {
@@ -627,6 +640,14 @@ export function CapitalFundingView({
                     {/* Desembolsos */}
                     <details open>
                       <summary>Cronograma de desembolso ({proposal.disbursements.length})</summary>
+                      {capabilities.manageProposal && proposal.status === "APPROVED" && <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                        <button className="button button-secondary" disabled={busy} onClick={() => setPlanningDisbursementFor(planningDisbursementFor === proposal.id ? null : proposal.id)}>{planningDisbursementFor === proposal.id ? "Cancelar" : "Planejar desembolso"}</button>
+                      </div>}
+                      {planningDisbursementFor === proposal.id && <form style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 12 }} action={(form) => submitScheduleDisbursement(proposal, form)}>
+                        <label>Data prevista<input name="expectedDate" type="date" defaultValue={today()} required /></label>
+                        <label>Valor previsto<input name="expectedAmount" type="number" min="0.01" step="0.01" required /></label>
+                        <div style={{ alignSelf: "end" }}><button className="button button-primary" disabled={busy} type="submit">Adicionar ao cronograma</button></div>
+                      </form>}
                       <table className="ds-data-table">
                         <thead><tr><th>#</th><th>Previsto</th><th>Status</th><th>Confirmado por</th><th>Ação</th></tr></thead>
                         <tbody>
