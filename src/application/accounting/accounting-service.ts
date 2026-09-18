@@ -35,6 +35,25 @@ async function assertTenantScope(context: Pick<AccountingContext, "organizationI
   return { company, project };
 }
 
+async function assertSegregatedAccountingApprover(
+  context: AccountingContext,
+  userId: string,
+  allowedRoles: Array<"OWNER" | "ADMIN" | "REVIEWER">,
+) {
+  if (userId === context.userId) throw new Error("A operação exige aprovação segregada.");
+  const membership = await prisma.organizationMembership.findFirst({
+    where: {
+      organizationId: context.organizationId,
+      userId,
+      isActive: true,
+      role: { in: allowedRoles },
+      user: { isActive: true },
+    },
+  });
+  if (!membership) throw new Error("Aprovador não possui vínculo ativo e alçada compatível nesta organização.");
+  return membership;
+}
+
 const audit = (context: AccountingContext, projectId: string | null, action: string, entityType: string, entityId: string, before?: unknown, after?: unknown) => ({
   organizationId: context.organizationId,
   userId: context.userId,
@@ -180,7 +199,7 @@ export async function reverseAccountingEntry(context: AccountingContext, entryId
     prisma.accountingPeriod.findFirst({ where: { id: input.periodId, organizationId: context.organizationId } }),
   ]);
   if (!original || !period) throw new Error("Lançamento ou período de estorno não encontrado nesta organização.");
-  if (input.approvedById === context.userId) throw new Error("O estorno exige aprovação segregada.");
+  await assertSegregatedAccountingApprover(context, input.approvedById, ["OWNER", "ADMIN", "REVIEWER"]);
   assertPeriodAllowsPosting(period.status, period.referenceMonth, period.referenceMonth);
   const reversed = reversePostingLines(original.lines.map((line) => ({ accountId: line.accountId, side: line.side, amount: line.amount, history: `Estorno: ${input.reason}` })));
   const total = assertBalancedEntry(reversed);
@@ -235,7 +254,8 @@ export async function reopenAccountingPeriod(context: AccountingContext, periodI
   requireCapability(context, "ACCOUNTING_REOPEN");
   const period = await prisma.accountingPeriod.findFirst({ where: { id: periodId, organizationId: context.organizationId, status: "CLOSED" } });
   if (!period) throw new Error("Período fechado não encontrado nesta organização.");
-  if (!reason.trim() || authorizedById === context.userId || authorizedById === period.closedById) throw new Error("Reabertura exige motivo e autorização segregada.");
+  if (!reason.trim() || authorizedById === period.closedById) throw new Error("Reabertura exige motivo e autorização segregada.");
+  await assertSegregatedAccountingApprover(context, authorizedById, ["OWNER", "ADMIN"]);
   const reopened = await prisma.accountingPeriod.update({ where: { id: period.id }, data: { status: "REOPENED", reopenedById: authorizedById, reopenedAt: new Date(), reopeningReason: reason.trim(), updatedById: context.userId } });
   await prisma.auditLog.create({ data: audit(context, null, "ACCOUNTING_PERIOD_REOPENED", "AccountingPeriod", period.id, { status: period.status }, { status: reopened.status, authorizedById, reason }) });
   return reopened;
