@@ -8,7 +8,10 @@ import {
   approveIntercompanyTransactionAction,
   confirmReconciliationAction,
   createBankAccountAction,
+  createCustomerAction,
+  createFinancialTransferAction,
   createIntercompanyTransactionAction,
+  createSupplierAction,
   createPayableAccountAction,
   createReceivableAccountAction,
   importBankStatementCsvAction,
@@ -43,6 +46,9 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
   const [showPayableForm, setShowPayableForm] = useState(false);
   const [showReceivableForm, setShowReceivableForm] = useState(false);
   const [showIntercompanyForm, setShowIntercompanyForm] = useState(false);
+  const [showTransferForm, setShowTransferForm] = useState(false);
+  const [showSupplierForm, setShowSupplierForm] = useState(false);
+  const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [payingId, setPayingId] = useState<string | null>(null);
   const [receivingId, setReceivingId] = useState<string | null>(null);
   const [csvAccount, setCsvAccount] = useState(workspace.bankAccounts[0]?.id ?? "");
@@ -105,6 +111,40 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
     setShowReceivableForm(false);
   }
 
+  async function submitSupplier(form: FormData) {
+    await withFeedback(() => createSupplierAction({
+      name: String(form.get("name")),
+      legalName: String(form.get("legalName") || "") || null,
+      taxId: String(form.get("taxId") || "") || null,
+      personType: form.get("personType") as "INDIVIDUAL" | "LEGAL_ENTITY",
+      email: String(form.get("email") || "") || null,
+      phone: String(form.get("phone") || "") || null,
+    }), () => "Fornecedor cadastrado.");
+    setShowSupplierForm(false);
+  }
+
+  async function submitCustomer(form: FormData) {
+    await withFeedback(() => createCustomerAction({
+      name: String(form.get("name")),
+      personType: form.get("personType") as "INDIVIDUAL" | "LEGAL_ENTITY",
+      taxId: String(form.get("taxId") || "") || null,
+      email: String(form.get("email") || "") || null,
+      phone: String(form.get("phone") || "") || null,
+    }), () => "Cliente cadastrado.");
+    setShowCustomerForm(false);
+  }
+
+  async function submitTransfer(form: FormData) {
+    await withFeedback(() => createFinancialTransferAction({
+      fromBankAccountId: String(form.get("fromBankAccountId")),
+      toBankAccountId: String(form.get("toBankAccountId")),
+      amount: String(form.get("amount")),
+      transferredAt: new Date(`${form.get("transferredAt")}T00:00:00.000Z`),
+      description: String(form.get("description") || "") || null,
+    }), () => "Transferência entre contas registrada e conciliada.");
+    setShowTransferForm(false);
+  }
+
   async function submitIntercompany(form: FormData) {
     const toCompanyId = String(form.get("toCompanyId"));
     await withFeedback(() => createIntercompanyTransactionAction({
@@ -162,7 +202,7 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
 
       {section === "tesouraria" && (
         <section className="operations-panel">
-          <header><div><span className="eyebrow">POSIÇÃO DE CAIXA</span><h3>Contas bancárias da SPE</h3><p>{workspace.pendingReconciliations} transação(ões) aguardando conciliação · {workspace.pendingIntercompany} movimentação(ões) intercompany pendente(s).</p></div><button className="button button-secondary" onClick={() => setShowBankForm((value) => !value)}><Plus size={16} /> Nova conta bancária</button></header>
+          <header><div><span className="eyebrow">POSIÇÃO DE CAIXA</span><h3>Contas bancárias da SPE</h3><p>{workspace.pendingReconciliations} transação(ões) aguardando conciliação · {workspace.pendingIntercompany} movimentação(ões) intercompany pendente(s).</p></div><div className="panel-actions"><button className="button button-secondary" onClick={() => setShowBankForm((value) => !value)}><Plus size={16} /> Nova conta bancária</button><button className="button button-secondary" disabled={workspace.bankAccounts.length < 2} onClick={() => setShowTransferForm((value) => !value)}>Transferir entre contas</button></div></header>
           {showBankForm && <form className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10, gridTemplateColumns: "repeat(3, 1fr)" }} action={submitBankAccount}>
             <input name="institutionName" placeholder="Instituição (ex.: Itaú)" required />
             <input name="agency" placeholder="Agência" required />
@@ -172,6 +212,14 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
             <select name="restriction" defaultValue="FREE"><option value="FREE">Livre</option><option value="RESTRICTED">Restrita</option></select>
             <input name="openingBalance" type="number" step="0.01" placeholder="Saldo de abertura" defaultValue="0" />
             <button className="button button-primary" disabled={busy} type="submit">Cadastrar</button>
+          </form>}
+          {showTransferForm && <form className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10, gridTemplateColumns: "repeat(3, 1fr)" }} action={submitTransfer}>
+            <select name="fromBankAccountId" required defaultValue=""><option value="" disabled>Conta de origem</option>{workspace.bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.institution} · {account.accountNumber}</option>)}</select>
+            <select name="toBankAccountId" required defaultValue=""><option value="" disabled>Conta de destino</option>{workspace.bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.institution} · {account.accountNumber}</option>)}</select>
+            <label>Valor<input name="amount" type="number" min="0.01" step="0.01" required /></label>
+            <label>Data<input name="transferredAt" type="date" defaultValue={today()} required /></label>
+            <input name="description" placeholder="Descrição da transferência" />
+            <button className="button button-primary" disabled={busy} type="submit">Transferir</button>
           </form>}
           <div className="operations-table-wrap">
             <table className="operations-table">
@@ -190,7 +238,16 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
 
       {section === "pagar" && (
         <section className="operations-panel">
-          <header><div><span className="eyebrow">RÉGUA DE VENCIMENTOS</span><h3>Contas a pagar</h3><p>{workspace.payables.openCount} parcela(s) em aberto · Próximos 7 dias: {money.format(workspace.payables.horizons.byHorizon[7] ?? 0)} · 30 dias: {money.format(workspace.payables.horizons.byHorizon[30] ?? 0)} · 90 dias: {money.format(workspace.payables.horizons.byHorizon[90] ?? 0)}</p></div><button className="button button-secondary" onClick={() => setShowPayableForm((value) => !value)}><Plus size={16} /> Nova conta a pagar</button></header>
+          <header><div><span className="eyebrow">RÉGUA DE VENCIMENTOS</span><h3>Contas a pagar</h3><p>{workspace.payables.openCount} parcela(s) em aberto · Próximos 7 dias: {money.format(workspace.payables.horizons.byHorizon[7] ?? 0)} · 30 dias: {money.format(workspace.payables.horizons.byHorizon[30] ?? 0)} · 90 dias: {money.format(workspace.payables.horizons.byHorizon[90] ?? 0)}</p></div><div className="panel-actions"><button className="button button-secondary" onClick={() => setShowSupplierForm((value) => !value)}>Novo fornecedor</button><button className="button button-secondary" onClick={() => setShowPayableForm((value) => !value)}><Plus size={16} /> Nova conta a pagar</button></div></header>
+          {showSupplierForm && <form className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10, gridTemplateColumns: "repeat(3, 1fr)" }} action={submitSupplier}>
+            <input name="name" placeholder="Nome do fornecedor" required />
+            <input name="legalName" placeholder="Razão social" />
+            <input name="taxId" placeholder="CPF/CNPJ" />
+            <select name="personType" defaultValue="LEGAL_ENTITY"><option value="LEGAL_ENTITY">Pessoa jurídica</option><option value="INDIVIDUAL">Pessoa física</option></select>
+            <input name="email" type="email" placeholder="E-mail" />
+            <input name="phone" placeholder="Telefone" />
+            <button className="button button-primary" disabled={busy} type="submit">Cadastrar fornecedor</button>
+          </form>}
           {showPayableForm && <form className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10, gridTemplateColumns: "repeat(3, 1fr)" }} action={submitPayableAccount}>
             <input name="description" placeholder="Descrição" required style={{ gridColumn: "span 2" }} />
             <select name="supplierId" defaultValue=""><option value="">— Sem fornecedor —</option>{workspace.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select>
@@ -233,7 +290,15 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
 
       {section === "receber" && (
         <section className="operations-panel">
-          <header><div><span className="eyebrow">RÉGUA DE VENCIMENTOS</span><h3>Contas a receber</h3><p>{workspace.receivables.openCount} parcela(s) em aberto · Próximos 7 dias: {money.format(workspace.receivables.horizons.byHorizon[7] ?? 0)} · 30 dias: {money.format(workspace.receivables.horizons.byHorizon[30] ?? 0)} · 90 dias: {money.format(workspace.receivables.horizons.byHorizon[90] ?? 0)}</p></div><button className="button button-secondary" onClick={() => setShowReceivableForm((value) => !value)}><Plus size={16} /> Nova conta a receber</button></header>
+          <header><div><span className="eyebrow">RÉGUA DE VENCIMENTOS</span><h3>Contas a receber</h3><p>{workspace.receivables.openCount} parcela(s) em aberto · Próximos 7 dias: {money.format(workspace.receivables.horizons.byHorizon[7] ?? 0)} · 30 dias: {money.format(workspace.receivables.horizons.byHorizon[30] ?? 0)} · 90 dias: {money.format(workspace.receivables.horizons.byHorizon[90] ?? 0)}</p></div><div className="panel-actions"><button className="button button-secondary" onClick={() => setShowCustomerForm((value) => !value)}>Novo cliente</button><button className="button button-secondary" onClick={() => setShowReceivableForm((value) => !value)}><Plus size={16} /> Nova conta a receber</button></div></header>
+          {showCustomerForm && <form className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10, gridTemplateColumns: "repeat(3, 1fr)" }} action={submitCustomer}>
+            <input name="name" placeholder="Nome do cliente" required />
+            <input name="taxId" placeholder="CPF/CNPJ" />
+            <select name="personType" defaultValue="INDIVIDUAL"><option value="INDIVIDUAL">Pessoa física</option><option value="LEGAL_ENTITY">Pessoa jurídica</option></select>
+            <input name="email" type="email" placeholder="E-mail" />
+            <input name="phone" placeholder="Telefone" />
+            <button className="button button-primary" disabled={busy} type="submit">Cadastrar cliente</button>
+          </form>}
           {showReceivableForm && <form className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10, gridTemplateColumns: "repeat(3, 1fr)" }} action={submitReceivableAccount}>
             <input name="description" placeholder="Descrição" required style={{ gridColumn: "span 2" }} />
             <select name="customerId" defaultValue=""><option value="">— Sem cliente —</option>{workspace.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select>
