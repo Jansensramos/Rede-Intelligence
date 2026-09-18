@@ -8,7 +8,7 @@ import * as service from "@/application/procurement/procurement-service";
 type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 const message = (error: unknown) => error instanceof Error ? error.message : "Não foi possível concluir a operação de suprimentos.";
 async function run<T>(operation: () => Promise<T>): Promise<ActionResult<T>> {
-  try { const data = await operation(); revalidatePath("/"); return { ok: true, data }; }
+  try { const data = JSON.parse(JSON.stringify(await operation())) as T; revalidatePath("/"); return { ok: true, data }; }
   catch (error) { return { ok: false, error: message(error) }; }
 }
 
