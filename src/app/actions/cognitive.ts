@@ -23,6 +23,21 @@ function asJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
+
+function jsonObject(value: Prisma.JsonValue | null): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function jsonString(value: unknown) {
+  return typeof value === "string" ? value : undefined;
+}
+
+function jsonArray(value: unknown) {
+  return Array.isArray(value) ? value : [];
+}
+
 function errorMessage(error: unknown) {
   if (isReadAccessDeniedError(error) || isAiAccessDeniedError(error)) {
     return "Seu perfil não possui acesso aos recursos cognitivos da REDE.";
@@ -197,6 +212,154 @@ export async function recordCognitiveDecisionAction(input: {
         decisionId: decision.id,
         decision: input.decision,
         decidedAt: decision.createdAt.toISOString(),
+      },
+    };
+  } catch (error) {
+    return { ok: false as const, error: errorMessage(error) };
+  }
+}
+
+
+export async function listCognitiveReviewHistoryAction(input: {
+  projectId: string;
+}) {
+  const context = await requireDomainActionContext("AI_READ");
+  try {
+    assertAiUse(context);
+
+    const project = await prisma.project.findFirst({
+      where: { id: input.projectId, organizationId: context.organizationId },
+      select: { id: true },
+    });
+    if (!project) {
+      return { ok: false as const, error: "Empreendimento não encontrado." };
+    }
+
+    const reviews = await prisma.auditLog.findMany({
+      where: {
+        organizationId: context.organizationId,
+        projectId: input.projectId,
+        action: "COGNITIVE_COMMITTEE_RUN",
+        entityType: "AI_COGNITIVE_REVIEW",
+      },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: {
+        user: { select: { name: true } },
+      },
+    });
+
+    const reviewIds = reviews.map((review) => review.id);
+    const decisions = reviewIds.length
+      ? await prisma.auditLog.findMany({
+          where: {
+            organizationId: context.organizationId,
+            projectId: input.projectId,
+            action: "COGNITIVE_COMMITTEE_DECISION",
+            entityType: "AI_COGNITIVE_DECISION",
+            entityId: { in: reviewIds },
+          },
+          orderBy: { createdAt: "desc" },
+          include: {
+            user: { select: { name: true } },
+          },
+        })
+      : [];
+
+    const decisionByReview = new Map(decisions.map((decision) => [decision.entityId, decision]));
+
+    return {
+      ok: true as const,
+      data: reviews.map((review) => {
+        const stored = jsonObject(review.after);
+        const report = jsonObject(stored.report as Prisma.JsonValue | null);
+        const proposal = jsonObject(report.proposal as Prisma.JsonValue | null);
+        const challenges = jsonArray(report.challenges);
+        const decision = decisionByReview.get(review.id);
+        const decisionAfter = jsonObject(decision?.after ?? null);
+
+        return {
+          reviewId: review.id,
+          conversationId: review.entityId,
+          objective: jsonString(stored.objective) ?? "Análise cognitiva",
+          disposition: jsonString(proposal.disposition) ?? "UNKNOWN",
+          challengeCount: challenges.length,
+          criticalCount: challenges.filter((item) => {
+            const challenge = item && typeof item === "object" && !Array.isArray(item)
+              ? item as Record<string, unknown>
+              : {};
+            return challenge.severity === "CRITICAL";
+          }).length,
+          createdAt: review.createdAt.toISOString(),
+          createdBy: review.user.name,
+          decision: jsonString(decisionAfter.status) ?? null,
+          decisionNote: jsonString(decisionAfter.note) ?? null,
+          decidedAt: decision?.createdAt.toISOString() ?? null,
+          decidedBy: decision?.user.name ?? null,
+        };
+      }),
+    };
+  } catch (error) {
+    return { ok: false as const, error: errorMessage(error) };
+  }
+}
+
+export async function getCognitiveReviewAction(input: {
+  reviewId: string;
+  projectId: string;
+}) {
+  const context = await requireDomainActionContext("AI_READ");
+  try {
+    assertAiUse(context);
+
+    const review = await prisma.auditLog.findFirst({
+      where: {
+        id: input.reviewId,
+        organizationId: context.organizationId,
+        projectId: input.projectId,
+        action: "COGNITIVE_COMMITTEE_RUN",
+        entityType: "AI_COGNITIVE_REVIEW",
+      },
+      include: {
+        user: { select: { name: true } },
+      },
+    });
+
+    if (!review) {
+      return { ok: false as const, error: "Rodada cognitiva não encontrada." };
+    }
+
+    const decision = await prisma.auditLog.findFirst({
+      where: {
+        organizationId: context.organizationId,
+        projectId: input.projectId,
+        action: "COGNITIVE_COMMITTEE_DECISION",
+        entityType: "AI_COGNITIVE_DECISION",
+        entityId: review.id,
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        user: { select: { name: true } },
+      },
+    });
+
+    const stored = jsonObject(review.after);
+    const decisionAfter = jsonObject(decision?.after ?? null);
+
+    return {
+      ok: true as const,
+      data: {
+        reviewId: review.id,
+        conversationId: review.entityId,
+        createdAt: review.createdAt.toISOString(),
+        createdBy: review.user.name,
+        objective: jsonString(stored.objective) ?? "Análise cognitiva",
+        report: stored.report,
+        recommendations: jsonArray(stored.recommendations),
+        humanDecision: jsonString(decisionAfter.status) ?? null,
+        decisionNote: jsonString(decisionAfter.note) ?? "",
+        decidedAt: decision?.createdAt.toISOString() ?? null,
+        decidedBy: decision?.user.name ?? null,
       },
     };
   } catch (error) {
