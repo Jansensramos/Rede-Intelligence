@@ -3,6 +3,7 @@ import { UserFacingTextSanitizer } from "@/components/user-facing-text-sanitizer
 import "./globals.css";
 import "./professional-overrides.css";
 import "./presentation-polish.css";
+import "./cognitive-product.css";
 
 export const metadata: Metadata = {
   title: "REDE Intelligence",
