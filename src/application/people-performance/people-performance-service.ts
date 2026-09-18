@@ -82,6 +82,14 @@ export async function createEmploymentRelationship(context: PeopleContext, input
     prisma.personProfile.findFirst({ where: { id: input.personId, organizationId: context.organizationId } }),
   ]);
   if (!company || !person) throw new Error("Empresa ou perfil profissional não pertence à organização.");
+  if (input.departmentId) {
+    const department = await prisma.department.findFirst({ where: { id: input.departmentId, organizationId: context.organizationId, OR: [{ companyId: input.companyId }, { companyId: null }] } });
+    if (!department) throw new Error("Departamento não pertence à organização/empresa informada.");
+  }
+  if (input.positionId) {
+    const position = await prisma.position.findFirst({ where: { id: input.positionId, organizationId: context.organizationId } });
+    if (!position || (input.departmentId && position.departmentId && position.departmentId !== input.departmentId)) throw new Error("Cargo não pertence ao contexto informado.");
+  }
   if (input.managerId) await relationshipForTenant(context, input.managerId);
   const relationship = await prisma.employmentRelationship.create({ data: { organizationId: context.organizationId, companyId: input.companyId, personId: input.personId, positionId: input.positionId ?? null, departmentId: input.departmentId ?? null, managerId: input.managerId ?? null, type: input.type, startDate: input.startDate, endDate: input.endDate ?? null, weeklyHours: input.weeklyHours ?? null, createdById: context.userId, updatedById: context.userId } });
   await prisma.auditLog.create({ data: audit(context, null, "EMPLOYMENT_RELATIONSHIP_CREATED", "EmploymentRelationship", relationship.id, undefined, { personId: person.id, companyId: company.id, type: relationship.type }) });
@@ -91,6 +99,16 @@ export async function createEmploymentRelationship(context: PeopleContext, input
 export async function createWorkAllocation(context: PeopleContext, input: { projectId: string; relationshipId: string; teamId?: string | null; costCenterId?: string | null; economicItemId?: string | null; scheduleActivityId?: string | null; criterion: "PERCENTAGE" | "HOURS" | "FIXED_AMOUNT"; allocationRate?: number | null; allocatedHours?: number | null; allocatedAmount?: number | null; startDate: Date; endDate?: Date | null; overAllocationJustification?: string | null }) {
   requireCapability(context, "ALLOCATION_MANAGE");
   await Promise.all([projectForTenant(context, input.projectId), relationshipForTenant(context, input.relationshipId)]);
+  const [team, costCenter, economicItem, scheduleActivity] = await Promise.all([
+    input.teamId ? prisma.team.findFirst({ where: { id: input.teamId, organizationId: context.organizationId, OR: [{ projectId: input.projectId }, { projectId: null }] } }) : null,
+    input.costCenterId ? prisma.costCenter.findFirst({ where: { id: input.costCenterId, organizationId: context.organizationId, OR: [{ projectId: input.projectId }, { projectId: null }] } }) : null,
+    input.economicItemId ? prisma.economicItem.findFirst({ where: { id: input.economicItemId, organizationId: context.organizationId, projectId: input.projectId } }) : null,
+    input.scheduleActivityId ? prisma.scheduleActivity.findFirst({ where: { id: input.scheduleActivityId, schedule: { organizationId: context.organizationId, projectId: input.projectId } } }) : null,
+  ]);
+  if (input.teamId && !team) throw new Error("Equipe não pertence ao empreendimento/organização.");
+  if (input.costCenterId && !costCenter) throw new Error("Centro de custo não pertence ao empreendimento/organização.");
+  if (input.economicItemId && !economicItem) throw new Error("Item econômico não pertence ao empreendimento.");
+  if (input.scheduleActivityId && !scheduleActivity) throw new Error("Atividade de cronograma não pertence ao empreendimento.");
   assertValidDateRange(input.startDate, input.endDate);
   const existing = await prisma.workAllocation.findMany({ where: { organizationId: context.organizationId, relationshipId: input.relationshipId, startDate: { lte: input.endDate ?? new Date("9999-12-31") }, OR: [{ endDate: null }, { endDate: { gte: input.startDate } }] } });
   const capacity = assertAllocationCapacity(existing.map((item) => ({ criterion: item.criterion, allocationRate: item.allocationRate, allocatedHours: item.allocatedHours, justification: item.overAllocationJustification })), { criterion: input.criterion, allocationRate: input.allocationRate, allocatedHours: input.allocatedHours, justification: input.overAllocationJustification });
