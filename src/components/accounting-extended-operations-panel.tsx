@@ -152,14 +152,14 @@ export function AccountingExtendedOperationsPanel({
 
       <div className="data-table-scroll">
         <table className="data-table">
-          <thead><tr><th>Conciliação</th><th>Período</th><th>Situação</th><th>Diferença</th></tr></thead>
+          <thead><tr><th>Conciliação</th><th>Fonte × razão</th><th>Situação</th><th>Diferença</th></tr></thead>
           <tbody>
             {workspace.reconciliations.slice(0, 12).map((item) => (
               <tr key={item.id}>
                 <td><strong>{item.type}</strong></td>
-                <td>{item.period}</td>
+                <td>{item.sourceAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} × {item.ledgerAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
                 <td>{item.status}</td>
-                <td>{item.difference.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                <td>{item.differenceAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
               </tr>
             ))}
             {workspace.reconciliations.length === 0 && <tr><td colSpan={4}>Nenhuma conciliação registrada.</td></tr>}
