@@ -119,8 +119,8 @@ export function PeopleWorkforceOperabilityPanel({ workspace }: { workspace: Peop
       </div>
       <div className="panel-actions">
         <button className="button button-secondary" disabled={pending || !workspace.permissions.canManagePeople || unlinkedProfiles.length === 0 || workspace.workforce.companies.length === 0} onClick={() => setModal({ type: "relationship" })}><BriefcaseBusiness size={15}/> Novo vínculo</button>
-        <button className="button button-secondary" disabled={pending || !workspace.permissions.canManagePeople || workspace.workforce.relationships.length === 0} onClick={() => setModal({ type: "allocation" })}><CalendarRange size={15}/> Nova alocação</button>
-        <button className="button button-primary" disabled={pending || !workspace.permissions.canViewCompensation || workspace.workforce.relationships.length === 0} onClick={() => setModal({ type: "cost" })}><Coins size={15}/> Registrar custo</button>
+        <button className="button button-secondary" disabled={pending || !workspace.permissions.canManageAllocations || workspace.workforce.relationships.length === 0} onClick={() => setModal({ type: "allocation" })}><CalendarRange size={15}/> Nova alocação</button>
+        <button className="button button-primary" disabled={pending || !workspace.permissions.canManageCompensation || workspace.workforce.relationships.length === 0} onClick={() => setModal({ type: "cost" })}><Coins size={15}/> Registrar custo</button>
       </div>
     </div>
 
