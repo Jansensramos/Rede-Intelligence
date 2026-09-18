@@ -323,7 +323,7 @@ export async function getPeoplePerformanceWorkspace(context: Pick<PeopleContext,
   const [departments, positions, profiles, companies, relationships, teams, allocations, adminPlans, runs, variances, policies, simulations] = await Promise.all([
     prisma.department.findMany({ where: { organizationId: context.organizationId, isActive: true }, orderBy: { code: "asc" } }),
     prisma.position.findMany({ where: { organizationId: context.organizationId, isActive: true }, include: { department: true }, orderBy: { code: "asc" } }),
-    prisma.personProfile.findMany({ where: { organizationId: context.organizationId, isActive: true }, orderBy: { fullName: "asc" }, take: 1000 }),
+    prisma.personProfile.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE" }, orderBy: { fullName: "asc" }, take: 1000 }),
     prisma.company.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE" }, orderBy: { name: "asc" }, take: 200 }),
     prisma.employmentRelationship.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE" }, include: { person: true, position: true, department: true, company: true, costSnapshots: { orderBy: { referenceMonth: "desc" }, take: 1 } }, orderBy: { person: { fullName: "asc" } }, take: 500 }),
     prisma.team.findMany({ where: { organizationId: context.organizationId, OR: [{ projectId }, { projectId: null }], isActive: true }, include: { memberships: { include: { relationship: { include: { person: true } } } } }, orderBy: { code: "asc" } }),
