@@ -1,0 +1,61 @@
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+
+const ROOTS = ["src/components", "src/app/(workspace)"];
+const FORBIDDEN = [
+  "Learning Loop",
+  "Decision Engine",
+  "Red Team 2.0",
+  "Autopilot",
+  "Investment Committee",
+  "Tool Layer",
+  "Context Engine",
+  "AI Gateway",
+  "COMITÊ COGNITIVO",
+  "GOVERNANÇA COGNITIVA",
+  "FECHAMENTO DAS FASES",
+];
+
+function filesUnder(root: string): string[] {
+  const out: string[] = [];
+  for (const name of readdirSync(root)) {
+    const path = join(root, name);
+    const stat = statSync(path);
+    if (stat.isDirectory()) out.push(...filesUnder(path));
+    else if (/\.(tsx|ts)$/.test(name)) out.push(path);
+  }
+  return out;
+}
+
+function stripComments(source: string) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+}
+
+describe("linguagem pública da interface", () => {
+  it("não expõe nomes internos da arquitetura cognitiva", () => {
+    const violations: string[] = [];
+    for (const root of ROOTS) {
+      for (const file of filesUnder(root)) {
+        const source = stripComments(readFileSync(file, "utf8"));
+        for (const term of FORBIDDEN) {
+          if (source.includes(term)) violations.push(`${file}: ${term}`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("carrega o tema claro e a marca oficial no shell", () => {
+    const layout = readFileSync("src/app/layout.tsx", "utf8");
+    const mark = readFileSync("src/components/rede-mark.tsx", "utf8");
+    const theme = readFileSync("src/app/product-theme.css", "utf8");
+
+    expect(layout).toContain('import "./product-theme.css"');
+    expect(mark).toContain("/branding/rede-intelligence-logo.svg");
+    expect(theme).toContain("--rede-sidebar: #f2f0ea");
+    expect(theme).toContain(".sidebar");
+  });
+});
