@@ -94,7 +94,7 @@ export function SalesView({ workspace }: { workspace: SalesWorkspaceView }) {
       <article className="metric-card"><div><span>VSO do mês</span><Users size={17} /></div><strong>{percentage.format(workspace.summary.vso)}</strong><small>{workspace.summary.salesThisMonth} venda(s) no mês</small></article>
       <article className="metric-card"><div><span>Preço/m² médio</span><Home size={17} /></div><strong>{brlPrecise.format(workspace.summary.averagePricePerM2)}</strong><small>Desconto médio {brl.format(workspace.summary.averageDiscount)}</small></article>
       <article className="metric-card"><div><span>Reservas ativas</span><CalendarClock size={17} /></div><strong>{workspace.summary.activeReservations}</strong><small>{workspace.summary.activeProposals} proposta(s) em curso</small></article>
-      <article className="metric-card"><div><span>Recebíveis vencidos</span><AlertTriangle size={17} /></div><strong>{brl.format(workspace.summary.overdueReceivablesAmount)}</strong><small>{workspace.summary.overdueReceivables} parcela(s) — leitura direta da 9B</small></article>
+      <article className="metric-card"><div><span>Recebíveis vencidos</span><AlertTriangle size={17} /></div><strong>{brl.format(workspace.summary.overdueReceivablesAmount)}</strong><small>{workspace.summary.overdueReceivables} parcela(s) — integrado ao Financeiro</small></article>
     </div>
     <article className="panel"><div className="panel-heading"><div><span className="eyebrow">CADEIA COMERCIAL</span><h2>Estoque → Tabela → Proposta → Reserva → Venda → Recebíveis (9B)</h2></div></div><div className="scenario-table">
       <div className="table-row table-head"><span>Estágio</span><span>Valor / Quantidade</span><span>Origem</span></div>
