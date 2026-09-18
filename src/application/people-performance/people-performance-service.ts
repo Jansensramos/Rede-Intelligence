@@ -320,9 +320,11 @@ export async function getPeoplePerformanceWorkspace(context: Pick<PeopleContext,
   const project = await prisma.project.findFirst({ where: { id: projectId, organizationId: context.organizationId } });
   if (!project) throw new Error("Empreendimento não encontrado nesta organização.");
   const canViewCompensation = hasPeopleCapability(context.role, "COMPENSATION_READ");
-  const [departments, positions, relationships, teams, allocations, adminPlans, runs, variances, policies, simulations] = await Promise.all([
+  const [departments, positions, profiles, companies, relationships, teams, allocations, adminPlans, runs, variances, policies, simulations] = await Promise.all([
     prisma.department.findMany({ where: { organizationId: context.organizationId, isActive: true }, orderBy: { code: "asc" } }),
     prisma.position.findMany({ where: { organizationId: context.organizationId, isActive: true }, include: { department: true }, orderBy: { code: "asc" } }),
+    prisma.personProfile.findMany({ where: { organizationId: context.organizationId, isActive: true }, orderBy: { fullName: "asc" }, take: 1000 }),
+    prisma.company.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE" }, orderBy: { name: "asc" }, take: 200 }),
     prisma.employmentRelationship.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE" }, include: { person: true, position: true, department: true, company: true, costSnapshots: { orderBy: { referenceMonth: "desc" }, take: 1 } }, orderBy: { person: { fullName: "asc" } }, take: 500 }),
     prisma.team.findMany({ where: { organizationId: context.organizationId, OR: [{ projectId }, { projectId: null }], isActive: true }, include: { memberships: { include: { relationship: { include: { person: true } } } } }, orderBy: { code: "asc" } }),
     prisma.workAllocation.findMany({ where: { organizationId: context.organizationId, projectId }, include: { relationship: { include: { person: true } }, team: true, costCenter: true, scheduleActivity: true }, orderBy: { startDate: "desc" }, take: 500 }),
@@ -341,6 +343,8 @@ export async function getPeoplePerformanceWorkspace(context: Pick<PeopleContext,
     permissions: { canViewCompensation, canManagePeople: hasPeopleCapability(context.role, "PEOPLE_MANAGE"), canAnalyze: hasPeopleCapability(context.role, "EFFICIENCY_ANALYZE"), canManageRootCause: hasPeopleCapability(context.role, "ROOT_CAUSE_MANAGE"), canApproveAction: hasPeopleCapability(context.role, "ACTION_APPROVE"), canVerifyAction: hasPeopleCapability(context.role, "ACTION_VERIFY"), canSimulateIncentive: hasPeopleCapability(context.role, "INCENTIVE_SIMULATE") },
     summary: { people: people.length, departments: departments.length, positions: positions.length, teams: teams.length, allocations: allocations.length, activeVarianceCases: variances.filter((item) => !["CLOSED"].includes(item.status)).length, activeActions: activeActions.length, totalMonthlyCost },
     people,
+    profiles: profiles.map((item) => ({ id: item.id, name: item.preferredName ?? item.fullName, fullName: item.fullName })),
+    companies: companies.map((item) => ({ id: item.id, name: item.name })),
     departments: departments.map((item) => ({ id: item.id, code: item.code, name: item.name, parentId: item.parentId })),
     positions: positions.map((item) => ({ id: item.id, code: item.code, title: item.title, department: item.department?.name ?? null })),
     teams: teams.map((item) => ({ id: item.id, code: item.code, name: item.name, type: item.type, members: item.memberships.map((membership) => membership.relationship.person.preferredName ?? membership.relationship.person.fullName) })),
