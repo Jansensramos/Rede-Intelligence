@@ -34,7 +34,7 @@ const credentialLabels: Record<string, string> = { PENDING: "Pendente", ACTIVE: 
 const errorClassLabels: Record<string, string> = { AUTHENTICATION: "Autenticação", AUTHORIZATION: "Autorização", RATE_LIMIT: "Rate limit", VALIDATION: "Validação", MAPPING: "Mapeamento", DUPLICATE: "Duplicata", CONFLICT: "Conflito", NETWORK: "Rede", PROVIDER: "Provedor", BUSINESS_RULE: "Regra de negócio", STORAGE: "Storage", UNKNOWN: "Desconhecido" };
 
 function dateTime(value: string | null) {
-  return value ? new Date(value).toLocaleString("pt-BR") : "—";
+  return value ? new Date(value).toLocaleString("pt-BR", { timeZone: "UTC" }) : "—";
 }
 
 export function IntegrationsView({ initialWorkspace, projectId, onWorkspaceChange }: { initialWorkspace: IntegrationsWorkspaceView; projectId: string; onWorkspaceChange: (workspace: IntegrationsWorkspaceView) => void }) {
