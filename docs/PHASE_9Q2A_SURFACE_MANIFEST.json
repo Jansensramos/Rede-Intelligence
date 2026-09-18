@@ -61,7 +61,7 @@
   },
   {
     "path": "src/app/actions/integrations.ts",
-    "sha256": "0d835d302252df6bdd22d76c2ddd3d87e338e3658ac41e0bc378fa01c28177dd"
+    "sha256": "536731352d553c830355769bc79cff1d457a6c25cb6844b8c714c2cd5a241390"
   },
   {
     "path": "src/app/actions/investment.ts",
