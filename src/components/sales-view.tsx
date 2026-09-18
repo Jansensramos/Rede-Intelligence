@@ -23,7 +23,7 @@ import {
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const brlPrecise = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const percentage = new Intl.NumberFormat("pt-BR", { style: "percent", maximumFractionDigits: 1 });
-const date = new Intl.DateTimeFormat("pt-BR");
+const date = new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" });
 type Area = "visao" | "estoque" | "propostas" | "reservas" | "vendas" | "fechamento360" | "comissoes" | "posvenda" | "repasse" | "clientes";
 const areas: { key: Area; label: string }[] = [
   { key: "visao", label: "Visão Geral" }, { key: "estoque", label: "Estoque e Preços" }, { key: "propostas", label: "Propostas" },
