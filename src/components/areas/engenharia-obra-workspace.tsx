@@ -17,7 +17,7 @@ import type { EngineeringWorkspaceView } from "@/application/engineering/enginee
 
 type Funcao = "design" | "engenharia" | "orcamento";
 
-export function EngenhariaObraWorkspace({ initialDesign, initialBudget, operations, engineering, canWriteOperations, canApproveOperations }: { initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; operations: OperationsWorkspaceView; engineering: EngineeringWorkspaceView; canWriteOperations: boolean; canApproveOperations: boolean; }) {
+export function EngenhariaObraWorkspace({ initialDesign, initialBudget, operations, engineering, canMutateDesign, canWriteOperations, canApproveOperations }: { initialDesign: DesignWorkspaceView; initialBudget: BudgetWorkspaceView | null; operations: OperationsWorkspaceView; engineering: EngineeringWorkspaceView; canMutateDesign: boolean; canWriteOperations: boolean; canApproveOperations: boolean; }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [design, setDesign] = useState(initialDesign);
@@ -48,7 +48,7 @@ export function EngenhariaObraWorkspace({ initialDesign, initialBudget, operatio
 
   return <div className="view-stack">
     <Tabs items={[{ key: "design", label: "Projetos e BIM" }, { key: "engenharia", label: "Engenharia e Orçamento Inteligente" }, { key: "orcamento", label: "Base e Execução" }]} activeKey={funcao} onChange={(key) => setFuncao(key as Funcao)} />
-    {funcao === "design" && <DesignIntelligenceView initialWorkspace={design} onWorkspaceChange={setDesign} onAskAI={(prompt) => router.push(`/assistente?prompt=${encodeURIComponent(prompt)}`)} />}
+    {funcao === "design" && <DesignIntelligenceView initialWorkspace={design} canMutate={canMutateDesign} onWorkspaceChange={setDesign} onAskAI={(prompt) => router.push(`/assistente?prompt=${encodeURIComponent(prompt)}`)} />}
     {funcao === "engenharia" && <EngineeringIntelligenceView workspace={engineering} />}
     {funcao === "orcamento" && <div className="view-stack">
       <SectionTitle eyebrow="GESTÃO OPERACIONAL" title="Base Aprovada, Orçamento e Cronograma" description="Referências separadas, versionadas e rastreáveis para a execução do empreendimento." />
