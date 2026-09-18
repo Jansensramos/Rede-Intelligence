@@ -309,6 +309,6 @@ export function SalesView({ workspace, canWrite, canApprove }: { workspace: Sale
     </article>
   </>}
 
-    {area === "repasse" && <HandoverOperabilityPanel workspace={workspace} canWrite={canWrite} canApprove={canApprove} />}
+    {area === "repasse" && <HandoverOperabilityPanel workspace={workspace} canWrite={canWrite} />}
   </div>;
 }
