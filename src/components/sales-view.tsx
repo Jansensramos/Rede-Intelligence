@@ -116,7 +116,7 @@ export function SalesView({ workspace }: { workspace: SalesWorkspaceView }) {
         <div><span className="eyebrow">MODELO CONTRATUAL</span><h2>Modelos por empreendimento e versões aprovadas</h2></div>
         {!approvedTemplateVersion && <button className="button button-primary" disabled={pending} onClick={() => runCommercialAction(() => ensureDefaultContractTemplateAction(workspace.projectId), "Modelo contratual padrão criado e aprovado.")}>{pending ? "Processando..." : "Criar modelo padrão"}</button>}
       </div>
-      {feedback && <div className="model-note"><div><strong>{feedback}</strong></div></div>}
+      {feedback && <div style={{ padding: "12px 16px", borderRadius: 12, border: "1px solid var(--line)", background: "var(--surface-subtle)" }}><strong>{feedback}</strong></div>}
       <div className="scenario-table"><div className="table-row table-head"><span>Modelo</span><span>Situação</span><span>Versões</span></div>{workspace.contractTemplates.map((template) => <div className="table-row" key={template.id}><strong>{template.name}</strong><Status value={template.status} /><span>{template.versions.map((version) => `v${version.version} (${statusLabel[version.status] ?? version.status})`).join(", ") || "—"}</span></div>)}{workspace.contractTemplates.length === 0 && <p className="empty-state">Nenhum modelo contratual cadastrado neste empreendimento. Use “Criar modelo padrão” para iniciar o fluxo.</p>}</div>
     </article>
 
