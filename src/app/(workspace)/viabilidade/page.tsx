@@ -5,6 +5,7 @@ import { getLatestLandStudyForProject } from "@/application/land/land-service";
 import { ensureInvestmentCase } from "@/application/investment/investment-service";
 import { getCurrentOperationalContext } from "@/application/workspace/current-context";
 import { ViabilidadeWorkspace } from "@/components/areas/viabilidade-workspace";
+import { ViabilidadeFirstStudy } from "@/components/areas/viabilidade-first-study";
 import { Loading } from "@/components/ui";
 import { hasProtectedWriteCapability } from "@/domain/auth/write-capabilities";
 
@@ -20,7 +21,13 @@ export default async function ViabilidadePage() {
   const canWrite = hasProtectedWriteCapability(authContext.role, "VIABILITY_WRITE");
 
   const initialStudy = await getLatestStudyForProject(authContext.organizationId, projectId);
-  if (!initialStudy) throw new Error("Este empreendimento ainda não tem um estudo ativo. Crie um estudo (\"Novo estudo\", nesta área) ou execute o seed.");
+  if (!initialStudy) {
+    return (
+      <Suspense fallback={<Loading label="Preparando primeiro estudo…" />}>
+        <ViabilidadeFirstStudy project={context.project} canWrite={canWrite} />
+      </Suspense>
+    );
+  }
 
   // Fechamento 9K.1 (revisão pós-fechamento): escopado por projeto (`getLatestLandStudyForProject`),
   // nunca "o terreno mais recente da organização" — evita mostrar o terreno de outro projeto da
