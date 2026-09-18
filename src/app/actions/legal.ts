@@ -14,7 +14,7 @@ const message = (error: unknown) => error instanceof Error ? error.message : "NÃ
 
 async function run<T>(operation: () => Promise<T>): Promise<Result<T>> {
   try {
-    const data = await operation();
+    const data = JSON.parse(JSON.stringify(await operation())) as T;
     revalidatePath("/juridico");
     revalidatePath("/executivo");
     revalidatePath("/acoes");
