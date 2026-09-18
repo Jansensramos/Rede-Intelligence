@@ -95,7 +95,13 @@ export async function ensureDefaultContractTemplate(context: AuthContext, projec
   });
   if (template?.versions[0]) return { template, version: template.versions[0] };
 
-  if (!template) template = await createContractTemplate(context, { projectId, name });
+  if (!template) {
+    const created = await createContractTemplate(context, { projectId, name });
+    template = await prisma.contractTemplate.findFirstOrThrow({
+      where: { id: created.id },
+      include: { versions: { where: { status: "APPROVED" }, orderBy: { version: "desc" }, take: 1 } },
+    });
+  }
 
   const content = [
     "CONTRATO DE COMPRA E VENDA",
