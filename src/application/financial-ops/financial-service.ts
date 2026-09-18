@@ -539,7 +539,7 @@ export async function getFinancialWorkspace(context: Pick<AuthContext, "organiza
   const project = await projectForTenant(context.organizationId, projectId);
   const companyId = project.companyId;
 
-  const [bankAccounts, payableInstallments, receivableInstallments, pendingReconciliations, pendingIntercompanyList, latestSchedule, suppliers, customers, companies, unreconciledTransactions] = await Promise.all([
+  const [bankAccounts, payableInstallments, receivableInstallments, pendingReconciliations, pendingIntercompanyList, latestSchedule, suppliers, customers, companies, unreconciledTransactions, periodClosures] = await Promise.all([
     companyId ? prisma.bankAccount.findMany({ where: { organizationId: context.organizationId, companyId }, include: { institution: true } }) : Promise.resolve([]),
     prisma.payableInstallment.findMany({ where: { payableAccount: { organizationId: context.organizationId, projectId }, status: { notIn: ["CANCELADA"] } }, include: { payments: true, payableAccount: { include: { supplier: true } } }, orderBy: { dueDate: "asc" } }),
     prisma.receivableInstallment.findMany({ where: { receivableAccount: { organizationId: context.organizationId, projectId }, status: { notIn: ["CANCELADA", "RENEGOCIADA"] } }, include: { payments: true, receivableAccount: { include: { customer: true } } }, orderBy: { dueDate: "asc" } }),
@@ -550,6 +550,7 @@ export async function getFinancialWorkspace(context: Pick<AuthContext, "organiza
     prisma.customer.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE" }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.company.findMany({ where: { organizationId: context.organizationId }, orderBy: { name: "asc" }, select: { id: true, name: true, type: true } }),
     companyId ? prisma.bankTransaction.findMany({ where: { organizationId: context.organizationId, status: { in: ["RECEIVED", "CANDIDATE", "UNRECONCILED"] }, bankAccount: { companyId } }, include: { reconciliationMatches: { where: { status: "SUGGESTED" }, orderBy: { score: "desc" } } }, orderBy: { occurredAt: "desc" }, take: 50 }) : Promise.resolve([]),
+    companyId ? prisma.financialPeriodClosure.findMany({ where: { organizationId: context.organizationId, companyId }, orderBy: { referenceMonth: "desc" }, take: 12 }) : Promise.resolve([]),
   ]);
 
   const balances = await Promise.all(bankAccounts.map(async (account) => ({ account, balance: Number(await computeBankAccountBalance(account.id, account.openingBalance)) })));
@@ -608,6 +609,15 @@ export async function getFinancialWorkspace(context: Pick<AuthContext, "organiza
     suppliers,
     customers,
     companies,
+    periodClosures: periodClosures.map((item) => ({
+      id: item.id,
+      referenceMonth: item.referenceMonth.toISOString(),
+      status: item.status,
+      closedAt: item.closedAt?.toISOString() ?? null,
+      reopenedAt: item.reopenedAt?.toISOString() ?? null,
+      reopenReason: item.reopenReason,
+      pendingIssuesCount: Array.isArray(item.pendingIssues) ? item.pendingIssues.length : 0,
+    })),
     payables: {
       openCount: payableOpenBalances.length,
       totalOpen: engine.roundMoney(payableOpenBalances.reduce((sum, item) => sum + item.balance, 0)),
