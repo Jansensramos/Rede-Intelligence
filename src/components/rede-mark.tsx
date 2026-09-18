@@ -8,7 +8,7 @@ export function RedeMark({ compact = false }: { compact?: boolean }) {
         src="/branding/rede-intelligence-logo.svg"
         alt="REDE Intelligence"
         width={360}
-        height={120}
+        height={180}
         priority
       />
     </div>
