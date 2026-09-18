@@ -15,7 +15,7 @@ export default async function InteligenciaDadosPage() {
     <div className="view-stack">
       <SectionTitle
         eyebrow="INTELIGÊNCIA DE DADOS"
-        title="Fato → normalização → comparabilidade → métrica → benchmark → confiança → recomendação → explicação → revisão humana"
+        title="Fato → normalização → comparabilidade → métrica → comparativo → confiança → recomendação → explicação → revisão humana"
         description="O histórico operacional do REDE vira ativo proprietário: contratos analíticos, métricas versionadas, comparativos com amostra e confiança visíveis, previsto x realizado, qualidade dos dados, carteira de empreendimentos e Orçamento Inteligente — sempre como sugestão, nunca como base aprovada automaticamente."
       />
       <DataIntelligenceOperabilityPanel workspace={workspace} />
