@@ -6,14 +6,14 @@ const expected = {
   "design.ts": { read: "ENGINEERING_READ", gate: "requireDomainActionContext" },
   "engineering.ts": { read: "ENGINEERING_READ", gate: "requireDomainActionContext" },
   "executive-insights.ts": { read: "EXECUTIVE_READ", gate: "requireDomainActionContext" },
-  "financial.ts": { read: "FINANCIAL_READ", gate: "requireDomainActionContext" },
+  "financial.ts": { read: "FINANCIAL_READ", gate: "requireDomainWriteContext", write: "FINANCIAL_WRITE", approval: "FINANCIAL_APPROVE" },
   "integrations.ts": { read: "INTEGRATIONS_READ", gate: "requireDomainActionContext" },
   "investment.ts": { read: "EXECUTIVE_READ", gate: "requireDomainActionContext" },
   "land.ts": { read: "VIABILITY_READ", gate: "requireDomainWriteContext", write: "VIABILITY_WRITE" },
   "launch-intelligence.ts": { read: "MARKET_PRODUCT_READ", gate: "requireDomainActionContext" },
-  "market-product.ts": { read: "MARKET_PRODUCT_READ", gate: "requireDomainWriteContext", write: "MARKET_PRODUCT_WRITE" },
+  "market-product.ts": { read: "MARKET_PRODUCT_READ", gate: "requireDomainActionContext" },
   "operations.ts": { read: "OPERATIONS_READ", gate: "requireDomainWriteContext", write: "OPERATIONS_WRITE", approval: "OPERATIONS_APPROVE" },
-  "procurement.ts": { read: "PROCUREMENT_READ", gate: "requireDomainActionContext" },
+  "procurement.ts": { read: "PROCUREMENT_READ", gate: "requireDomainWriteContext", write: "PROCUREMENT_WRITE", approval: "PROCUREMENT_APPROVE" },
   "studies.ts": { read: "VIABILITY_READ", gate: "requireDomainWriteContext", write: "VIABILITY_WRITE" },
 } as const;
 
