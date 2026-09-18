@@ -13,8 +13,8 @@ import { EmptyState, SectionTitle } from "@/components/ui";
 export default function AcademyPage() {
   return (
     <div className="view-stack">
-      <SectionTitle eyebrow="ECOSSISTEMA REDE" title="REDE Academy" description="Mentorias, treinamentos, cursos, materiais e certificados para times que operam com o REDE." />
-      <EmptyState icon={GraduationCap} title="REDE Academy chega em breve" description="Próximas turmas, trilhas de treinamento e certificações REDE. Nenhum conteúdo publicado ainda nesta sprint.">
+      <SectionTitle eyebrow="ECOSSISTEMA REDE" title="REDE Academia" description="Mentorias, treinamentos, cursos, materiais e certificados para equipes que operam com a REDE." />
+      <EmptyState icon={GraduationCap} title="REDE Academia chega em breve" description="Próximas turmas, trilhas de treinamento e certificações da REDE. Ainda não há conteúdo publicado nesta área.">
         <button className="button button-secondary" disabled title="Em breve" type="button">
           Ver treinamentos (em breve)
         </button>
