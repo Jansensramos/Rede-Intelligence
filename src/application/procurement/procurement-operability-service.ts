@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import type { AuthContext } from "@/application/auth/session";
 import { prisma } from "@/infrastructure/database/prisma";
 
@@ -35,12 +36,23 @@ export async function getProcurementOperabilityMetadata(context: Pick<AuthContex
       orderBy: { createdAt: "desc" },
       take: 100,
     }),
-    prisma.measurementCertificate.findMany({
-      where: { organizationId: context.organizationId, projectId, status: { in: ["APPROVED", "SENT_TO_FINANCE"] } },
-      select: { id: true, contractId: true, number: true, status: true, netAmount: true, serviceOrderId: true, competenceDate: true },
-      orderBy: [{ competenceDate: "desc" }, { number: "desc" }],
-      take: 200,
-    }),
+    prisma.$queryRaw<Array<{
+      id: string;
+      contract_id: string;
+      number: number;
+      status: string;
+      net_amount: Prisma.Decimal;
+      service_order_id: string | null;
+      competence_date: Date;
+    }>>(Prisma.sql`
+      SELECT id, contract_id, number, status, net_amount, service_order_id, competence_date
+        FROM measurement_certificates
+       WHERE organization_id = ${context.organizationId}
+         AND project_id = ${projectId}
+         AND status IN ('APPROVED', 'SENT_TO_FINANCE')
+       ORDER BY competence_date DESC, number DESC
+       LIMIT 200
+    `),
   ]);
 
   return {
@@ -99,12 +111,12 @@ export async function getProcurementOperabilityMetadata(context: Pick<AuthContex
     })),
     measurements: measurements.map((measurement) => ({
       id: measurement.id,
-      contractId: measurement.contractId,
+      contractId: measurement.contract_id,
       number: measurement.number,
       status: measurement.status,
-      netAmount: Number(measurement.netAmount),
-      serviceOrderId: measurement.serviceOrderId,
-      competenceDate: measurement.competenceDate.toISOString(),
+      netAmount: Number(measurement.net_amount),
+      serviceOrderId: measurement.service_order_id,
+      competenceDate: measurement.competence_date.toISOString(),
     })),
     contracts: contracts.map((contract) => ({
       id: contract.id,
