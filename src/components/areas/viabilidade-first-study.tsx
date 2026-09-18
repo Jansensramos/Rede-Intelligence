@@ -44,7 +44,7 @@ export function ViabilidadeFirstStudy({
     <EmptyState
       icon={Calculator}
       title="Nenhum estudo ativo neste empreendimento"
-      description="Cadastre as premissas iniciais para gerar cenários, score, sensibilidade, Red Team, fluxo de caixa e trilha de cálculo."
+      description="Cadastre as premissas iniciais para gerar cenários, índice de viabilidade, sensibilidade, revisão crítica, fluxo de caixa e trilha de cálculo."
     />
     <section className="panel">
       <div className="panel-heading">
