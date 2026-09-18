@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { assertAiUse, isAiAccessDeniedError } from "@/application/ai-gateway/rbac";
 import { requireDomainActionContext } from "./authorization";
 import {
+  buildLearningReport,
   createExistingToolLayerPort,
   planAutopilot,
   runInvestmentCommittee,
@@ -14,6 +15,7 @@ import {
   WriteAccessDeniedError,
 } from "@/domain/auth/write-capabilities";
 import { prisma } from "@/infrastructure/database/prisma";
+import { aiGatewayProviderStatus } from "@/infrastructure/ai-gateway/config";
 
 const genericError = "Não foi possível concluir a análise cognitiva.";
 
@@ -360,6 +362,201 @@ export async function getCognitiveReviewAction(input: {
         decisionNote: jsonString(decisionAfter.note) ?? "",
         decidedAt: decision?.createdAt.toISOString() ?? null,
         decidedBy: decision?.user.name ?? null,
+      },
+    };
+  } catch (error) {
+    return { ok: false as const, error: errorMessage(error) };
+  }
+}
+
+
+export async function getCognitiveLearningReportAction(input: {
+  projectId: string;
+}) {
+  const context = await requireDomainActionContext("AI_READ");
+  try {
+    assertAiUse(context);
+
+    const project = await prisma.project.findFirst({
+      where: { id: input.projectId, organizationId: context.organizationId },
+      select: { id: true },
+    });
+    if (!project) {
+      return { ok: false as const, error: "Empreendimento não encontrado." };
+    }
+
+    const evaluations = await prisma.forecastEvaluation.findMany({
+      where: {
+        organizationId: context.organizationId,
+        projectId: input.projectId,
+        evaluated: true,
+        actualValue: { not: null },
+      },
+      orderBy: { calculatedAt: "desc" },
+      take: 500,
+      include: {
+        metricDefinition: {
+          select: { key: true, name: true },
+        },
+      },
+    });
+
+    const report = buildLearningReport(
+      evaluations.flatMap((evaluation) => {
+        if (evaluation.actualValue === null) return [];
+        return [{
+          id: evaluation.id,
+          decisionId: evaluation.forecastSourceId,
+          predicted: {
+            metric: evaluation.metricDefinition.name || evaluation.metricDefinition.key,
+            value: Number(evaluation.predictedValue),
+          },
+          actual: {
+            value: Number(evaluation.actualValue),
+          },
+          recordedAt: evaluation.calculatedAt.toISOString(),
+        }];
+      }),
+    );
+
+    return {
+      ok: true as const,
+      data: {
+        report,
+        observations: evaluations.length,
+        lastCalculatedAt: evaluations[0]?.calculatedAt.toISOString() ?? null,
+      },
+    };
+  } catch (error) {
+    return { ok: false as const, error: errorMessage(error) };
+  }
+}
+
+export async function getCognitiveProductionReadinessAction(input: {
+  projectId: string;
+}) {
+  const context = await requireDomainActionContext("AI_READ");
+  try {
+    assertAiUse(context);
+
+    const project = await prisma.project.findFirst({
+      where: { id: input.projectId, organizationId: context.organizationId },
+      select: { id: true },
+    });
+    if (!project) {
+      return { ok: false as const, error: "Empreendimento não encontrado." };
+    }
+
+    const [
+      cognitiveRuns,
+      humanDecisions,
+      evaluatedForecasts,
+      activeConnectors,
+      closure,
+    ] = await Promise.all([
+      prisma.auditLog.count({
+        where: {
+          organizationId: context.organizationId,
+          projectId: input.projectId,
+          action: "COGNITIVE_COMMITTEE_RUN",
+          entityType: "AI_COGNITIVE_REVIEW",
+        },
+      }),
+      prisma.auditLog.count({
+        where: {
+          organizationId: context.organizationId,
+          projectId: input.projectId,
+          action: "COGNITIVE_COMMITTEE_DECISION",
+          entityType: "AI_COGNITIVE_DECISION",
+        },
+      }),
+      prisma.forecastEvaluation.count({
+        where: {
+          organizationId: context.organizationId,
+          projectId: input.projectId,
+          evaluated: true,
+          actualValue: { not: null },
+        },
+      }),
+      prisma.connectorInstallation.count({
+        where: {
+          organizationId: context.organizationId,
+          status: "ACTIVE",
+        },
+      }),
+      prisma.projectClosureResult.findFirst({
+        where: {
+          organizationId: context.organizationId,
+          projectId: input.projectId,
+        },
+        orderBy: { version: "desc" },
+        select: { status: true, version: true },
+      }),
+    ]);
+
+    const provider = aiGatewayProviderStatus();
+
+    return {
+      ok: true as const,
+      data: {
+        provider,
+        cognitiveRuns,
+        humanDecisions,
+        evaluatedForecasts,
+        activeConnectors,
+        closure: closure
+          ? { status: closure.status, version: closure.version }
+          : null,
+        checks: [
+          {
+            key: "COGNITIVE_GOVERNANCE",
+            label: "Governança cognitiva",
+            status: cognitiveRuns > 0 ? "READY" : "WAITING_DATA",
+            detail: cognitiveRuns > 0
+              ? `${cognitiveRuns} rodada(s) auditada(s)`
+              : "Aguardando a primeira rodada real do Comitê Cognitivo.",
+          },
+          {
+            key: "HUMAN_DECISIONS",
+            label: "Decisão humana",
+            status: humanDecisions > 0 ? "READY" : "WAITING_DATA",
+            detail: humanDecisions > 0
+              ? `${humanDecisions} decisão(ões) registrada(s)`
+              : "Nenhuma decisão humana real registrada ainda.",
+          },
+          {
+            key: "LEARNING_LOOP",
+            label: "Learning Loop",
+            status: evaluatedForecasts > 0 ? "READY" : "WAITING_DATA",
+            detail: evaluatedForecasts > 0
+              ? `${evaluatedForecasts} observação(ões) previsto × realizado`
+              : "Aguardando dados reais previsto × realizado.",
+          },
+          {
+            key: "AI_PROVIDER",
+            label: "Provider de IA",
+            status: provider === "AVAILABLE" ? "READY" : "EXTERNAL_DEPENDENCY",
+            detail: provider === "AVAILABLE"
+              ? "Provider comercial disponível."
+              : "Depende de configuração e credencial do ambiente.",
+          },
+          {
+            key: "CONNECTORS",
+            label: "Integrações externas",
+            status: activeConnectors > 0 ? "READY" : "EXTERNAL_DEPENDENCY",
+            detail: activeConnectors > 0
+              ? `${activeConnectors} conector(es) ativo(s)`
+              : "Depende da instalação/configuração de conectores reais.",
+          },
+          {
+            key: "PROJECT_CLOSURE",
+            label: "Encerramento",
+            status: closure?.status === "FINAL" ? "READY" : "WAITING_DATA",
+            detail: closure
+              ? `Versão ${closure.version} · ${closure.status}`
+              : "Nenhum resultado de encerramento preparado.",
+          },
+        ],
       },
     };
   } catch (error) {

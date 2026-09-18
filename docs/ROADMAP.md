@@ -1,44 +1,70 @@
-# Roadmap
+# Roadmap — REDE Intelligence
 
-## Fase 0 — Fundação
+Atualizado em 18/09/2026.
 
-- decisões, modelo e fórmulas documentados;
-- monólito modular e tokens visuais;
-- esquema Prisma e contratos tipados.
+## Estado da linha principal
 
-## Fase 1 — REDE Engine v1
+A linha numerada de produto está implementada até a Fase 10J.
 
-- fluxo editável e cálculo mensal;
-- cenários padrão;
-- dashboard, riscos objetivos e trilha de cálculo;
-- testes unitários, typecheck, lint e build.
+- Fases 0–8: fundação, engine, produto, studio, dados, design/BIM e REDE AI.
+- Fases 9A–9S: operação empresarial completa da incorporação, endurecimento, integrações, repasse/chaves/assistência e encerramento.
+- Fases 10A–10C: AI Gateway, Context Engine e Tool Layer auditados.
+- Fase 10C.1: operabilidade humana transversal.
+- Fases 10D–10J: Agent Framework, Red Team 2.0, Decision Engine, Investment Committee, REDE Operator, Autopilot e Learning Loop.
 
-## Próximos incrementos recomendados
+## Fechamento de produto
 
-### 1. Persistência e governança
+A evolução atual não abre uma nova fase estrutural. O objetivo é concluir a integração e o aceite operacional do que já foi implementado.
 
-Conectar PostgreSQL, autenticação, papéis, isolamento por empresa, versionamento de premissas e auditoria persistida.
+### Integração cognitiva
 
-### 2. Fidelidade financeira
+Fluxo implementado:
 
-Parcelamento de terreno, permutas, curva de obra configurável, inflação/indexadores, distrato, inadimplência, cronograma de financiamento e repasse.
+`REDE AI → Tool Layer → agentes → Red Team → Decision Engine → Comitê → decisão humana → histórico → Gestão Executiva → Learning Loop`.
 
-### 3. Sensibilidade
+### Aceite operacional
 
-Matriz automática, tornado chart e limites de viabilidade por variável.
+O ambiente só deve ser marcado como produção integral depois de validar, com dados reais:
 
-### 4. REDE Score
+1. organização e empreendimento sem seed de negócio;
+2. matriz OWNER/ADMIN/ANALYST/REVIEWER/VIEWER;
+3. isolamento organization/project;
+4. jornada ponta a ponta de incorporação;
+5. decisão cognitiva auditável;
+6. previsto × realizado suficiente para o Learning Loop;
+7. conectores e provider reais, quando as respectivas credenciais existirem;
+8. CI oficial completo verde.
 
-Política versionada, pesos configuráveis, evidências e justificativa reproduzível. Validar pesos com decisões históricas antes de uso institucional.
+## Dependências de ambiente
 
-### 5. Red Team
+Não são tratadas como código faltante e não devem ser simuladas:
 
-Expandir regras determinísticas; só então acoplar agentes especializados via interface de provedor, com aprovação humana.
+- credencial/configuração de provider comercial de IA;
+- credenciais e instalação de conectores externos;
+- fontes reais de mercado;
+- histórico real previsto × realizado;
+- evidências reais necessárias ao encerramento.
 
-### 6. REDE Studio e Data
+## Próximas evoluções após o fechamento
 
-Gerar outputs a partir de snapshots aprovados e capturar previsto × realizado com evidências.
+Depois do aceite operacional, novos trabalhos devem ser tratados como evolução de produto, e não como “fase faltante” da linha atual. Exemplos:
 
-## Gates de qualidade
+- ampliar conectores por fornecedor;
+- evoluir UX de Comercial, Pessoas e Contabilidade sobre as operações já disponíveis;
+- evoluir o Jurídico especializado somente quando mutations de domínio correspondentes forem formalmente modeladas e auditadas;
+- calibrar REDE Score e políticas com histórico;
+- evoluir Autopilot de ADVISORY para ASSISTED apenas onde houver adapter seguro e aprovação humana;
+- expandir Learning Loop com histórico real multiempreendimento.
 
-Nenhuma fase avança se fórmulas críticas não tiverem testes, se o snapshot não for rastreável ou se a interface não distinguir premissa, cálculo e inferência.
+## Gates permanentes
+
+Nenhuma evolução pode quebrar:
+
+- evidência antes de conclusão;
+- rastreabilidade;
+- isolamento multi-tenant;
+- RBAC;
+- Tool Layer como choke point cognitivo;
+- aprovação humana de mutações materiais;
+- ausência de dados inventados;
+- testes, lint, typecheck, Prisma e build verdes.

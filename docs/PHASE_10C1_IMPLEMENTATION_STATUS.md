@@ -1,6 +1,6 @@
 # Fase 10C.1 — Status de Implementação Transversal
 
-Data: 17/09/2026
+Data: 18/09/2026
 Branch: `codex/fase-10c1-operabilidade-humana`
 
 ## Princípio
@@ -28,13 +28,13 @@ VIEWER e REVIEWER não recebem escrita genérica. OWNER/ADMIN recebem escrita e 
 | Capital & Funding | Operacional | proposta, revisão, submissão, aprovação/rejeição, desembolso, covenant, condições e serviço da dívida já possuíam UI operacional |
 | Comercial | Operacional básico ampliado | cliente, lead, proposta, reserva, venda, confirmação/liberação e aprovação de venda com geração de recebível expostos na UI |
 | Jurídico | Operacional básico ampliado | abertura de diligência, decisão jurídica, envio de obrigação ao Financeiro e reversão expostos; cadastros jurídicos especializados continuam sujeitos às operações realmente existentes no backend |
-| Pessoas | Operacional básico ampliado | departamento, cargo, pessoa, investigação de causa, hipótese e ação corretiva com workflow DRAFT→PENDING_APPROVAL→ACTIVE→COMPLETED→VERIFIED |
-| Contabilidade / Controladoria | Operacional ampliado | contabilização de eventos classificados e fechamento de período expostos; service mantém validações e segregação |
+| Pessoas | Operacional ampliado | departamento, cargo, pessoa, vínculo profissional, alocação em empreendimento, custo mensal, investigação de causa, hipótese e ação corretiva com workflow DRAFT→PENDING_APPROVAL→ACTIVE→COMPLETED→VERIFIED |
+| Contabilidade / Controladoria | Operacional ampliado | contabilização, conciliação, estorno com aprovação segregada, fechamento e reabertura controlada expostos; service mantém validações e segregação |
 | Integrações | Operacional | resolução de conflitos, quarentena, sincronização e configuração de conectores já possuíam operação humana; credenciais permanecem protegidas |
 | Inteligência de Dados | Operacional de governança | inicialização de contratos/métricas e atualização completa de fatos, benchmarks, previsto x realizado, qualidade e carteira pela UI; métricas derivadas não são editáveis manualmente |
 | Central de Ações | Fonte transversal, não CRUD paralelo | por arquitetura é um read model de ações/exceções originadas nos domínios; correção/decisão deve ocorrer na fonte para não criar segunda verdade |
 | Minha Rotina | Fonte transversal, não CRUD paralelo | reutiliza Central de Ações e organiza o que o usuário precisa tratar; a ação material ocorre no domínio de origem |
-| Assistente | Somente leitura/recomendação | intencional nesta fase; nenhuma escrita autônoma de IA foi habilitada |
+| Assistente | Operacional com governança cognitiva | Comitê Cognitivo conectado à Tool Layer; agentes, Red Team e Decision Engine produzem proposta; decisão material permanece humana e auditável |
 | Asset / Academy / Ajuda | Fora de CRUD operacional | conteúdo/ecossistema; não foram artificialmente transformados em módulos transacionais |
 | Encerramento | Operacional | preparação, distribuição, aprovação, gates e reabertura expostos na Gestão Executiva com segregação de função preservada |
 
@@ -46,19 +46,22 @@ VIEWER e REVIEWER não recebem escrita genérica. OWNER/ADMIN recebem escrita e 
 4. Matriz explícita de `WRITE` e `APPROVE`, separada das capabilities de leitura.
 5. Encerramento final com gates operacional, contratual, jurídico, financeiro e contábil visíveis na UI.
 6. Preservação da Central de Ações/Minha Rotina como read models transversais, evitando uma segunda fonte de verdade.
-7. Preservação do Assistente/Tool Layer da IA como read-only.
+7. Preservação do Tool Layer da IA como read-only; Comitê Cognitivo conectado ao produto sem bypass da camada de evidência.
+8. Histórico auditável das rodadas cognitivas e decisão humana.
+9. Linha do tempo cognitiva na Gestão Executiva.
+10. Learning Loop 10J conectado a avaliações reais de previsto × realizado (`ForecastEvaluation`).
 
 ## Itens que NÃO devem ser falsamente tratados como concluídos
 
 A 10C.1 não cria operações de domínio inexistentes só para colocar um botão na tela. Onde o backend ainda não possui uma mutation segura, a lacuna precisa ser implementada no service/schema antes da UI. Os principais pontos para evolução incremental são:
 
 - Jurídico: CRUD especializado de achados, pedidos de documento, licenças, processos e obrigações quando o domínio expuser mutations correspondentes;
-- Comercial: aprofundar unidades/tabelas/comissões/pós-venda/inspeções em superfícies humanas adicionais, embora os services já possuam parte desses fluxos;
-- Pessoas: expor vínculos, alocações, custos e evidências adicionais já suportados pelo service;
-- Contabilidade: ampliar reversões, reabertura e conciliações na superfície conforme necessidade operacional;
+- Comercial: as superfícies existentes já cobrem unidades/tabelas, comissões, inspeções, entrega e pós-venda; novas telas passam a ser evolução de UX, não lacuna estrutural;
+- Pessoas: vínculos, alocações e custos já estão expostos; evidências adicionais passam a ser evolução incremental;
+- Contabilidade: conciliação, estorno e reabertura já estão expostos com segregação; ampliações futuras passam a ser evolução incremental;
 - Mercado ao vivo: depende de conectores/fontes reais; não criar entrada manual que finja dado de mercado integrado.
 
-Esses itens não impedem a existência de operação humana nos departamentos, mas impedem classificar a 10C.1 como **produção final** sem a auditoria de jornada completa e a validação de CI.
+Esses itens deixam de ser bloqueadores da linha numerada: são evoluções incrementais de superfície. A classificação como **produção real integral** continua condicionada à auditoria de jornada completa, aos dados reais e às integrações/credenciais do ambiente.
 
 ## Critério de fechamento técnico
 
@@ -69,4 +72,8 @@ Antes de encerrar a fase:
 3. testar VIEWER sem escrita;
 4. testar tenant/project isolation;
 5. percorrer a jornada estudo → obra/suprimentos → financeiro → comercial → jurídico/pessoas → contabilidade → encerramento;
-6. registrar no documento principal qualquer lacuna remanescente descoberta pela jornada.
+6. registrar no documento principal qualquer lacuna remanescente descoberta pela jornada;
+7. executar Comitê Cognitivo e registrar decisão humana;
+8. validar histórico na Gestão Executiva;
+9. validar pelo menos uma avaliação previsto × realizado no Learning Loop quando houver dado real;
+10. validar provider e conectores somente quando credenciais reais estiverem configuradas.
