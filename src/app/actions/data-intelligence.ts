@@ -12,7 +12,7 @@ import {
 
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 async function run<T>(op: () => Promise<T>): Promise<Result<T>> {
-  try { const data = await op(); revalidatePath("/inteligencia-dados"); return { ok: true, data }; }
+  try { const data = JSON.parse(JSON.stringify(await op())) as T; revalidatePath("/inteligencia-dados"); return { ok: true, data }; }
   catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Não foi possível concluir a operação de Inteligência de Dados." }; }
 }
 const write = () => requireDomainWriteContext("DATA_INTELLIGENCE_READ", "DATA_INTELLIGENCE_WRITE");
