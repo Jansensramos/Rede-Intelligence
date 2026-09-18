@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { AlertTriangle, ArrowRight, Bookmark, Bot, Check, ChevronRight, CircleStop, Download, FileSearch, Plus, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { confirmAIActionAction, createAIConversationAction, exportAIConversationAction, refreshAIBootstrapAction, requestMessagePromotionAction, saveAIFeedbackAction, saveAIInsightAction, updateAIResponseModeAction } from "@/app/actions/ai";
 import type { AIBootstrapView, AIMessageView, AIResponseEvidenceInput, AIStructuredBlock } from "@/domain/ai";
+import { CognitiveCommitteePanel } from "@/components/cognitive-committee-panel";
 
 interface RedeAIViewProps {
   initialBootstrap: AIBootstrapView;
@@ -93,6 +94,7 @@ export function RedeAIView({ initialBootstrap, projectId, currentModule, initial
     <div className="ai-main">
       <header className="ai-hero"><div className="ai-mark"><Sparkles size={19} /></div><div><span className="eyebrow">COPILOTO DE DECISÃO</span><h2>REDE AI</h2><p>Pergunte qualquer coisa sobre este empreendimento.</p></div><span className={`ai-status status-${bootstrap.status.toLowerCase()}`}><i /> {bootstrap.status}</span></header>
       <div className="ai-context-bar" aria-label="Contexto ativo"><ContextItem label="Projeto" value={bootstrap.contextLabels.projectName} /><ContextItem label="StudyVersion" value={`v${active.context.studyVersionNumber}`} /><ContextItem label="Financeiro" value={active.context.financialScenario.toUpperCase()} /><ContextItem label="Urbanístico" value={active.context.urbanScenarioType ?? "N/D"} /><ContextItem label="Investment Case" value={bootstrap.contextLabels.investmentCaseTitle} /></div>
+      <CognitiveCommitteePanel conversationId={active.id} projectId={projectId} />
       {active.stale && <div className="ai-stale"><AlertTriangle size={16} /><span>Esta conversa foi iniciada usando uma versão anterior. Mensagens antigas preservam o contexto original.</span><button onClick={() => void submit("Atualize explicitamente o contexto para a última versão disponível.")}>ATUALIZAR CONTEXTO</button></div>}
       <div className="ai-thread" role="log" aria-live="polite">
         {!active.messages.length && <AIWelcome suggestions={bootstrap.suggestions} onSelect={(prompt) => void submit(prompt)} />}
