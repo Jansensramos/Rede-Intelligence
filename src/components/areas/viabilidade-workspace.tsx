@@ -54,10 +54,10 @@ const FUNCOES: { key: Funcao; label: string }[] = [
   { key: "assumptions", label: "Premissas" },
   { key: "scenarios", label: "Cenários" },
   { key: "sensitivity", label: "Sensibilidade" },
-  { key: "redteam", label: "Red Team" },
+  { key: "redteam", label: "Revisão Crítica" },
   { key: "committee", label: "Comitê" },
-  { key: "studio", label: "Studio" },
-  { key: "dataroom", label: "Data Room" },
+  { key: "studio", label: "Relatórios" },
+  { key: "dataroom", label: "Sala de Documentos" },
   { key: "cashflow", label: "Fluxo de caixa" },
   { key: "risks", label: "Riscos" },
   { key: "audit", label: "Trilha de cálculo" },
@@ -70,7 +70,7 @@ function AssumptionSummary({ project, onEdit, canWrite }: { project: ProjectAssu
     { title: "Produto", items: [["Terreno", `${number.format(Number(project.landAreaM2))} m²`], ["Unidades", project.units.toString()], ["Área privativa", `${project.privateAreaPerUnitM2} m² / un.`], ["Eficiência", `${project.efficiencyRate}%`], ["Preço", brl(project.unitPrice)]] },
     { title: "Estrutura de custos", items: [["Terreno", brl(project.landPrice)], ["Obra", `${brl(project.constructionCostPerM2)} / m²`], ["Indiretos", `${project.indirectCostsRate}%`], ["Contingência", `${project.contingencyRate}%`], ["Comissão + MKT", `${Number(project.commissionRate) + Number(project.marketingRate)}%`]] },
     { title: "Cronograma e vendas", items: [["Aprovação", `${project.approvalMonths} meses`], ["Obra", `${project.constructionMonths} meses`], ["Velocidade", `${project.salesVelocityUnitsMonth} un. / mês`], ["Entrada", `${project.downPaymentRate}%`], ["Entrega", `${project.onDeliveryRate}%`]] },
-    { title: "Capital e política", items: [["Funding", brl(project.financingLimit)], ["Custo", `${project.annualFinancingRate}% a.a.`], ["Margem mín.", `${project.policy.minimumMarginRate}%`], ["TIR mín.", `${project.policy.minimumIrrRate}% a.a.`], ["Exposição máx.", brl(project.policy.maximumExposure)]] },
+    { title: "Capital e política", items: [["Financiamento", brl(project.financingLimit)], ["Custo", `${project.annualFinancingRate}% a.a.`], ["Margem mín.", `${project.policy.minimumMarginRate}%`], ["TIR mín.", `${project.policy.minimumIrrRate}% a.a.`], ["Exposição máx.", brl(project.policy.maximumExposure)]] },
   ];
   return (
     <>
