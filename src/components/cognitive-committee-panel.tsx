@@ -7,11 +7,17 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  History as HistoryIcon,
   LoaderCircle,
   ShieldCheck,
   Users,
 } from "lucide-react";
-import { recordCognitiveDecisionAction, runCognitiveReviewAction } from "@/app/actions/cognitive";
+import {
+  getCognitiveReviewAction,
+  listCognitiveReviewHistoryAction,
+  recordCognitiveDecisionAction,
+  runCognitiveReviewAction,
+} from "@/app/actions/cognitive";
 import type {
   AutopilotRecommendation,
   InvestmentCommitteeReport,
@@ -22,18 +28,37 @@ interface CognitiveCommitteePanelProps {
   projectId: string;
 }
 
+type HumanDecision = "ACCEPTED" | "HOLD" | "REWORK_REQUESTED";
+
+type HistoryItem = {
+  reviewId: string;
+  conversationId: string;
+  objective: string;
+  disposition: string;
+  challengeCount: number;
+  criticalCount: number;
+  createdAt: string;
+  createdBy: string;
+  decision: string | null;
+  decisionNote: string | null;
+  decidedAt: string | null;
+  decidedBy: string | null;
+};
+
 export function CognitiveCommitteePanel({
   conversationId,
   projectId,
 }: CognitiveCommitteePanelProps) {
   const [expanded, setExpanded] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [objective, setObjective] = useState(
     "Avaliar se o empreendimento pode avançar para a próxima etapa com base nas evidências atuais.",
   );
   const [report, setReport] = useState<InvestmentCommitteeReport | null>(null);
   const [recommendations, setRecommendations] = useState<AutopilotRecommendation[]>([]);
   const [reviewId, setReviewId] = useState<string | null>(null);
-  const [humanDecision, setHumanDecision] = useState<"ACCEPTED" | "HOLD" | "REWORK_REQUESTED" | null>(null);
+  const [humanDecision, setHumanDecision] = useState<HumanDecision | null>(null);
   const [decisionNote, setDecisionNote] = useState("");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
@@ -42,6 +67,15 @@ export function CognitiveCommitteePanel({
     () => report?.challenges.filter((item) => item.severity === "CRITICAL").length ?? 0,
     [report],
   );
+
+  async function refreshHistory() {
+    const response = await listCognitiveReviewHistoryAction({ projectId });
+    if (!response.ok) {
+      setError(response.error);
+      return;
+    }
+    setHistory(response.data as HistoryItem[]);
+  }
 
   function runReview() {
     setError("");
@@ -61,10 +95,11 @@ export function CognitiveCommitteePanel({
       setHumanDecision(null);
       setDecisionNote("");
       setExpanded(true);
+      if (historyOpen) await refreshHistory();
     });
   }
 
-  function recordDecision(decision: "ACCEPTED" | "HOLD" | "REWORK_REQUESTED") {
+  function recordDecision(decision: HumanDecision) {
     if (!reviewId) return;
     setError("");
     startTransition(async () => {
@@ -80,6 +115,42 @@ export function CognitiveCommitteePanel({
         return;
       }
       setHumanDecision(response.data.decision);
+      if (historyOpen) await refreshHistory();
+    });
+  }
+
+  function toggleHistory() {
+    const next = !historyOpen;
+    setHistoryOpen(next);
+    if (next && history.length === 0) {
+      setError("");
+      startTransition(refreshHistory);
+    }
+  }
+
+  function openHistoricalReview(item: HistoryItem) {
+    setError("");
+    startTransition(async () => {
+      const response = await getCognitiveReviewAction({
+        reviewId: item.reviewId,
+        projectId,
+      });
+      if (!response.ok) {
+        setError(response.error);
+        return;
+      }
+
+      setObjective(response.data.objective);
+      setReviewId(response.data.reviewId);
+      setReport(response.data.report as unknown as InvestmentCommitteeReport);
+      setRecommendations(response.data.recommendations as unknown as AutopilotRecommendation[]);
+      setHumanDecision(
+        isHumanDecision(response.data.humanDecision)
+          ? response.data.humanDecision
+          : null,
+      );
+      setDecisionNote(response.data.decisionNote);
+      setExpanded(true);
     });
   }
 
@@ -100,6 +171,16 @@ export function CognitiveCommitteePanel({
           >
             {pending ? <LoaderCircle size={15} className="spin" /> : <Users size={15} />}
             Executar comitê
+          </button>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={toggleHistory}
+            disabled={pending}
+            aria-expanded={historyOpen}
+          >
+            <HistoryIcon size={15} />
+            Histórico
           </button>
           {report && (
             <button
@@ -133,12 +214,62 @@ export function CognitiveCommitteePanel({
         </div>
       )}
 
+      {historyOpen && (
+        <article className="cognitive-history">
+          <header>
+            <div>
+              <HistoryIcon size={16} />
+              <strong>Histórico do empreendimento</strong>
+            </div>
+            <small>Últimas 20 rodadas auditadas</small>
+          </header>
+          {pending && history.length === 0 ? (
+            <div className="cognitive-history-empty">
+              <LoaderCircle size={15} className="spin" />
+              Carregando histórico...
+            </div>
+          ) : history.length === 0 ? (
+            <div className="cognitive-history-empty">Nenhuma rodada cognitiva registrada.</div>
+          ) : (
+            <div className="cognitive-history-list">
+              {history.map((item) => (
+                <button
+                  type="button"
+                  key={item.reviewId}
+                  className={item.reviewId === reviewId ? "is-active" : undefined}
+                  onClick={() => openHistoricalReview(item)}
+                  disabled={pending}
+                >
+                  <div className="cognitive-history-main">
+                    <strong>{item.objective}</strong>
+                    <span>{formatDateTime(item.createdAt)} · {item.createdBy}</span>
+                  </div>
+                  <div className="cognitive-history-metrics">
+                    <span>{dispositionText(item.disposition)}</span>
+                    <span>{item.challengeCount} questionamentos</span>
+                    {item.criticalCount > 0 && <span>{item.criticalCount} críticos</span>}
+                  </div>
+                  <div className="cognitive-history-decision">
+                    {item.decision
+                      ? `${humanDecisionText(item.decision)} · ${item.decidedBy ?? "usuário"}`
+                      : "Decisão humana pendente"}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </article>
+      )}
+
       {report && (
         <div className="cognitive-summary-row">
           <Summary label="Agentes" value={String(report.agents.length)} />
           <Summary label="Questionamentos" value={String(report.challenges.length)} />
           <Summary label="Críticos" value={String(criticalChallenges)} />
-          <Summary label="Status" value="Decisão humana pendente" />
+          <Summary
+            label="Status"
+            value={humanDecision ? humanDecisionLabel(humanDecision) : "Decisão humana pendente"}
+          />
         </div>
       )}
 
@@ -275,6 +406,13 @@ function dispositionLabel(value: InvestmentCommitteeReport["proposal"]["disposit
   return "Refazer a análise";
 }
 
+function dispositionText(value: string) {
+  if (value === "PROCEED_WITH_CONTROLS") return "Prosseguir com controles";
+  if (value === "HOLD_FOR_EVIDENCE") return "Aguardar evidências";
+  if (value === "REWORK_ANALYSIS") return "Refazer análise";
+  return "Proposta registrada";
+}
+
 function agentLabel(value: InvestmentCommitteeReport["agents"][number]["agentId"]) {
   return ({
     CFO: "CFO",
@@ -287,9 +425,23 @@ function agentLabel(value: InvestmentCommitteeReport["agents"][number]["agentId"
   } as const)[value];
 }
 
+function isHumanDecision(value: string | null): value is HumanDecision {
+  return value === "ACCEPTED" || value === "HOLD" || value === "REWORK_REQUESTED";
+}
 
-function humanDecisionLabel(value: "ACCEPTED" | "HOLD" | "REWORK_REQUESTED") {
+function humanDecisionLabel(value: HumanDecision) {
   if (value === "ACCEPTED") return "Proposta aceita";
   if (value === "HOLD") return "Mantida em análise";
   return "Reanálise solicitada";
+}
+
+function humanDecisionText(value: string) {
+  return isHumanDecision(value) ? humanDecisionLabel(value) : "Decisão registrada";
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
