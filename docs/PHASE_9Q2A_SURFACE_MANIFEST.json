@@ -85,7 +85,7 @@
   },
   {
     "path": "src/app/actions/market-product.ts",
-    "sha256": "3cd6c541cbeba54bd4152749cf38a0bb4812e5243503c422c5761aa8d4b2e296"
+    "sha256": "4bfe3bf0940e3fa68f4278f78de985fee91c0098b5dd9788c528c78eccb06eea"
   },
   {
     "path": "src/app/actions/operations.ts",
