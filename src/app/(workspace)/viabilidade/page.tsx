@@ -6,6 +6,7 @@ import { ensureInvestmentCase } from "@/application/investment/investment-servic
 import { getCurrentOperationalContext } from "@/application/workspace/current-context";
 import { ViabilidadeWorkspace } from "@/components/areas/viabilidade-workspace";
 import { Loading } from "@/components/ui";
+import { hasProtectedWriteCapability } from "@/domain/auth/write-capabilities";
 
 /**
  * Fase 9K.1 — área Viabilidade: busca só Estudo, Terreno e Investment Case (ordem de serviço §16).
@@ -16,6 +17,7 @@ export default async function ViabilidadePage() {
   const [authContext, context] = await Promise.all([requireAuthContext(), getCurrentOperationalContext()]);
   if (!context.project) return null;
   const projectId = context.project.id;
+  const canWrite = hasProtectedWriteCapability(authContext.role, "VIABILITY_WRITE");
 
   const initialStudy = await getLatestStudyForProject(authContext.organizationId, projectId);
   if (!initialStudy) throw new Error("Este empreendimento ainda não tem um estudo ativo. Crie um estudo (\"Novo estudo\", nesta área) ou execute o seed.");
@@ -35,7 +37,7 @@ export default async function ViabilidadePage() {
           `useState(initialStudy)`/`useState(initialLand)`/`useState(initialInvestment)` preservam o
           projeto ANTERIOR depois de um `router.refresh()` (React só usa o valor inicial no primeiro
           mount; props novas não re-sincronizam state derivado). Ver relatório de fechamento da 9K.1. */}
-      <ViabilidadeWorkspace key={projectId} initialStudy={initialStudy} initialLand={initialLand} initialInvestment={initialInvestment} />
+      <ViabilidadeWorkspace key={projectId} initialStudy={initialStudy} initialLand={initialLand} initialInvestment={initialInvestment} canWrite={canWrite} />
     </Suspense>
   );
 }
