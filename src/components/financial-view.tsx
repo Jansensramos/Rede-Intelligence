@@ -41,7 +41,7 @@ type SectionKey = "tesouraria" | "pagar" | "receber" | "conciliacao" | "intercom
 type PayableItem = FinancialWorkspaceView["payables"]["openItems"][number];
 type ReceivableItem = FinancialWorkspaceView["receivables"]["openItems"][number];
 
-export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView }) {
+export function FinancialView({ workspace, canWrite, canApprove }: { workspace: FinancialWorkspaceView; canWrite: boolean; canApprove: boolean }) {
   const router = useRouter();
   const [section, setSection] = useState<SectionKey>("tesouraria");
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -250,7 +250,7 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
 
       {section === "tesouraria" && (
         <section className="operations-panel">
-          <header><div><span className="eyebrow">POSIÇÃO DE CAIXA</span><h3>Contas bancárias da SPE</h3><p>{workspace.pendingReconciliations} transação(ões) aguardando conciliação · {workspace.pendingIntercompany} movimentação(ões) intercompany pendente(s).</p></div><div className="panel-actions"><button className="button button-secondary" onClick={() => setShowBankForm((value) => !value)}><Plus size={16} /> Nova conta bancária</button><button className="button button-secondary" disabled={workspace.bankAccounts.length < 2} onClick={() => setShowTransferForm((value) => !value)}>Transferir entre contas</button></div></header>
+          <header><div><span className="eyebrow">POSIÇÃO DE CAIXA</span><h3>Contas bancárias da SPE</h3><p>{workspace.pendingReconciliations} transação(ões) aguardando conciliação · {workspace.pendingIntercompany} movimentação(ões) intercompany pendente(s).</p></div><div className="panel-actions"><button className="button button-secondary" disabled={!canWrite} onClick={() => setShowBankForm((value) => !value)}><Plus size={16} /> Nova conta bancária</button><button className="button button-secondary" disabled={!canWrite || workspace.bankAccounts.length < 2} onClick={() => setShowTransferForm((value) => !value)}>Transferir entre contas</button></div></header>
           {showBankForm && <form className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10, gridTemplateColumns: "repeat(3, 1fr)" }} action={submitBankAccount}>
             <input name="institutionName" placeholder="Instituição (ex.: Itaú)" required />
             <input name="agency" placeholder="Agência" required />
@@ -259,7 +259,7 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
             <select name="type" defaultValue="OPERATIONAL">{Object.entries(bankAccountTypeLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
             <select name="restriction" defaultValue="FREE"><option value="FREE">Livre</option><option value="RESTRICTED">Restrita</option></select>
             <input name="openingBalance" type="number" step="0.01" placeholder="Saldo de abertura" defaultValue="0" />
-            <button className="button button-primary" disabled={busy} type="submit">Cadastrar</button>
+            <button className="button button-primary" disabled={busy || !canWrite} type="submit">Cadastrar</button>
           </form>}
           {showTransferForm && <form className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10, gridTemplateColumns: "repeat(3, 1fr)" }} action={submitTransfer}>
             <select name="fromBankAccountId" required defaultValue=""><option value="" disabled>Conta de origem</option>{workspace.bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.institution} · {account.accountNumber}</option>)}</select>
@@ -267,7 +267,7 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
             <label>Valor<input name="amount" type="number" min="0.01" step="0.01" required /></label>
             <label>Data<input name="transferredAt" type="date" defaultValue={today()} required /></label>
             <input name="description" placeholder="Descrição da transferência" />
-            <button className="button button-primary" disabled={busy} type="submit">Transferir</button>
+            <button className="button button-primary" disabled={busy || !canWrite} type="submit">Transferir</button>
           </form>}
           <div className="operations-table-wrap">
             <table className="operations-table">
@@ -284,11 +284,11 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
           <div className="operations-table-wrap" style={{ marginTop: 18, padding: 20 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
               <div><strong>Fechamento financeiro</strong><p style={{ margin: "4px 0 0" }}>Feche a competência da SPE e preserve a trilha de reaberturas.</p></div>
-              <button className="button button-secondary" disabled={busy || !workspace.companyId} onClick={() => setShowClosePeriodForm((value) => !value)}>{showClosePeriodForm ? "Cancelar" : "Fechar competência"}</button>
+              <button className="button button-secondary" disabled={busy || !canApprove || !workspace.companyId} onClick={() => setShowClosePeriodForm((value) => !value)}>{showClosePeriodForm ? "Cancelar" : "Fechar competência"}</button>
             </div>
             {showClosePeriodForm && <form style={{ display: "flex", gap: 10, marginTop: 12, alignItems: "end", flexWrap: "wrap" }} action={closePeriod}>
               <label>Competência<input name="referenceMonth" type="month" defaultValue={today().slice(0, 7)} required /></label>
-              <button className="button button-primary" disabled={busy} type="submit">Confirmar fechamento</button>
+              <button className="button button-primary" disabled={busy || !canApprove} type="submit">Confirmar fechamento</button>
             </form>}
             <table className="operations-table" style={{ marginTop: 14 }}>
               <thead><tr><th>Competência</th><th>Status</th><th>Pendências no fechamento</th><th>Ação</th></tr></thead>
@@ -298,8 +298,8 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
                   <td>{closure.status === "CLOSED" ? "Fechado" : closure.status === "REOPENED" ? "Reaberto" : closure.status}</td>
                   <td>{closure.pendingIssuesCount}</td>
                   <td>{closure.status === "CLOSED" && (reopeningClosureId === closure.id
-                    ? <form style={{ display: "flex", gap: 6 }} action={(form) => reopenPeriod(closure.id, form)}><input name="reason" placeholder="Motivo da reabertura" required /><button className="text-button" type="submit" disabled={busy}>Reabrir</button><button className="text-button" type="button" onClick={() => setReopeningClosureId(null)}>Cancelar</button></form>
-                    : <button className="text-button" disabled={busy} onClick={() => setReopeningClosureId(closure.id)}>Reabrir</button>)}</td>
+                    ? <form style={{ display: "flex", gap: 6 }} action={(form) => reopenPeriod(closure.id, form)}><input name="reason" placeholder="Motivo da reabertura" required /><button className="text-button" type="submit" disabled={busy || !canApprove}>Reabrir</button><button className="text-button" type="button" onClick={() => setReopeningClosureId(null)}>Cancelar</button></form>
+                    : <button className="text-button" disabled={busy || !canApprove} onClick={() => setReopeningClosureId(closure.id)}>Reabrir</button>)}</td>
                 </tr>)}
                 {workspace.periodClosures.length === 0 && <tr><td colSpan={4} className="operations-empty">Nenhum fechamento financeiro registrado.</td></tr>}
               </tbody>
@@ -310,7 +310,7 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
 
       {section === "pagar" && (
         <section className="operations-panel">
-          <header><div><span className="eyebrow">RÉGUA DE VENCIMENTOS</span><h3>Contas a pagar</h3><p>{workspace.payables.openCount} parcela(s) em aberto · Próximos 7 dias: {money.format(workspace.payables.horizons.byHorizon[7] ?? 0)} · 30 dias: {money.format(workspace.payables.horizons.byHorizon[30] ?? 0)} · 90 dias: {money.format(workspace.payables.horizons.byHorizon[90] ?? 0)}</p></div><div className="panel-actions"><button className="button button-secondary" onClick={() => setShowSupplierForm((value) => !value)}>Novo fornecedor</button><button className="button button-secondary" onClick={() => setShowPayableForm((value) => !value)}><Plus size={16} /> Nova conta a pagar</button></div></header>
+          <header><div><span className="eyebrow">RÉGUA DE VENCIMENTOS</span><h3>Contas a pagar</h3><p>{workspace.payables.openCount} parcela(s) em aberto · Próximos 7 dias: {money.format(workspace.payables.horizons.byHorizon[7] ?? 0)} · 30 dias: {money.format(workspace.payables.horizons.byHorizon[30] ?? 0)} · 90 dias: {money.format(workspace.payables.horizons.byHorizon[90] ?? 0)}</p></div><div className="panel-actions"><button className="button button-secondary" disabled={!canWrite} onClick={() => setShowSupplierForm((value) => !value)}>Novo fornecedor</button><button className="button button-secondary" disabled={!canWrite} onClick={() => setShowPayableForm((value) => !value)}><Plus size={16} /> Nova conta a pagar</button></div></header>
           {showSupplierForm && <form className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10, gridTemplateColumns: "repeat(3, 1fr)" }} action={submitSupplier}>
             <input name="name" placeholder="Nome do fornecedor" required />
             <input name="legalName" placeholder="Razão social" />
@@ -318,7 +318,7 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
             <select name="personType" defaultValue="LEGAL_ENTITY"><option value="LEGAL_ENTITY">Pessoa jurídica</option><option value="INDIVIDUAL">Pessoa física</option></select>
             <input name="email" type="email" placeholder="E-mail" />
             <input name="phone" placeholder="Telefone" />
-            <button className="button button-primary" disabled={busy} type="submit">Cadastrar fornecedor</button>
+            <button className="button button-primary" disabled={busy || !canWrite} type="submit">Cadastrar fornecedor</button>
           </form>}
           {showPayableForm && <form className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10, gridTemplateColumns: "repeat(3, 1fr)" }} action={submitPayableAccount}>
             <input name="description" placeholder="Descrição" required style={{ gridColumn: "span 2" }} />
@@ -327,7 +327,7 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
             <label>Valor total<input name="totalAmount" type="number" step="0.01" min="0.01" required /></label>
             <label>Nº de parcelas<input name="installmentsCount" type="number" min="1" defaultValue={1} /></label>
             <label>1º vencimento<input name="firstDueDate" type="date" required defaultValue={today()} /></label>
-            <button className="button button-primary" disabled={busy} type="submit">Criar</button>
+            <button className="button button-primary" disabled={busy || !canWrite} type="submit">Criar</button>
           </form>}
           <div className="operations-table-wrap">
             <table className="operations-table">
@@ -339,18 +339,18 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
                     <td className={item.overdue ? "operation-negative" : ""}><CalendarClock size={13} /> {date.format(new Date(item.dueDate))}</td>
                     <td>{payableStatusLabel[item.status] ?? item.status}</td><td>{money.format(item.balance)}</td>
                     <td>
-                      {item.status === "PREVISTA" && <button className="text-button" disabled={busy} onClick={() => withFeedback(() => transitionPayableInstallmentAction(item.id, "PROGRAMADA"), () => "Parcela programada.")}>Programar</button>}
-                      {item.status === "PROGRAMADA" && <button className="text-button" disabled={busy} onClick={() => withFeedback(() => transitionPayableInstallmentAction(item.id, "APROVADA"), () => "Parcela aprovada.")}>Aprovar</button>}
+                      {item.status === "PREVISTA" && <button className="text-button" disabled={busy || !canWrite} onClick={() => withFeedback(() => transitionPayableInstallmentAction(item.id, "PROGRAMADA"), () => "Parcela programada.")}>Programar</button>}
+                      {item.status === "PROGRAMADA" && <button className="text-button" disabled={busy || !canApprove} onClick={() => withFeedback(() => transitionPayableInstallmentAction(item.id, "APROVADA"), () => "Parcela aprovada.")}>Aprovar</button>}
                       {(item.status === "APROVADA" || item.status === "PARCIALMENTE_PAGA") && (payingId === item.id
                         ? <form style={{ display: "flex", gap: 6 }} action={(form) => payInstallment(item, form)}>
                             <select name="bankAccountId" required defaultValue={workspace.bankAccounts[0]?.id ?? ""}>{workspace.bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.institution} {account.accountNumber}</option>)}</select>
                             <input name="amount" type="number" step="0.01" defaultValue={item.balance} required style={{ width: 100 }} />
                             <input name="paidAt" type="date" defaultValue={today()} required />
-                            <button className="text-button" disabled={busy} type="submit">Confirmar</button>
+                            <button className="text-button" disabled={busy || !canWrite} type="submit">Confirmar</button>
                             <button className="text-button" type="button" onClick={() => setPayingId(null)}>Cancelar</button>
                           </form>
-                        : <button className="text-button" disabled={busy} onClick={() => setPayingId(item.id)}>Pagar</button>)}
-                      {!["PAGA", "CANCELADA"].includes(item.status) && correctingPayableId !== item.id && <button className="text-button" disabled={busy} onClick={() => setCorrectingPayableId(item.id)}>Corrigir</button>}
+                        : <button className="text-button" disabled={busy || !canWrite} onClick={() => setPayingId(item.id)}>Pagar</button>)}
+                      {!["PAGA", "CANCELADA"].includes(item.status) && correctingPayableId !== item.id && <button className="text-button" disabled={busy || !canWrite} onClick={() => setCorrectingPayableId(item.id)}>Corrigir</button>}
                       {correctingPayableId === item.id && <form style={{ display: "grid", gap: 6, marginTop: 8 }} action={(form) => correctPayableInstallment(item, form)}>
                         <select name="indexName" defaultValue=""><option value="">Sem índice</option><option value="IPCA">IPCA</option><option value="INCC">INCC</option><option value="IGP_M">IGP-M</option><option value="CUSTOM">Personalizado</option></select>
                         <input name="indexPercentage" type="number" step="0.0001" defaultValue="0" placeholder="Índice %" />
@@ -359,7 +359,7 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
                         <input name="fineRate" type="number" min="0" step="0.0001" defaultValue="0" placeholder="Multa %" />
                         <input name="discountAmount" type="number" min="0" step="0.01" defaultValue="0" placeholder="Desconto R$" />
                         <input name="referencePeriod" defaultValue={today().slice(0, 7)} required placeholder="AAAA-MM" />
-                        <div><button className="text-button" type="submit" disabled={busy}>Aplicar correção</button><button className="text-button" type="button" onClick={() => setCorrectingPayableId(null)}>Cancelar</button></div>
+                        <div><button className="text-button" type="submit" disabled={busy || !canWrite}>Aplicar correção</button><button className="text-button" type="button" onClick={() => setCorrectingPayableId(null)}>Cancelar</button></div>
                       </form>}
                     </td>
                   </tr>
@@ -373,14 +373,14 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
 
       {section === "receber" && (
         <section className="operations-panel">
-          <header><div><span className="eyebrow">RÉGUA DE VENCIMENTOS</span><h3>Contas a receber</h3><p>{workspace.receivables.openCount} parcela(s) em aberto · Próximos 7 dias: {money.format(workspace.receivables.horizons.byHorizon[7] ?? 0)} · 30 dias: {money.format(workspace.receivables.horizons.byHorizon[30] ?? 0)} · 90 dias: {money.format(workspace.receivables.horizons.byHorizon[90] ?? 0)}</p></div><div className="panel-actions"><button className="button button-secondary" onClick={() => setShowCustomerForm((value) => !value)}>Novo cliente</button><button className="button button-secondary" onClick={() => setShowReceivableForm((value) => !value)}><Plus size={16} /> Nova conta a receber</button></div></header>
+          <header><div><span className="eyebrow">RÉGUA DE VENCIMENTOS</span><h3>Contas a receber</h3><p>{workspace.receivables.openCount} parcela(s) em aberto · Próximos 7 dias: {money.format(workspace.receivables.horizons.byHorizon[7] ?? 0)} · 30 dias: {money.format(workspace.receivables.horizons.byHorizon[30] ?? 0)} · 90 dias: {money.format(workspace.receivables.horizons.byHorizon[90] ?? 0)}</p></div><div className="panel-actions"><button className="button button-secondary" disabled={!canWrite} onClick={() => setShowCustomerForm((value) => !value)}>Novo cliente</button><button className="button button-secondary" disabled={!canWrite} onClick={() => setShowReceivableForm((value) => !value)}><Plus size={16} /> Nova conta a receber</button></div></header>
           {showCustomerForm && <form className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10, gridTemplateColumns: "repeat(3, 1fr)" }} action={submitCustomer}>
             <input name="name" placeholder="Nome do cliente" required />
             <input name="taxId" placeholder="CPF/CNPJ" />
             <select name="personType" defaultValue="INDIVIDUAL"><option value="INDIVIDUAL">Pessoa física</option><option value="LEGAL_ENTITY">Pessoa jurídica</option></select>
             <input name="email" type="email" placeholder="E-mail" />
             <input name="phone" placeholder="Telefone" />
-            <button className="button button-primary" disabled={busy} type="submit">Cadastrar cliente</button>
+            <button className="button button-primary" disabled={busy || !canWrite} type="submit">Cadastrar cliente</button>
           </form>}
           {showReceivableForm && <form className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10, gridTemplateColumns: "repeat(3, 1fr)" }} action={submitReceivableAccount}>
             <input name="description" placeholder="Descrição" required style={{ gridColumn: "span 2" }} />
@@ -389,7 +389,7 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
             <label>Valor total<input name="totalAmount" type="number" step="0.01" min="0.01" required /></label>
             <label>Nº de parcelas<input name="installmentsCount" type="number" min="1" defaultValue={1} /></label>
             <label>1º vencimento<input name="firstDueDate" type="date" required defaultValue={today()} /></label>
-            <button className="button button-primary" disabled={busy} type="submit">Criar</button>
+            <button className="button button-primary" disabled={busy || !canWrite} type="submit">Criar</button>
           </form>}
           <div className="operations-table-wrap">
             <table className="operations-table">
@@ -401,17 +401,17 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
                     <td className={item.overdue ? "operation-negative" : ""}><CalendarClock size={13} /> {date.format(new Date(item.dueDate))}</td>
                     <td>{receivableStatusLabel[item.status] ?? item.status}</td><td>{money.format(item.balance)}</td>
                     <td>
-                      {item.status === "PREVISTA" && <button className="text-button" disabled={busy} onClick={() => withFeedback(() => transitionReceivableInstallmentAction(item.id, "EMITIDA"), () => "Parcela emitida.")}>Emitir</button>}
+                      {item.status === "PREVISTA" && <button className="text-button" disabled={busy || !canWrite} onClick={() => withFeedback(() => transitionReceivableInstallmentAction(item.id, "EMITIDA"), () => "Parcela emitida.")}>Emitir</button>}
                       {(item.status === "EMITIDA" || item.status === "PARCIALMENTE_RECEBIDA") && (receivingId === item.id
                         ? <form style={{ display: "flex", gap: 6 }} action={(form) => receiveInstallment(item, form)}>
                             <select name="bankAccountId" required defaultValue={workspace.bankAccounts[0]?.id ?? ""}>{workspace.bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.institution} {account.accountNumber}</option>)}</select>
                             <input name="amount" type="number" step="0.01" defaultValue={item.balance} required style={{ width: 100 }} />
                             <input name="receivedAt" type="date" defaultValue={today()} required />
-                            <button className="text-button" disabled={busy} type="submit">Confirmar</button>
+                            <button className="text-button" disabled={busy || !canWrite} type="submit">Confirmar</button>
                             <button className="text-button" type="button" onClick={() => setReceivingId(null)}>Cancelar</button>
                           </form>
-                        : <button className="text-button" disabled={busy} onClick={() => setReceivingId(item.id)}>Registrar recebimento</button>)}
-                      {!["RECEBIDA", "CANCELADA", "RENEGOCIADA"].includes(item.status) && correctingReceivableId !== item.id && <button className="text-button" disabled={busy} onClick={() => setCorrectingReceivableId(item.id)}>Corrigir</button>}
+                        : <button className="text-button" disabled={busy || !canWrite} onClick={() => setReceivingId(item.id)}>Registrar recebimento</button>)}
+                      {!["RECEBIDA", "CANCELADA", "RENEGOCIADA"].includes(item.status) && correctingReceivableId !== item.id && <button className="text-button" disabled={busy || !canWrite} onClick={() => setCorrectingReceivableId(item.id)}>Corrigir</button>}
                       {correctingReceivableId === item.id && <form style={{ display: "grid", gap: 6, marginTop: 8 }} action={(form) => correctReceivableInstallment(item, form)}>
                         <select name="indexName" defaultValue=""><option value="">Sem índice</option><option value="IPCA">IPCA</option><option value="INCC">INCC</option><option value="IGP_M">IGP-M</option><option value="CUSTOM">Personalizado</option></select>
                         <input name="indexPercentage" type="number" step="0.0001" defaultValue="0" placeholder="Índice %" />
@@ -420,7 +420,7 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
                         <input name="fineRate" type="number" min="0" step="0.0001" defaultValue="0" placeholder="Multa %" />
                         <input name="discountAmount" type="number" min="0" step="0.01" defaultValue="0" placeholder="Desconto R$" />
                         <input name="referencePeriod" defaultValue={today().slice(0, 7)} required placeholder="AAAA-MM" />
-                        <div><button className="text-button" type="submit" disabled={busy}>Aplicar correção</button><button className="text-button" type="button" onClick={() => setCorrectingReceivableId(null)}>Cancelar</button></div>
+                        <div><button className="text-button" type="submit" disabled={busy || !canWrite}>Aplicar correção</button><button className="text-button" type="button" onClick={() => setCorrectingReceivableId(null)}>Cancelar</button></div>
                       </form>}
                     </td>
                   </tr>
@@ -440,7 +440,7 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
             <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
               <select value={csvAccount} onChange={(event) => setCsvAccount(event.target.value)}>{workspace.bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.institution} {account.accountNumber}</option>)}</select>
               <textarea value={csvContent} onChange={(event) => setCsvContent(event.target.value)} placeholder={"data,valor,tipo,descricao,contraparte,documento,external_id\n2026-09-15,1800.00,DEBITO,PAG NF 4821,Fornecedor X,NF 4821,"} rows={4} style={{ flex: 1, minWidth: 320 }} />
-              <button className="button button-secondary" disabled={busy || !csvContent.trim()} onClick={importCsv}>Importar</button>
+              <button className="button button-secondary" disabled={busy || !canWrite || !csvContent.trim()} onClick={importCsv}>Importar</button>
             </div>
           </div>
           <div className="operations-table-wrap">
@@ -455,14 +455,14 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
                     <td>{transaction.status}</td>
                     <td>
                       {transaction.suggestions.length === 0
-                        ? <button className="text-button" disabled={busy} onClick={() => withFeedback(() => suggestReconciliationsAction(transaction.id), () => "Sugestões geradas.")}>Sugerir candidatos</button>
+                        ? <button className="text-button" disabled={busy || !canWrite} onClick={() => withFeedback(() => suggestReconciliationsAction(transaction.id), () => "Sugestões geradas.")}>Sugerir candidatos</button>
                         : <div style={{ display: "grid", gap: 6 }}>
                             {transaction.suggestions.map((suggestion) => (
                               <div key={suggestion.matchId} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                 <span className={`materiality materiality-${suggestion.confidence === "ALTA" ? "informativo" : suggestion.confidence === "MEDIA" ? "atencao" : "relevante"}`}>{suggestion.confidence ?? "—"} · {suggestion.score}</span>
                                 <span>{suggestion.candidateLabel}</span>
-                                <button className="text-button" disabled={busy} onClick={() => withFeedback(() => confirmReconciliationAction(suggestion.matchId), () => "Conciliação confirmada.")}>Confirmar</button>
-                                <button className="text-button" disabled={busy} onClick={() => withFeedback(() => rejectReconciliationAction(suggestion.matchId, "Rejeitado manualmente na Central de Conciliação."), () => "Sugestão rejeitada.")}>Rejeitar</button>
+                                <button className="text-button" disabled={busy || !canApprove} onClick={() => withFeedback(() => confirmReconciliationAction(suggestion.matchId), () => "Conciliação confirmada.")}>Confirmar</button>
+                                <button className="text-button" disabled={busy || !canApprove} onClick={() => withFeedback(() => rejectReconciliationAction(suggestion.matchId, "Rejeitado manualmente na Central de Conciliação."), () => "Sugestão rejeitada.")}>Rejeitar</button>
                               </div>
                             ))}
                           </div>}
@@ -478,7 +478,7 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
 
       {section === "intercompany" && (
         <section className="operations-panel">
-          <header><div><span className="eyebrow">CONSOLIDAÇÃO SEM EFEITO ARTIFICIAL</span><h3>Movimentações intercompany</h3><p>Cada movimentação gera obrigação e direito vinculados nas duas empresas — eliminados na visão consolidada.</p></div><button className="button button-secondary" onClick={() => setShowIntercompanyForm((value) => !value)}><Plus size={16} /> Nova movimentação</button></header>
+          <header><div><span className="eyebrow">CONSOLIDAÇÃO SEM EFEITO ARTIFICIAL</span><h3>Movimentações intercompany</h3><p>Cada movimentação gera obrigação e direito vinculados nas duas empresas — eliminados na visão consolidada.</p></div><button className="button button-secondary" disabled={!canWrite} onClick={() => setShowIntercompanyForm((value) => !value)}><Plus size={16} /> Nova movimentação</button></header>
           {showIntercompanyForm && <form className="operations-table-wrap" style={{ padding: 20, display: "grid", gap: 10, gridTemplateColumns: "repeat(3, 1fr)" }} action={submitIntercompany}>
             <select name="fromCompanyId" required defaultValue="">{[<option key="" value="" disabled>Empresa de origem</option>, ...workspace.companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)]}</select>
             <select name="toCompanyId" required defaultValue={workspace.companyId ?? ""}>{[<option key="" value="" disabled>Empresa de destino</option>, ...workspace.companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)]}</select>
@@ -486,14 +486,14 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
             <label>Valor<input name="amount" type="number" step="0.01" min="0.01" required /></label>
             <label>Data<input name="occurredAt" type="date" required defaultValue={today()} /></label>
             <input name="description" placeholder="Descrição (opcional)" />
-            <button className="button button-primary" disabled={busy} type="submit">Registrar</button>
+            <button className="button button-primary" disabled={busy || !canWrite} type="submit">Registrar</button>
           </form>}
           <div className="operations-table-wrap">
             <table className="operations-table">
               <thead><tr><th>Origem</th><th>Destino</th><th>Natureza</th><th>Data</th><th>Valor</th><th>Ação</th></tr></thead>
               <tbody>
                 {workspace.pendingIntercompanyList.map((item) => (
-                  <tr key={item.id}><td><strong>{item.fromCompany}</strong></td><td>{item.toCompany}</td><td>{item.nature}</td><td>{date.format(new Date(item.occurredAt))}</td><td>{money.format(item.amount)}</td><td><button className="text-button" disabled={busy} onClick={() => withFeedback(() => approveIntercompanyTransactionAction(item.id), () => "Movimentação aprovada.")}>Aprovar</button></td></tr>
+                  <tr key={item.id}><td><strong>{item.fromCompany}</strong></td><td>{item.toCompany}</td><td>{item.nature}</td><td>{date.format(new Date(item.occurredAt))}</td><td>{money.format(item.amount)}</td><td><button className="text-button" disabled={busy || !canApprove} onClick={() => withFeedback(() => approveIntercompanyTransactionAction(item.id), () => "Movimentação aprovada.")}>Aprovar</button></td></tr>
                 ))}
                 {workspace.pendingIntercompanyList.length === 0 && <tr><td colSpan={6} className="operations-empty">Nenhuma movimentação intercompany pendente.</td></tr>}
               </tbody>
