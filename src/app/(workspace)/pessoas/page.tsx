@@ -2,6 +2,7 @@ import { requireAuthContext } from "@/application/auth/session";
 import { getPeoplePerformanceWorkspace } from "@/application/people-performance/people-performance-service";
 import { getCurrentOperationalContext } from "@/application/workspace/current-context";
 import { PeopleOperabilityPanel } from "@/components/people-operability-panel";
+import { PeopleWorkforceOperabilityPanel } from "@/components/people-workforce-operability-panel";
 import { PeoplePerformanceView } from "@/components/people-performance-view";
 import { SectionTitle } from "@/components/ui";
 
@@ -18,6 +19,7 @@ export default async function PessoasPage() {
         title="Estrutura → Capacidade → Desempenho → Causa-raiz → Ação"
         description="Leitura integrada ao orçamento, cronograma, medições e realizado, com remuneração restrita e economia somente quando validada."
       />
+      <PeopleWorkforceOperabilityPanel workspace={workspace} />
       <PeopleOperabilityPanel workspace={workspace} />
       <PeoplePerformanceView workspace={workspace} />
     </div>
