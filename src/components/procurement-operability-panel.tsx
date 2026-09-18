@@ -42,7 +42,7 @@ const STATUS: Record<string, string> = {
   DECIDED: "Decidida",
 };
 
-export function ProcurementOperabilityPanel({ workspace, operability }: { workspace: ProcurementWorkspaceView; operability: ProcurementOperabilityMetadata }) {
+export function ProcurementOperabilityPanel({ workspace, operability, canWrite, canApprove }: { workspace: ProcurementWorkspaceView; operability: ProcurementOperabilityMetadata; canWrite: boolean; canApprove: boolean }) {
   const router = useRouter();
   const [form, setForm] = useState<FormKey>(null);
   const [busy, setBusy] = useState(false);
@@ -270,6 +270,7 @@ export function ProcurementOperabilityPanel({ workspace, operability }: { worksp
 
   return (
     <section className={styles.section}>
+      {!canWrite && !canApprove && <div className={styles.info}><div><strong>Modo de leitura</strong><p>Seu perfil pode consultar Suprimentos, mas não alterar nem aprovar registros.</p></div></div>}
       <div className={styles.header}>
         <div>
           <span className={styles.kicker}>Compras e suprimentos</span>
@@ -277,14 +278,14 @@ export function ProcurementOperabilityPanel({ workspace, operability }: { worksp
           <p className={styles.description}>Estruture a demanda, formalize a requisição, compare fornecedores e registre a decisão de compra antes de gerar o compromisso contratual.</p>
         </div>
         <div className={styles.actions}>
-          <button className="button button-secondary" onClick={() => setForm(form === "need" ? null : "need")}><FilePlus2 size={15} /> Necessidade</button>
-          <button className="button button-secondary" onClick={() => setForm(form === "requisition" ? null : "requisition")}><Workflow size={15} /> Requisição</button>
-          <button className="button button-secondary" onClick={() => setForm(form === "quotation" ? null : "quotation")}><ShoppingCart size={15} /> Cotação</button>
-          <button className="button button-secondary" onClick={() => setForm(form === "proposal" ? null : "proposal")}><ReceiptText size={15} /> Proposta</button>
-          <button className="button button-primary" onClick={() => setForm(form === "decision" ? null : "decision")}><Gavel size={15} /> Decisão</button>
-          <button className="button button-secondary" onClick={() => setForm(form === "order" ? null : "order")}>Pedido</button>
-          <button className="button button-secondary" onClick={() => setForm(form === "contract" ? null : "contract")}>Contrato</button><button className="button button-secondary" onClick={() => setForm(form === "amendment" ? null : "amendment")}>Aditivo</button>
-          <button className="button button-secondary" onClick={() => setForm(form === "measurement" ? null : "measurement")}>Medição</button>
+          <button className="button button-secondary" disabled={!canWrite} onClick={() => setForm(form === "need" ? null : "need")}><FilePlus2 size={15} /> Necessidade</button>
+          <button className="button button-secondary" disabled={!canWrite} onClick={() => setForm(form === "requisition" ? null : "requisition")}><Workflow size={15} /> Requisição</button>
+          <button className="button button-secondary" disabled={!canWrite} onClick={() => setForm(form === "quotation" ? null : "quotation")}><ShoppingCart size={15} /> Cotação</button>
+          <button className="button button-secondary" disabled={!canWrite} onClick={() => setForm(form === "proposal" ? null : "proposal")}><ReceiptText size={15} /> Proposta</button>
+          <button className="button button-primary" disabled={!canApprove} onClick={() => setForm(form === "decision" ? null : "decision")}><Gavel size={15} /> Decisão</button>
+          <button className="button button-secondary" disabled={!canWrite} onClick={() => setForm(form === "order" ? null : "order")}>Pedido</button>
+          <button className="button button-secondary" disabled={!canWrite} onClick={() => setForm(form === "contract" ? null : "contract")}>Contrato</button><button className="button button-secondary" disabled={!canWrite} onClick={() => setForm(form === "amendment" ? null : "amendment")}>Aditivo</button>
+          <button className="button button-secondary" disabled={!canWrite} onClick={() => setForm(form === "measurement" ? null : "measurement")}>Medição</button>
         </div>
       </div>
 
@@ -409,19 +410,19 @@ export function ProcurementOperabilityPanel({ workspace, operability }: { worksp
         <table className={styles.table}>
           <thead><tr><th>Fluxo</th><th>Registro</th><th>Situação</th><th>Próxima ação</th></tr></thead>
           <tbody>
-            {identifiedNeeds.slice(0, 8).map((item) => <tr key={`need-${item.id}`}><td>Necessidade</td><td><span className={styles.recordTitle}>{item.code}</span><span className={styles.recordMeta}>{item.description}</span></td><td><span className={styles.status}>{STATUS[item.status] ?? item.status}</span></td><td><button className="button button-secondary" disabled={busy} onClick={() => validateNeed(item.id)}>Validar</button></td></tr>)}
-            {requisitionsToAdvance.slice(0, 8).map((item) => <tr key={`req-${item.id}`}><td>Requisição</td><td><span className={styles.recordTitle}>{item.number}</span><span className={styles.recordMeta}>{item.title}</span></td><td><span className={styles.status}>{STATUS[item.status] ?? item.status}</span></td><td><button className="button button-secondary" disabled={busy} onClick={() => advanceRequisition(item.id, item.status)}>{item.status === "DRAFT" ? "Solicitar" : item.status === "REQUESTED" ? "Enviar para aprovação" : "Aprovar para cotação"}</button></td></tr>)}
+            {identifiedNeeds.slice(0, 8).map((item) => <tr key={`need-${item.id}`}><td>Necessidade</td><td><span className={styles.recordTitle}>{item.code}</span><span className={styles.recordMeta}>{item.description}</span></td><td><span className={styles.status}>{STATUS[item.status] ?? item.status}</span></td><td><button className="button button-secondary" disabled={busy || !canWrite} onClick={() => validateNeed(item.id)}>Validar</button></td></tr>)}
+            {requisitionsToAdvance.slice(0, 8).map((item) => <tr key={`req-${item.id}`}><td>Requisição</td><td><span className={styles.recordTitle}>{item.number}</span><span className={styles.recordMeta}>{item.title}</span></td><td><span className={styles.status}>{STATUS[item.status] ?? item.status}</span></td><td><button className="button button-secondary" disabled={busy || (item.status === "IN_APPROVAL" ? !canApprove : !canWrite)} onClick={() => advanceRequisition(item.id, item.status)}>{item.status === "DRAFT" ? "Solicitar" : item.status === "REQUESTED" ? "Enviar para aprovação" : "Aprovar para cotação"}</button></td></tr>)}
             {identifiedNeeds.length === 0 && requisitionsToAdvance.length === 0 && <tr><td colSpan={4} className={styles.empty}>Nenhuma necessidade ou requisição aguardando ação.</td></tr>}
           </tbody>
         </table>
       </div>
-      <div className={styles.tableWrap} style={{ marginTop: 24 }}><table className={styles.table}><thead><tr><th>Pedido</th><th>Fornecedor</th><th>Valor</th><th>Status</th><th>Ação</th></tr></thead><tbody>{workspace.orders.map((item) => <tr key={item.id}><td>{item.number} · {item.title}</td><td>{item.supplier}</td><td>{item.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td>{item.status}</td><td>{["DRAFT", "IN_APPROVAL"].includes(item.status) ? <button className="text-button" disabled={busy} onClick={() => run(() => approvePurchaseOrderAction(item.id), "Pedido aprovado.")}>Aprovar</button> : "—"}</td></tr>)}</tbody></table></div>
+      <div className={styles.tableWrap} style={{ marginTop: 24 }}><table className={styles.table}><thead><tr><th>Pedido</th><th>Fornecedor</th><th>Valor</th><th>Status</th><th>Ação</th></tr></thead><tbody>{workspace.orders.map((item) => <tr key={item.id}><td>{item.number} · {item.title}</td><td>{item.supplier}</td><td>{item.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td>{item.status}</td><td>{["DRAFT", "IN_APPROVAL"].includes(item.status) ? <button className="text-button" disabled={busy || !canApprove} onClick={() => run(() => approvePurchaseOrderAction(item.id), "Pedido aprovado.")}>Aprovar</button> : "—"}</td></tr>)}</tbody></table></div>
 
-      <div className={styles.tableWrap} style={{ marginTop: 18 }}><table className={styles.table}><thead><tr><th>Contrato</th><th>Fornecedor</th><th>Valor atual</th><th>Status</th><th>Ação</th></tr></thead><tbody>{workspace.contracts.map((item) => <tr key={item.id}><td>{item.number} · {item.title}</td><td>{item.supplier}</td><td>{item.currentAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td>{item.status}</td><td>{["DRAFT", "UNDER_REVIEW", "IN_APPROVAL", "APPROVED"].includes(item.status) ? <button className="text-button" disabled={busy} onClick={() => advanceContract(item.id, item.status)}>Avançar</button> : "—"}{item.amendments.filter((amendment) => amendment.status !== "APPROVED").map((amendment) => <button key={amendment.id} className="text-button" disabled={busy} onClick={() => run(() => approveContractAmendmentAction(amendment.id), "Aditivo aprovado.")}>Aprovar aditivo {amendment.number}</button>)}</td></tr>)}</tbody></table></div>
+      <div className={styles.tableWrap} style={{ marginTop: 18 }}><table className={styles.table}><thead><tr><th>Contrato</th><th>Fornecedor</th><th>Valor atual</th><th>Status</th><th>Ação</th></tr></thead><tbody>{workspace.contracts.map((item) => <tr key={item.id}><td>{item.number} · {item.title}</td><td>{item.supplier}</td><td>{item.currentAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td>{item.status}</td><td>{["DRAFT", "UNDER_REVIEW", "IN_APPROVAL", "APPROVED"].includes(item.status) ? <button className="text-button" disabled={busy || (item.status === "IN_APPROVAL" ? !canApprove : !canWrite)} onClick={() => advanceContract(item.id, item.status)}>Avançar</button> : "—"}{item.amendments.filter((amendment) => amendment.status !== "APPROVED").map((amendment) => <button key={amendment.id} className="text-button" disabled={busy || !canApprove} onClick={() => run(() => approveContractAmendmentAction(amendment.id), "Aditivo aprovado.")}>Aprovar aditivo {amendment.number}</button>)}</td></tr>)}</tbody></table></div>
 
       <div className={styles.tableWrap} style={{ marginTop: 18 }}><table className={styles.table}><thead><tr><th>Medição</th><th>Contrato</th><th>Fornecedor</th><th>Líquido</th><th>Status</th><th>Ação</th></tr></thead><tbody>{workspace.measurements.map((item) => <tr key={item.id}><td>BM {item.number}</td><td>{item.contract}</td><td>{item.supplier}</td><td>{item.netAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td>{item.status}</td><td>
-        {["DRAFT", "SUBMITTED", "IN_TECHNICAL_REVIEW", "TECHNICALLY_APPROVED", "IN_APPROVAL"].includes(item.status) && <button className="text-button" disabled={busy} onClick={() => advanceMeasurement(item.id, item.status)}>{item.status === "IN_APPROVAL" ? "Aprovar e enviar ao Financeiro" : "Avançar"}</button>}
-        {["APPROVED", "SENT_TO_FINANCE"].includes(item.status) && reversingMeasurementId !== item.id && <button className="text-button" disabled={busy} onClick={() => setReversingMeasurementId(item.id)}>Reverter</button>}
+        {["DRAFT", "SUBMITTED", "IN_TECHNICAL_REVIEW", "TECHNICALLY_APPROVED", "IN_APPROVAL"].includes(item.status) && <button className="text-button" disabled={busy || (item.status === "IN_APPROVAL" ? !canApprove : !canWrite)} onClick={() => advanceMeasurement(item.id, item.status)}>{item.status === "IN_APPROVAL" ? "Aprovar e enviar ao Financeiro" : "Avançar"}</button>}
+        {["APPROVED", "SENT_TO_FINANCE"].includes(item.status) && reversingMeasurementId !== item.id && <button className="text-button" disabled={busy || !canApprove} onClick={() => setReversingMeasurementId(item.id)}>Reverter</button>}
         {reversingMeasurementId === item.id && <form style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }} action={(form) => reverseMeasurement(item.id, form)}><input name="reason" required placeholder="Motivo da reversão" /><button className="text-button" type="submit" disabled={busy}>Confirmar reversão</button><button className="text-button" type="button" onClick={() => setReversingMeasurementId(null)}>Cancelar</button></form>}
         {!["DRAFT", "SUBMITTED", "IN_TECHNICAL_REVIEW", "TECHNICALLY_APPROVED", "IN_APPROVAL", "APPROVED", "SENT_TO_FINANCE"].includes(item.status) && "—"}
       </td></tr>)}</tbody></table></div>
