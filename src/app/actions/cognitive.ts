@@ -481,7 +481,7 @@ export async function getCognitiveProductionReadinessAction(input: {
       prisma.connectorInstallation.count({
         where: {
           organizationId: context.organizationId,
-          isActive: true,
+          status: "ACTIVE",
         },
       }),
       prisma.projectClosureResult.findFirst({
