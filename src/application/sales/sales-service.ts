@@ -752,10 +752,10 @@ export async function evaluatePostSaleSlaBreaches(context: Pick<AuthContext, "or
 // ---------------------------------------------------------------------------
 
 export async function getSalesWorkspace(context: MutationContext, projectId: string, referenceDate: Date = new Date()) {
-  await projectForTenant(context.organizationId, projectId);
+  const project = await projectForTenant(context.organizationId, projectId);
   await releaseExpiredReservations(context, projectId, referenceDate);
 
-  const [units, priceTables, proposals, reservations, sales, leads, commissionPolicies, inspections, postSaleRequests, brokerProfiles, contractTemplates, disbursements, condominiumSetup, correctionRules] = await Promise.all([
+  const [units, priceTables, proposals, reservations, sales, leads, commissionPolicies, inspections, postSaleRequests, brokerProfiles, contractTemplates, disbursements, condominiumSetup, correctionRules, financialInstitutions, bankAccounts, suppliers] = await Promise.all([
     prisma.salesUnit.findMany({ where: { organizationId: context.organizationId, projectId }, include: { priceLines: { include: { priceTable: true } }, blocks: { where: { endedAt: null } } }, orderBy: { code: "asc" }, take: 2000 }),
     prisma.salesPriceTable.findMany({ where: { organizationId: context.organizationId, projectId }, include: { lines: true }, orderBy: { version: "desc" }, take: 50 }),
     prisma.salesProposal.findMany({ where: { organizationId: context.organizationId, projectId }, include: { customer: true, salesUnit: true, broker: true, creditBureauConsultations: { orderBy: { requestedAt: "desc" }, take: 1 } }, orderBy: { createdAt: "desc" }, take: 200 }),
@@ -776,6 +776,9 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
       orderBy: [{ name: "asc" }, { version: "desc" }],
       take: 100,
     }),
+    prisma.financialInstitution.findMany({ where: { organizationId: context.organizationId }, select: { id: true, name: true, code: true }, orderBy: { name: "asc" } }),
+    prisma.bankAccount.findMany({ where: { organizationId: context.organizationId, companyId: project.companyId, status: "ACTIVE" }, include: { institution: true }, orderBy: { createdAt: "asc" } }),
+    prisma.supplier.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" }, take: 500 }),
   ]);
 
   const activeLineByUnit = new Map(units.map((unit) => [unit.id, unit.priceLines.find((line) => line.priceTable.status === "ACTIVE") ?? null]));
@@ -816,7 +819,15 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
         contractId: sale.contract?.id ?? null, contractNumber: sale.contract?.number ?? null, contractDocuments: sale.contract?.documents.map((doc) => ({ id: doc.id, kind: doc.kind, status: doc.status, version: doc.version, fileName: doc.fileName })) ?? [],
         signatureStatus: sale.contract?.signatureStatus ?? null,
         signatureRequest: signatureRequest ? { id: signatureRequest.id, status: signatureRequest.status, provider: signatureRequest.provider, signedCount: signatureRequest.parties.filter((party) => party.status === "SIGNED").length, totalParties: signatureRequest.parties.length } : null,
-        installments: sale.paymentPlans.flatMap((plan) => plan.status === "ACTIVE" ? plan.installments : []).length, received: Number(receivedByReceivable(sale.receivableAccounts.flatMap((account) => account.installments))),
+        installments: sale.paymentPlans.flatMap((plan) => plan.status === "ACTIVE" ? plan.installments : []).length,
+        receivableInstallments: sale.receivableAccounts.flatMap((account) => account.installments.map((installment) => ({
+          id: installment.id,
+          number: installment.installmentNumber,
+          dueDate: installment.dueDate.toISOString(),
+          currentAmount: Number(installment.currentAmount),
+          status: installment.status,
+        }))),
+        received: Number(receivedByReceivable(sale.receivableAccounts.flatMap((account) => account.installments))),
       };
     }),
     leads: leads.map((lead) => ({ id: lead.id, name: lead.name, source: lead.source, stage: lead.stage, brokerId: lead.brokerId })),
@@ -850,6 +861,9 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
       interestRate: rule.interestRate ? Number(rule.interestRate) : null,
       fineRate: rule.fineRate ? Number(rule.fineRate) : null,
     })),
+    financialInstitutions: financialInstitutions.map((item) => ({ id: item.id, name: item.name, code: item.code })),
+    bankAccounts: bankAccounts.map((item) => ({ id: item.id, institution: item.institution?.name ?? "Instituição não informada", agency: item.agency, accountNumber: item.accountNumber })),
+    suppliers: suppliers.map((item) => ({ id: item.id, name: item.name })),
     // Entrada para o Cliente 360 (Fase 9K.4B, item 1) — nenhum dado novo: só agrupa por cliente o
     // que este mesmo workspace já buscou (propostas/reservas/vendas/pós-venda), sem consulta extra.
     customers: buildCustomerSummaries(proposals, reservations, sales, postSaleRequests),
