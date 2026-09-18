@@ -810,7 +810,7 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
       const signatureRequest = sale.contract?.signatureRequests[0] ?? null;
       const buyer = sale.parties.find((party) => party.role === "BUYER") ?? sale.parties[0] ?? null;
       return {
-        id: sale.id, unit: sale.salesUnit.code, buyers: sale.parties.map((party) => party.customer.name), buyerCustomerId: buyer?.customerId ?? null,
+        id: sale.id, salesUnitId: sale.salesUnitId, unit: sale.salesUnit.code, buyers: sale.parties.map((party) => party.customer.name), buyerCustomerId: buyer?.customerId ?? null,
         buyerParties: sale.parties.filter((party) => party.role === "BUYER" || party.role === "CO_BUYER").map((party) => ({ customerId: party.customerId, name: party.customer.name, email: party.customer.email, role: party.role })),
         broker: sale.broker?.name ?? null, soldPrice: Number(sale.soldPrice), discountAmount: Number(sale.discountAmount), status: sale.status,
         contractId: sale.contract?.id ?? null, contractNumber: sale.contract?.number ?? null, contractDocuments: sale.contract?.documents.map((doc) => ({ id: doc.id, kind: doc.kind, status: doc.status, version: doc.version, fileName: doc.fileName })) ?? [],
@@ -822,10 +822,10 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
     leads: leads.map((lead) => ({ id: lead.id, name: lead.name, source: lead.source, stage: lead.stage, brokerId: lead.brokerId })),
     commissionPolicies: commissionPolicies.map((policy) => ({ id: policy.id, triggerEvent: policy.triggerEvent, percentage: Number(policy.percentage), basis: policy.basis })),
     commissions: sales.flatMap((sale) => sale.commissions.map((commission) => ({ id: commission.id, sale: sale.id, broker: commission.broker.name, amount: Number(commission.amount), status: commission.status }))),
-    inspections: inspections.map((inspection) => ({ id: inspection.id, unit: inspection.salesUnit.code, scheduledAt: inspection.scheduledAt.toISOString(), outcome: inspection.outcome })),
+    inspections: inspections.map((inspection) => ({ id: inspection.id, salesUnitId: inspection.salesUnitId, saleId: inspection.saleId, unit: inspection.salesUnit.code, scheduledAt: inspection.scheduledAt.toISOString(), outcome: inspection.outcome })),
     // Fase 9R — supplier/custo/reincidência/SLA vencido (evaluatePostSaleSla, regra pura — nunca persistido).
     postSaleRequests: postSaleRequests.map((request) => ({
-      id: request.id, unit: request.salesUnit.code, customer: request.customer.name, customerId: request.customerId, category: request.category, status: request.status, updates: request.updates.length,
+      id: request.id, salesUnitId: request.salesUnitId, saleId: request.saleId, unit: request.salesUnit.code, customer: request.customer.name, customerId: request.customerId, category: request.category, status: request.status, updates: request.updates.length,
       supplier: request.supplier?.name ?? null, estimatedCost: request.estimatedCost ? Number(request.estimatedCost) : null, actualCost: request.actualCost ? Number(request.actualCost) : null,
       recurrenceOfId: request.recurrenceOfId, slaDueAt: request.slaDueAt?.toISOString() ?? null,
       slaViolated: evaluatePostSaleSla({ slaDueAt: request.slaDueAt, status: request.status, now: referenceDate }).violated,
