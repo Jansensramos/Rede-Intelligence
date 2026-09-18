@@ -9,12 +9,15 @@ import { getCurrentOperationalContext } from "@/application/workspace/current-co
 import { EngenhariaObraWorkspace } from "@/components/areas/engenharia-obra-workspace";
 import { Loading } from "@/components/ui";
 import { calculateAllScenarios } from "@/domain/financial/engine";
+import { hasProtectedApprovalCapability, hasProtectedWriteCapability } from "@/domain/auth/write-capabilities";
 
 /** Fase 9K.1 — área Engenharia e Obra: busca só Design, Orçamento e Operações (ordem de serviço §16). */
 export default async function EngenhariaObraPage() {
   const [authContext, context] = await Promise.all([requireAuthContext(), getCurrentOperationalContext()]);
   if (!context.project) return null;
   const projectId = context.project.id;
+  const canWriteOperations = hasProtectedWriteCapability(authContext.role, "OPERATIONS_WRITE");
+  const canApproveOperations = hasProtectedApprovalCapability(authContext.role, "OPERATIONS_APPROVE");
 
   // Fechamento 9K.1 (revisão): só o orçamento depende do estudo (via `baseVgv`) — Design e
   // Operações não dependem de nada aqui além do projectId, então não há razão para esperar o
@@ -32,7 +35,7 @@ export default async function EngenhariaObraPage() {
   return (
     <Suspense fallback={<Loading label="Carregando Engenharia e Obra…" />}>
       {/* Fechamento 9K.1: `key` por projeto — ver comentário em viabilidade/page.tsx. */}
-      <EngenhariaObraWorkspace key={projectId} initialDesign={design} initialBudget={budget} operations={operations} engineering={engineering} />
+      <EngenhariaObraWorkspace key={projectId} initialDesign={design} initialBudget={budget} operations={operations} engineering={engineering} canWriteOperations={canWriteOperations} canApproveOperations={canApproveOperations} />
     </Suspense>
   );
 }
