@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react";
-import { runCognitiveReviewAction } from "@/app/actions/cognitive";
+import { recordCognitiveDecisionAction, runCognitiveReviewAction } from "@/app/actions/cognitive";
 import type {
   AutopilotRecommendation,
   InvestmentCommitteeReport,
@@ -32,6 +32,9 @@ export function CognitiveCommitteePanel({
   );
   const [report, setReport] = useState<InvestmentCommitteeReport | null>(null);
   const [recommendations, setRecommendations] = useState<AutopilotRecommendation[]>([]);
+  const [reviewId, setReviewId] = useState<string | null>(null);
+  const [humanDecision, setHumanDecision] = useState<"ACCEPTED" | "HOLD" | "REWORK_REQUESTED" | null>(null);
+  const [decisionNote, setDecisionNote] = useState("");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -54,7 +57,29 @@ export function CognitiveCommitteePanel({
       }
       setReport(response.data.report);
       setRecommendations(response.data.recommendations);
+      setReviewId(response.data.reviewId);
+      setHumanDecision(null);
+      setDecisionNote("");
       setExpanded(true);
+    });
+  }
+
+  function recordDecision(decision: "ACCEPTED" | "HOLD" | "REWORK_REQUESTED") {
+    if (!reviewId) return;
+    setError("");
+    startTransition(async () => {
+      const response = await recordCognitiveDecisionAction({
+        reviewId,
+        conversationId,
+        projectId,
+        decision,
+        note: decisionNote,
+      });
+      if (!response.ok) {
+        setError(response.error);
+        return;
+      }
+      setHumanDecision(response.data.decision);
     });
   }
 
@@ -192,6 +217,48 @@ export function CognitiveCommitteePanel({
               ))}
             </article>
           )}
+
+          <article className="cognitive-human-decision">
+            <header>
+              <ShieldCheck size={16} />
+              <div>
+                <strong>Decisão humana</strong>
+                <p>A REDE registra sua decisão sobre esta rodada sem alterar automaticamente o empreendimento.</p>
+              </div>
+            </header>
+            {humanDecision ? (
+              <div className="cognitive-decision-recorded">
+                <CheckCircle2 size={16} />
+                <strong>{humanDecisionLabel(humanDecision)}</strong>
+                {decisionNote && <span>{decisionNote}</span>}
+              </div>
+            ) : (
+              <>
+                <label>
+                  <span>Observação opcional</span>
+                  <textarea
+                    rows={2}
+                    maxLength={800}
+                    value={decisionNote}
+                    onChange={(event) => setDecisionNote(event.target.value)}
+                    disabled={pending}
+                    placeholder="Contexto, condição ou motivo da decisão."
+                  />
+                </label>
+                <div className="cognitive-human-actions">
+                  <button type="button" className="button button-primary" disabled={pending} onClick={() => recordDecision("ACCEPTED")}>
+                    Aceitar proposta
+                  </button>
+                  <button type="button" className="button button-secondary" disabled={pending} onClick={() => recordDecision("HOLD")}>
+                    Manter em análise
+                  </button>
+                  <button type="button" className="button button-secondary" disabled={pending} onClick={() => recordDecision("REWORK_REQUESTED")}>
+                    Solicitar reanálise
+                  </button>
+                </div>
+              </>
+            )}
+          </article>
         </div>
       )}
     </section>
@@ -218,4 +285,11 @@ function agentLabel(value: InvestmentCommitteeReport["agents"][number]["agentId"
     INVESTOR: "Investidor",
     INCORPORATOR: "Incorporador",
   } as const)[value];
+}
+
+
+function humanDecisionLabel(value: "ACCEPTED" | "HOLD" | "REWORK_REQUESTED") {
+  if (value === "ACCEPTED") return "Proposta aceita";
+  if (value === "HOLD") return "Mantida em análise";
+  return "Reanálise solicitada";
 }
