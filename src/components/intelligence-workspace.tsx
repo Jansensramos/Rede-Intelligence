@@ -98,6 +98,7 @@ import { calculateAllScenarios } from "@/domain/financial/engine";
 import { SCENARIOS } from "@/domain/financial/scenarios";
 import type { ProjectAssumptions, ScenarioKey } from "@/domain/financial/types";
 import { analyzeRisk, type FindingSeverity } from "@/domain/risk/rules";
+import { hasProtectedApprovalCapability, hasProtectedWriteCapability } from "@/domain/auth/write-capabilities";
 
 type ViewKey = "overview" | "assumptions" | "land" | "design" | "budget" | "procurement" | "legal" | "financial" | "accounting" | "integrations" | "sales" | "people" | "scenarios" | "sensitivity" | "redteam" | "committee" | "studio" | "dataroom" | "ai" | "cashflow" | "risks" | "audit" | "dataIntelligence" | "marketIntelligence" | "productIntelligence";
 type EditorMode = "create" | "version";
@@ -202,6 +203,11 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState<string | undefined>();
   const [aiOriginModule, setAiOriginModule] = useState<ViewKey>("overview");
+
+  const canWriteFinancial = hasProtectedWriteCapability(role, "FINANCIAL_WRITE");
+  const canApproveFinancial = hasProtectedApprovalCapability(role, "FINANCIAL_APPROVE");
+  const canWriteCommercial = hasProtectedWriteCapability(role, "COMMERCIAL_WRITE");
+  const canApproveCommercial = hasProtectedApprovalCapability(role, "COMMERCIAL_APPROVE");
 
   const [lazyData, setLazyData] = useState<LazyWorkspaceData>({});
   const [lazyLoaded, setLazyLoaded] = useState<Partial<Record<LazyViewKey, boolean>>>({});
@@ -531,7 +537,7 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
             !lazyLoaded.financial || !lazyData.financial ? <Loading label="Carregando Financeiro…" /> : (
               <div className="view-stack">
                 <SectionTitle eyebrow="FINANCEIRO E TESOURARIA" title="Contas a Pagar, Contas a Receber e Caixa" description="Obrigação → conta → parcela → pagamento → conciliação → realizado, rastreável por SPE e centro de custo." />
-                <FinancialView workspace={lazyData.financial} />
+                <FinancialView workspace={lazyData.financial} canWrite={canWriteFinancial} canApprove={canApproveFinancial} />
               </div>
             )
           )}
@@ -596,7 +602,7 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
             !lazyLoaded.sales || !lazyData.sales ? <Loading label="Carregando Vendas e Recebíveis…" /> : (
               <div className="view-stack">
                 <SectionTitle eyebrow="VENDAS, CLIENTES E RECEBÍVEIS" title="Unidade → Tabela → Proposta → Reserva → Venda → Contrato → Recebíveis" description="Estoque, preço, comissão, entrega e pós-venda conectados ao Financeiro (9B) sem financeiro paralelo nem dupla contagem." />
-                <SalesView workspace={lazyData.sales} />
+                <SalesView workspace={lazyData.sales} canWrite={canWriteCommercial} canApprove={canApproveCommercial} />
               </div>
             )
           )}
