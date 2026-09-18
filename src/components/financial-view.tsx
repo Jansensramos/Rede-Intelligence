@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, Banknote, CalendarClock, CircleDollarSign, Landmark, Plus, TrendingDown, Wallet } from "lucide-react";
 import type { FinancialWorkspaceView } from "@/application/financial-ops/financial-service";
 import {
+  applyPayableInstallmentCorrectionAction,
+  applyReceivableInstallmentCorrectionAction,
   approveIntercompanyTransactionAction,
+  closeFinancialPeriodAction,
   confirmReconciliationAction,
   createBankAccountAction,
   createCustomerAction,
@@ -18,6 +21,7 @@ import {
   registerPayablePaymentAction,
   registerReceivablePaymentAction,
   rejectReconciliationAction,
+  reopenFinancialPeriodAction,
   suggestReconciliationsAction,
   transitionPayableInstallmentAction,
   transitionReceivableInstallmentAction,
@@ -51,6 +55,10 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [payingId, setPayingId] = useState<string | null>(null);
   const [receivingId, setReceivingId] = useState<string | null>(null);
+  const [correctingPayableId, setCorrectingPayableId] = useState<string | null>(null);
+  const [correctingReceivableId, setCorrectingReceivableId] = useState<string | null>(null);
+  const [showClosePeriodForm, setShowClosePeriodForm] = useState(false);
+  const [reopeningClosureId, setReopeningClosureId] = useState<string | null>(null);
   const [csvAccount, setCsvAccount] = useState(workspace.bankAccounts[0]?.id ?? "");
   const [csvContent, setCsvContent] = useState("");
 
@@ -172,6 +180,46 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
     setReceivingId(null);
   }
 
+  async function correctPayableInstallment(item: PayableItem, form: FormData) {
+    await withFeedback(() => applyPayableInstallmentCorrectionAction({
+      installmentId: item.id,
+      indexPercentage: Number(form.get("indexPercentage") || 0),
+      interestRatePerMonth: Number(form.get("interestRatePerMonth") || 0),
+      monthsLate: Number(form.get("monthsLate") || 0),
+      fineRate: Number(form.get("fineRate") || 0),
+      discountAmount: Number(form.get("discountAmount") || 0),
+      referencePeriod: String(form.get("referencePeriod")),
+      indexName: (String(form.get("indexName") || "") || null) as "IPCA" | "INCC" | "IGP_M" | "CUSTOM" | null,
+    }), () => "Correção aplicada à parcela a pagar.");
+    setCorrectingPayableId(null);
+  }
+
+  async function correctReceivableInstallment(item: ReceivableItem, form: FormData) {
+    await withFeedback(() => applyReceivableInstallmentCorrectionAction({
+      installmentId: item.id,
+      indexPercentage: Number(form.get("indexPercentage") || 0),
+      interestRatePerMonth: Number(form.get("interestRatePerMonth") || 0),
+      monthsLate: Number(form.get("monthsLate") || 0),
+      fineRate: Number(form.get("fineRate") || 0),
+      discountAmount: Number(form.get("discountAmount") || 0),
+      referencePeriod: String(form.get("referencePeriod")),
+      indexName: (String(form.get("indexName") || "") || null) as "IPCA" | "INCC" | "IGP_M" | "CUSTOM" | null,
+    }), () => "Correção aplicada à parcela a receber.");
+    setCorrectingReceivableId(null);
+  }
+
+  async function closePeriod(form: FormData) {
+    if (!workspace.companyId) { setFeedback("O empreendimento precisa estar vinculado a uma empresa/SPE para fechar a competência."); return; }
+    const referenceMonth = String(form.get("referenceMonth"));
+    await withFeedback(() => closeFinancialPeriodAction(workspace.companyId!, new Date(`${referenceMonth}-01T00:00:00.000Z`)), () => "Competência financeira fechada.");
+    setShowClosePeriodForm(false);
+  }
+
+  async function reopenPeriod(closureId: string, form: FormData) {
+    await withFeedback(() => reopenFinancialPeriodAction(closureId, String(form.get("reason"))), () => "Competência financeira reaberta.");
+    setReopeningClosureId(null);
+  }
+
   async function importCsv() {
     if (!csvAccount || !csvContent.trim()) return;
     await withFeedback(() => importBankStatementCsvAction(csvAccount, csvContent), (data) => `Importação concluída: ${data.accepted} aceita(s), ${data.rejected.length} rejeitada(s), ${data.duplicates} duplicada(s) ignorada(s).`);
@@ -233,6 +281,30 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
               <tfoot><tr><td colSpan={5}>Total</td><td>{money.format(workspace.cashPosition.total)}</td></tr></tfoot>
             </table>
           </div>
+          <div className="operations-table-wrap" style={{ marginTop: 18, padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+              <div><strong>Fechamento financeiro</strong><p style={{ margin: "4px 0 0" }}>Feche a competência da SPE e preserve a trilha de reaberturas.</p></div>
+              <button className="button button-secondary" disabled={busy || !workspace.companyId} onClick={() => setShowClosePeriodForm((value) => !value)}>{showClosePeriodForm ? "Cancelar" : "Fechar competência"}</button>
+            </div>
+            {showClosePeriodForm && <form style={{ display: "flex", gap: 10, marginTop: 12, alignItems: "end", flexWrap: "wrap" }} action={closePeriod}>
+              <label>Competência<input name="referenceMonth" type="month" defaultValue={today().slice(0, 7)} required /></label>
+              <button className="button button-primary" disabled={busy} type="submit">Confirmar fechamento</button>
+            </form>}
+            <table className="operations-table" style={{ marginTop: 14 }}>
+              <thead><tr><th>Competência</th><th>Status</th><th>Pendências no fechamento</th><th>Ação</th></tr></thead>
+              <tbody>
+                {workspace.periodClosures.map((closure) => <tr key={closure.id}>
+                  <td><strong>{month.format(new Date(closure.referenceMonth))}</strong></td>
+                  <td>{closure.status === "CLOSED" ? "Fechado" : closure.status === "REOPENED" ? "Reaberto" : closure.status}</td>
+                  <td>{closure.pendingIssuesCount}</td>
+                  <td>{closure.status === "CLOSED" && (reopeningClosureId === closure.id
+                    ? <form style={{ display: "flex", gap: 6 }} action={(form) => reopenPeriod(closure.id, form)}><input name="reason" placeholder="Motivo da reabertura" required /><button className="text-button" type="submit" disabled={busy}>Reabrir</button><button className="text-button" type="button" onClick={() => setReopeningClosureId(null)}>Cancelar</button></form>
+                    : <button className="text-button" disabled={busy} onClick={() => setReopeningClosureId(closure.id)}>Reabrir</button>)}</td>
+                </tr>)}
+                {workspace.periodClosures.length === 0 && <tr><td colSpan={4} className="operations-empty">Nenhum fechamento financeiro registrado.</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
 
@@ -278,6 +350,17 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
                             <button className="text-button" type="button" onClick={() => setPayingId(null)}>Cancelar</button>
                           </form>
                         : <button className="text-button" disabled={busy} onClick={() => setPayingId(item.id)}>Pagar</button>)}
+                      {!["PAGA", "CANCELADA"].includes(item.status) && correctingPayableId !== item.id && <button className="text-button" disabled={busy} onClick={() => setCorrectingPayableId(item.id)}>Corrigir</button>}
+                      {correctingPayableId === item.id && <form style={{ display: "grid", gap: 6, marginTop: 8 }} action={(form) => correctPayableInstallment(item, form)}>
+                        <select name="indexName" defaultValue=""><option value="">Sem índice</option><option value="IPCA">IPCA</option><option value="INCC">INCC</option><option value="IGP_M">IGP-M</option><option value="CUSTOM">Personalizado</option></select>
+                        <input name="indexPercentage" type="number" step="0.0001" defaultValue="0" placeholder="Índice %" />
+                        <input name="interestRatePerMonth" type="number" min="0" step="0.0001" defaultValue="0" placeholder="Juros % a.m." />
+                        <input name="monthsLate" type="number" min="0" step="1" defaultValue={item.overdue ? "1" : "0"} placeholder="Meses em atraso" />
+                        <input name="fineRate" type="number" min="0" step="0.0001" defaultValue="0" placeholder="Multa %" />
+                        <input name="discountAmount" type="number" min="0" step="0.01" defaultValue="0" placeholder="Desconto R$" />
+                        <input name="referencePeriod" defaultValue={today().slice(0, 7)} required placeholder="AAAA-MM" />
+                        <div><button className="text-button" type="submit" disabled={busy}>Aplicar correção</button><button className="text-button" type="button" onClick={() => setCorrectingPayableId(null)}>Cancelar</button></div>
+                      </form>}
                     </td>
                   </tr>
                 ))}
@@ -328,6 +411,17 @@ export function FinancialView({ workspace }: { workspace: FinancialWorkspaceView
                             <button className="text-button" type="button" onClick={() => setReceivingId(null)}>Cancelar</button>
                           </form>
                         : <button className="text-button" disabled={busy} onClick={() => setReceivingId(item.id)}>Registrar recebimento</button>)}
+                      {!["RECEBIDA", "CANCELADA", "RENEGOCIADA"].includes(item.status) && correctingReceivableId !== item.id && <button className="text-button" disabled={busy} onClick={() => setCorrectingReceivableId(item.id)}>Corrigir</button>}
+                      {correctingReceivableId === item.id && <form style={{ display: "grid", gap: 6, marginTop: 8 }} action={(form) => correctReceivableInstallment(item, form)}>
+                        <select name="indexName" defaultValue=""><option value="">Sem índice</option><option value="IPCA">IPCA</option><option value="INCC">INCC</option><option value="IGP_M">IGP-M</option><option value="CUSTOM">Personalizado</option></select>
+                        <input name="indexPercentage" type="number" step="0.0001" defaultValue="0" placeholder="Índice %" />
+                        <input name="interestRatePerMonth" type="number" min="0" step="0.0001" defaultValue="0" placeholder="Juros % a.m." />
+                        <input name="monthsLate" type="number" min="0" step="1" defaultValue={item.overdue ? "1" : "0"} placeholder="Meses em atraso" />
+                        <input name="fineRate" type="number" min="0" step="0.0001" defaultValue="0" placeholder="Multa %" />
+                        <input name="discountAmount" type="number" min="0" step="0.01" defaultValue="0" placeholder="Desconto R$" />
+                        <input name="referencePeriod" defaultValue={today().slice(0, 7)} required placeholder="AAAA-MM" />
+                        <div><button className="text-button" type="submit" disabled={busy}>Aplicar correção</button><button className="text-button" type="button" onClick={() => setCorrectingReceivableId(null)}>Cancelar</button></div>
+                      </form>}
                     </td>
                   </tr>
                 ))}
