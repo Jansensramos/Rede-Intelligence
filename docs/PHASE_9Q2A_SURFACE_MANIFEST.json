@@ -1,7 +1,7 @@
 [
   {
     "path": "src/app/actions/accounting.ts",
-    "sha256": "ae4e3264a568de29cf4e5b747306b620aa0fe09bb99870c009283f0229f7ebf6"
+    "sha256": "76f397a2ac7ac3570c58b01196989e6277e22796cc583fb86eccbc4df750c930"
   },
   {
     "path": "src/app/actions/ai.ts",
@@ -77,7 +77,7 @@
   },
   {
     "path": "src/app/actions/legal.ts",
-    "sha256": "5765b45e958793aded12cf3bc68a51dac8d7b74b300ac026a33317e713223284"
+    "sha256": "0ccc187322ad40cc5266609586e3ac182ae729c4fd17fe9b13968c19ecef670e"
   },
   {
     "path": "src/app/actions/local-readiness.ts",
@@ -85,7 +85,7 @@
   },
   {
     "path": "src/app/actions/market-product.ts",
-    "sha256": "4bfe3bf0940e3fa68f4278f78de985fee91c0098b5dd9788c528c78eccb06eea"
+    "sha256": "3cd6c541cbeba54bd4152749cf38a0bb4812e5243503c422c5761aa8d4b2e296"
   },
   {
     "path": "src/app/actions/operations.ts",
@@ -93,7 +93,7 @@
   },
   {
     "path": "src/app/actions/people.ts",
-    "sha256": "686509da3abf01b71555b87318070333027ddc9c74c58da5ba3dee8b7fb41694"
+    "sha256": "d29e307491c31c5e053b17107e9c37cd5af5ca4e5a20cf93d78a7e5af92366da"
   },
   {
     "path": "src/app/actions/procurement.ts",
@@ -101,7 +101,7 @@
   },
   {
     "path": "src/app/actions/sales.ts",
-    "sha256": "efb03bacf2d0315a96b0e219459607e526f865a687ede9a5421bc903f27ed14f"
+    "sha256": "c135b6d244c329e3fd7a3ecd9d1237ce7da055f2fe5225b5999919a861916c26"
   },
   {
     "path": "src/app/actions/service-orders.ts",
