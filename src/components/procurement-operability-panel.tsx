@@ -15,6 +15,7 @@ import {
   createProcurementNeedAction,
   createPurchaseOrderAction,
   createPurchaseRequisitionAction,
+  reverseMeasurementAction,
   createQuotationProcessAction,
   decideQuotationAction,
   submitSupplierProposalAction,
@@ -53,6 +54,7 @@ export function ProcurementOperabilityPanel({ workspace, operability }: { worksp
   const [instrumentQuotationId, setInstrumentQuotationId] = useState("");
   const [measurementContractId, setMeasurementContractId] = useState("");
   const [amendmentContractId, setAmendmentContractId] = useState("");
+  const [reversingMeasurementId, setReversingMeasurementId] = useState<string | null>(null);
 
   const identifiedNeeds = useMemo(() => workspace.needs.filter((item) => item.status === "IDENTIFIED"), [workspace.needs]);
   const validatedNeeds = useMemo(() => workspace.needs.filter((item) => item.status === "VALIDATED"), [workspace.needs]);
@@ -242,6 +244,13 @@ export function ProcurementOperabilityPanel({ workspace, operability }: { worksp
     await run(() => transitionOperationalContractAction(id, next as "UNDER_REVIEW" | "IN_APPROVAL" | "APPROVED" | "ACTIVE"), "Contrato atualizado.");
   }
 
+  async function reverseMeasurement(id: string, form: FormData) {
+    const reason = String(form.get("reason") ?? "").trim();
+    if (!reason) return setFeedback("Informe o motivo da reversão.");
+    await run(() => reverseMeasurementAction(id, reason), "Medição revertida e obrigação financeira estornada.");
+    setReversingMeasurementId(null);
+  }
+
   async function advanceMeasurement(id: string, status: string) {
     const next = status === "DRAFT" ? "SUBMITTED" : status === "SUBMITTED" ? "IN_TECHNICAL_REVIEW" : status === "IN_TECHNICAL_REVIEW" ? "TECHNICALLY_APPROVED" : status === "TECHNICALLY_APPROVED" ? "IN_APPROVAL" : null;
     if (next) await run(() => transitionMeasurementAction(id, next as "SUBMITTED" | "IN_TECHNICAL_REVIEW" | "TECHNICALLY_APPROVED" | "IN_APPROVAL"), "Medição atualizada.");
@@ -410,7 +419,12 @@ export function ProcurementOperabilityPanel({ workspace, operability }: { worksp
 
       <div className={styles.tableWrap} style={{ marginTop: 18 }}><table className={styles.table}><thead><tr><th>Contrato</th><th>Fornecedor</th><th>Valor atual</th><th>Status</th><th>Ação</th></tr></thead><tbody>{workspace.contracts.map((item) => <tr key={item.id}><td>{item.number} · {item.title}</td><td>{item.supplier}</td><td>{item.currentAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td>{item.status}</td><td>{["DRAFT", "UNDER_REVIEW", "IN_APPROVAL", "APPROVED"].includes(item.status) ? <button className="text-button" disabled={busy} onClick={() => advanceContract(item.id, item.status)}>Avançar</button> : "—"}{item.amendments.filter((amendment) => amendment.status !== "APPROVED").map((amendment) => <button key={amendment.id} className="text-button" disabled={busy} onClick={() => run(() => approveContractAmendmentAction(amendment.id), "Aditivo aprovado.")}>Aprovar aditivo {amendment.number}</button>)}</td></tr>)}</tbody></table></div>
 
-      <div className={styles.tableWrap} style={{ marginTop: 18 }}><table className={styles.table}><thead><tr><th>Medição</th><th>Contrato</th><th>Fornecedor</th><th>Líquido</th><th>Status</th><th>Ação</th></tr></thead><tbody>{workspace.measurements.map((item) => <tr key={item.id}><td>BM {item.number}</td><td>{item.contract}</td><td>{item.supplier}</td><td>{item.netAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td>{item.status}</td><td>{["DRAFT", "SUBMITTED", "IN_TECHNICAL_REVIEW", "TECHNICALLY_APPROVED", "IN_APPROVAL"].includes(item.status) ? <button className="text-button" disabled={busy} onClick={() => advanceMeasurement(item.id, item.status)}>{item.status === "IN_APPROVAL" ? "Aprovar e enviar ao Financeiro" : "Avançar"}</button> : "—"}</td></tr>)}</tbody></table></div>
+      <div className={styles.tableWrap} style={{ marginTop: 18 }}><table className={styles.table}><thead><tr><th>Medição</th><th>Contrato</th><th>Fornecedor</th><th>Líquido</th><th>Status</th><th>Ação</th></tr></thead><tbody>{workspace.measurements.map((item) => <tr key={item.id}><td>BM {item.number}</td><td>{item.contract}</td><td>{item.supplier}</td><td>{item.netAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td>{item.status}</td><td>
+        {["DRAFT", "SUBMITTED", "IN_TECHNICAL_REVIEW", "TECHNICALLY_APPROVED", "IN_APPROVAL"].includes(item.status) && <button className="text-button" disabled={busy} onClick={() => advanceMeasurement(item.id, item.status)}>{item.status === "IN_APPROVAL" ? "Aprovar e enviar ao Financeiro" : "Avançar"}</button>}
+        {["APPROVED", "SENT_TO_FINANCE"].includes(item.status) && reversingMeasurementId !== item.id && <button className="text-button" disabled={busy} onClick={() => setReversingMeasurementId(item.id)}>Reverter</button>}
+        {reversingMeasurementId === item.id && <form style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }} action={(form) => reverseMeasurement(item.id, form)}><input name="reason" required placeholder="Motivo da reversão" /><button className="text-button" type="submit" disabled={busy}>Confirmar reversão</button><button className="text-button" type="button" onClick={() => setReversingMeasurementId(null)}>Cancelar</button></form>}
+        {!["DRAFT", "SUBMITTED", "IN_TECHNICAL_REVIEW", "TECHNICALLY_APPROVED", "IN_APPROVAL", "APPROVED", "SENT_TO_FINANCE"].includes(item.status) && "—"}
+      </td></tr>)}</tbody></table></div>
     </section>
   );
 }
