@@ -26,8 +26,8 @@ export async function runCognitiveReviewAction(input: {
   projectId: string;
   objective: string;
 }) {
+  const context = await requireDomainActionContext("AI_READ");
   try {
-    const context = await requireDomainActionContext("AI_READ");
     assertAiUse(context);
 
     const objective = input.objective.trim();
