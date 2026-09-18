@@ -64,7 +64,7 @@ const FUNCOES: { key: Funcao; label: string }[] = [
 
 type EditorMode = "create" | "version";
 
-function AssumptionSummary({ project, onEdit }: { project: ProjectAssumptions; onEdit: () => void }) {
+function AssumptionSummary({ project, onEdit, canWrite }: { project: ProjectAssumptions; onEdit: () => void; canWrite: boolean }) {
   const groups = [
     { title: "Produto", items: [["Terreno", `${number.format(Number(project.landAreaM2))} m²`], ["Unidades", project.units.toString()], ["Área privativa", `${project.privateAreaPerUnitM2} m² / un.`], ["Eficiência", `${project.efficiencyRate}%`], ["Preço", brl(project.unitPrice)]] },
     { title: "Estrutura de custos", items: [["Terreno", brl(project.landPrice)], ["Obra", `${brl(project.constructionCostPerM2)} / m²`], ["Indiretos", `${project.indirectCostsRate}%`], ["Contingência", `${project.contingencyRate}%`], ["Comissão + MKT", `${Number(project.commissionRate) + Number(project.marketingRate)}%`]] },
@@ -73,7 +73,7 @@ function AssumptionSummary({ project, onEdit }: { project: ProjectAssumptions; o
   ];
   return (
     <>
-      <SectionTitle eyebrow="PREMISSAS ATIVAS" title="Uma fonte para todos os cálculos" description="Valores do caso base. Cenários aplicam deltas sem alterar este snapshot." action={<button className="button button-primary" onClick={onEdit}><Settings2 size={16} /> Editar premissas</button>} />
+      <SectionTitle eyebrow="PREMISSAS ATIVAS" title="Uma fonte para todos os cálculos" description="Valores do caso base. Cenários aplicam deltas sem alterar este snapshot." action={<button className="button button-primary" disabled={!canWrite} onClick={onEdit}><Settings2 size={16} /> Editar premissas</button>} />
       <div className="assumption-groups">
         {groups.map((group) => <article className="assumption-card" key={group.title}><h3>{group.title}</h3><dl>{group.items.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></article>)}
       </div>
@@ -86,10 +86,12 @@ export function ViabilidadeWorkspace({
   initialStudy,
   initialLand,
   initialInvestment,
+  canWrite,
 }: {
   initialStudy: PersistedStudyView;
   initialLand: LandWorkspaceView | null;
   initialInvestment: InvestmentCaseWorkspace;
+  canWrite: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -186,12 +188,13 @@ export function ViabilidadeWorkspace({
 
   return (
     <div className="view-stack">
+      {!canWrite && <div className="model-note"><div><strong>Modo de leitura</strong><p>Seu perfil pode consultar a Viabilidade, mas não criar estudos, alterar premissas, cadastrar terrenos ou salvar snapshots.</p></div></div>}
       <SectionTitle
         eyebrow="VIABILIDADE"
         title="Terreno, premissas, cenários e decisão em um só lugar"
         description="Engine, score, sensibilidade, Red Team, comitê, Studio, Data Room, fluxo de caixa e trilha de cálculo — reorganizados, não redesenhados."
         action={
-          <button className="button button-secondary" onClick={() => { setEditorMode("create"); setEditorProject({ ...structuredClone(DEMO_PROJECT), projectName: "Novo empreendimento", city: "", state: "SP", landPrice: "0", financingLimit: "0" }); }}>
+          <button className="button button-secondary" disabled={!canWrite} onClick={() => { setEditorMode("create"); setEditorProject({ ...structuredClone(DEMO_PROJECT), projectName: "Novo empreendimento", city: "", state: "SP", landPrice: "0", financingLimit: "0" }); }}>
             <Plus size={16} /> Novo estudo
           </button>
         }
@@ -208,6 +211,7 @@ export function ViabilidadeWorkspace({
       {funcao === "land" && landWorkspace && (
         <LandIntelligenceView
           initialLand={landWorkspace}
+          canWrite={canWrite}
           onLandChange={(nextLand) => {
             setLandWorkspace(nextLand);
             void reassessInvestmentCaseAction(investmentWorkspace.id, study.studyVersionId, nextLand.versionId).then((response) => {
@@ -220,7 +224,7 @@ export function ViabilidadeWorkspace({
       {funcao === "land" && !landWorkspace && (
         <div className="view-stack">
           <EmptyState icon={MapPinned} title="Nenhum terreno vinculado a este empreendimento" description="Cadastre o terreno para criar o Land Asset, gerar o primeiro snapshot e iniciar o estudo de potencial construtivo." />
-          <div className="panel-actions"><button className="button button-primary" onClick={() => setLandCreateOpen(true)}><Plus size={16} /> Cadastrar terreno</button></div>
+          <div className="panel-actions"><button className="button button-primary" disabled={!canWrite} onClick={() => setLandCreateOpen(true)}><Plus size={16} /> Cadastrar terreno</button></div>
           {landFeedback && <div className={styles.error}>{landFeedback}</div>}
         </div>
       )}
@@ -246,12 +250,12 @@ export function ViabilidadeWorkspace({
               <div className={styles.field + " " + styles.fieldFull}><span className={styles.help}>O primeiro polígono esquemático será criado pela área e testada informadas. Depois você pode corrigi-lo via GeoJSON no Zoning Lab.</span></div>
             </div>
             {landFeedback && <div className={styles.error}>{landFeedback}</div>}
-            <div className={styles.modalActions}><button type="button" className="button button-secondary" disabled={landPending} onClick={() => setLandCreateOpen(false)}>Cancelar</button><button type="submit" className="button button-primary" disabled={landPending}>{landPending ? "Criando..." : "Criar terreno e estudo"}</button></div>
+            <div className={styles.modalActions}><button type="button" className="button button-secondary" disabled={landPending} onClick={() => setLandCreateOpen(false)}>Cancelar</button><button type="submit" className="button button-primary" disabled={landPending || !canWrite}>{landPending ? "Criando..." : "Criar terreno e estudo"}</button></div>
           </form>
         </div>
       </div>}
 
-      {funcao === "assumptions" && <AssumptionSummary project={project} onEdit={() => { setEditorMode("version"); setEditorProject(project); }} />}
+      {funcao === "assumptions" && <AssumptionSummary project={project} canWrite={canWrite} onEdit={() => { setEditorMode("version"); setEditorProject(project); }} />}
 
       {funcao === "scenarios" && (
         <div className="view-stack">
