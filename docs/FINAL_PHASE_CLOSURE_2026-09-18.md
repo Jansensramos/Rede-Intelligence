@@ -77,3 +77,12 @@ Para declarar um ambiente específico pronto para produção, executar a jornada
 - Autopilot nunca fabrica aprovação;
 - Learning Loop nunca altera política automaticamente;
 - dados externos indisponíveis permanecem indisponíveis, nunca simulados como reais.
+
+## Fechamentos adicionais de operabilidade
+
+Após a consolidação cognitiva, foram fechadas duas lacunas operacionais ainda registradas na 10C.1:
+
+- **Pessoas**: vínculo profissional, alocação por empreendimento e custo mensal agora possuem superfície humana conectada aos serviços existentes e à trilha de auditoria.
+- **Contabilidade/Controladoria**: conciliação, estorno e reabertura de período agora possuem superfície humana com segregação de função e gates de autorização.
+
+O Comercial já possuía no produto fluxos de comissão, inspeção, entrega e pós-venda; não foi criado domínio paralelo. O Jurídico especializado permanece uma evolução de domínio quando houver mutations correspondentes seguras; dados de mercado ao vivo permanecem dependência externa.
