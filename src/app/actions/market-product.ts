@@ -24,6 +24,7 @@ import {
   type IngestMarketInventorySnapshotInput,
   type IngestMarketPriceObservationInput,
 } from "@/domain/market-product";
+import { getOrCreateDefaultMarketArea } from "@/application/market-product/market-area-service";
 import { prisma } from "@/infrastructure/database/prisma";
 
 export type MarketProductActionResult = { ok: true; data: MarketProductWorkspaceView } | { ok: false; error: string };
