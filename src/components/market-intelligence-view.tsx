@@ -47,7 +47,7 @@ function DemoDataBanner() {
   );
 }
 
-export function MarketIntelligenceView({ workspace, canManage, onChange }: { workspace: MarketProductWorkspaceView; canManage: boolean; onChange: (workspace: MarketProductWorkspaceView) => void }) {
+export function MarketIntelligenceView({ workspace, canManage = false, onChange }: { workspace: MarketProductWorkspaceView; canManage?: boolean; onChange?: (workspace: MarketProductWorkspaceView) => void }) {
   const [area, setArea] = useState<Area>("visao");
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -85,7 +85,7 @@ export function MarketIntelligenceView({ workspace, canManage, onChange }: { wor
     const response = await action();
     setBusy(false);
     if (!response.ok) return setFeedback(response.error);
-    onChange(response.data);
+    onChange?.(response.data);
     setFeedback(success);
   }
 
