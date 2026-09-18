@@ -13,6 +13,9 @@ import {
   createPerformanceVariance,
   createPersonProfile,
   createPosition,
+  createEmploymentRelationship,
+  createWorkAllocation,
+  recordRelationshipCost,
   startRootCauseInvestigation,
   transitionCausalHypothesis,
   transitionCorrectiveAction,
@@ -50,3 +53,17 @@ export async function transitionCorrectiveActionAction(actionId: string, to: Par
   return run(() => transitionCorrectiveAction(ctx, actionId, to));
 }
 export async function transitionPerformanceVarianceAction(varianceCaseId: string, to: Parameters<typeof transitionPerformanceVariance>[2]) { const ctx = await write(); return run(() => transitionPerformanceVariance(ctx, varianceCaseId, to)); }
+
+
+export async function createEmploymentRelationshipAction(input: Parameters<typeof createEmploymentRelationship>[1]) {
+  const ctx = await write();
+  return run(() => createEmploymentRelationship(ctx, input));
+}
+export async function createWorkAllocationAction(input: Parameters<typeof createWorkAllocation>[1]) {
+  const ctx = await write();
+  return run(() => createWorkAllocation(ctx, input));
+}
+export async function recordRelationshipCostAction(input: Parameters<typeof recordRelationshipCost>[1]) {
+  const ctx = await write();
+  return run(() => recordRelationshipCost(ctx, input));
+}
