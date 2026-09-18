@@ -204,6 +204,7 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
   const [aiPrompt, setAiPrompt] = useState<string | undefined>();
   const [aiOriginModule, setAiOriginModule] = useState<ViewKey>("overview");
 
+  const canWriteViability = hasProtectedWriteCapability(role, "VIABILITY_WRITE");
   const canWriteFinancial = hasProtectedWriteCapability(role, "FINANCIAL_WRITE");
   const canApproveFinancial = hasProtectedApprovalCapability(role, "FINANCIAL_APPROVE");
   const canWriteCommercial = hasProtectedWriteCapability(role, "COMMERCIAL_WRITE");
@@ -500,7 +501,7 @@ export function IntelligenceWorkspace({ initialStudy, initialLand, initialInvest
 
           {view === "assumptions" && <AssumptionSummary project={project} onEdit={() => { setEditorMode("version"); setEditorProject(project); }} />}
 
-          {view === "land" && <LandIntelligenceView initialLand={landWorkspace} onLandChange={(nextLand) => { setLandWorkspace(nextLand); void reassessInvestmentCaseAction(investmentWorkspace.id, study.studyVersionId, nextLand.versionId).then((response) => { if (response.ok) setInvestmentWorkspace(response.data); }); }} />}
+          {view === "land" && <LandIntelligenceView initialLand={landWorkspace} canWrite={canWriteViability} onLandChange={(nextLand) => { setLandWorkspace(nextLand); void reassessInvestmentCaseAction(investmentWorkspace.id, study.studyVersionId, nextLand.versionId).then((response) => { if (response.ok) setInvestmentWorkspace(response.data); }); }} />}
 
           {view === "design" && (
             lazyError.design ? <ErrorState message={lazyError.design} onRetry={() => loadLazyView("design")} /> :
