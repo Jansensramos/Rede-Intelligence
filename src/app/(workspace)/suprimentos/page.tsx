@@ -10,10 +10,13 @@ import { ProcurementOperabilityPanel } from "@/components/procurement-operabilit
 import { ProcurementView } from "@/components/procurement-view";
 import { ServiceOrderOperabilityPanel } from "@/components/service-order-operability-panel";
 import { SectionTitle } from "@/components/ui";
+import { hasProtectedApprovalCapability, hasProtectedWriteCapability } from "@/domain/auth/write-capabilities";
 
 export default async function SuprimentosPage() {
   const [authContext, context] = await Promise.all([requireAuthContext(), getCurrentOperationalContext()]);
   if (!context.project) return null;
+  const canWrite = hasProtectedWriteCapability(authContext.role, "PROCUREMENT_WRITE");
+  const canApprove = hasProtectedApprovalCapability(authContext.role, "PROCUREMENT_APPROVE");
   const [workspace, operability, serviceOrders, contractControl, serviceOrderMeasurements] = await Promise.all([
     getProcurementWorkspace(authContext, context.project.id),
     getProcurementOperabilityMetadata(authContext, context.project.id),
@@ -29,10 +32,10 @@ export default async function SuprimentosPage() {
         title="Da necessidade de compra ao pagamento"
         description="Planeje a compra, compare propostas, formalize o compromisso, autorize a execução por ordem de serviço e acompanhe medição, obrigação e pagamento."
       />
-      <ProcurementOperabilityPanel workspace={workspace} operability={operability} />
-      <ProcurementContractOperabilityPanel workspace={workspace} operability={operability} />
-      <ServiceOrderOperabilityPanel projectId={context.project.id} operability={operability} serviceOrders={serviceOrders} />
-      <Contract360MeasurementPanel workspace={workspace} contracts={contractControl} serviceOrders={serviceOrderMeasurements} />
+      <ProcurementOperabilityPanel workspace={workspace} operability={operability} canWrite={canWrite} canApprove={canApprove} />
+      <ProcurementContractOperabilityPanel workspace={workspace} operability={operability} canWrite={canWrite} canApprove={canApprove} />
+      <ServiceOrderOperabilityPanel projectId={context.project.id} operability={operability} serviceOrders={serviceOrders} canWrite={canWrite} canApprove={canApprove} />
+      <Contract360MeasurementPanel workspace={workspace} contracts={contractControl} serviceOrders={serviceOrderMeasurements} canWrite={canWrite} canApprove={canApprove} />
       <ProcurementView workspace={workspace} />
     </div>
   );
