@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { AlertTriangle, Building2, Coins, Landmark, MapPinned, Radar, ShieldQuestion, TrendingUp, Users } from "lucide-react";
 import type { MarketProductWorkspaceView } from "@/application/market-product";
 import {
+  createDefaultMarketAreaAction,
   registerMarketDevelopmentAction,
   registerMarketInventorySnapshotAction,
   registerMarketPriceObservationAction,
@@ -47,19 +48,55 @@ function DemoDataBanner() {
   );
 }
 
-export function MarketIntelligenceView({ workspace, canManage = false, onChange }: { workspace: MarketProductWorkspaceView; canManage?: boolean; onChange?: (workspace: MarketProductWorkspaceView) => void }) {
+export function MarketIntelligenceView({ workspace, projectId, canManage = false, onChange }: { workspace: MarketProductWorkspaceView; projectId?: string; canManage?: boolean; onChange?: (workspace: MarketProductWorkspaceView) => void }) {
   const [area, setArea] = useState<Area>("visao");
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [showMarketAreaForm, setShowMarketAreaForm] = useState(false);
   const [showCompetitorForm, setShowCompetitorForm] = useState(false);
   const [showPriceForm, setShowPriceForm] = useState(false);
   const [showInventoryForm, setShowInventoryForm] = useState(false);
   const { marketArea, overview } = workspace;
 
   if (!marketArea || !overview) {
+    async function submitMarketArea(event: FormEvent<HTMLFormElement>) {
+      event.preventDefault();
+      if (!projectId) return setFeedback("Empreendimento ativo não identificado.");
+      const data = new FormData(event.currentTarget);
+      setBusy(true);
+      setFeedback(null);
+      const response = await createDefaultMarketAreaAction(projectId, {
+        name: String(data.get("name")),
+        type: String(data.get("type")) as "RADIUS" | "NEIGHBORHOOD" | "MUNICIPALITY" | "CUSTOM_POLYGON" | "ISOCHRONE",
+        centerLatitude: Number(data.get("centerLatitude")),
+        centerLongitude: Number(data.get("centerLongitude")),
+        radiusMeters: Number(data.get("radiusMeters") || 3000),
+        neighborhood: String(data.get("neighborhood") || "") || undefined,
+        city: String(data.get("city")),
+        state: String(data.get("state")).toUpperCase(),
+      });
+      setBusy(false);
+      if (!response.ok) return setFeedback(response.error);
+      onChange?.(response.data);
+      setShowMarketAreaForm(false);
+    }
+
     return (
-      <div className="empty-state">
-        <MapPinned size={18} /> Nenhuma área de mercado configurada para esta organização ainda. Execute o seed demonstrativo ou cadastre uma área de influência com um perfil que possua a capacidade de gerenciar dados de mercado.
+      <div className="view-stack">
+        <div className="empty-state"><MapPinned size={18} /> Nenhuma área de mercado configurada para este empreendimento.</div>
+        {feedback && <div className="model-note"><AlertTriangle size={20} /><div><strong>Área de mercado</strong><p>{feedback}</p></div></div>}
+        {canManage && projectId && <div className="panel-actions"><button className="button button-primary" onClick={() => setShowMarketAreaForm((value) => !value)}>{showMarketAreaForm ? "Fechar cadastro" : "Criar área de mercado"}</button></div>}
+        {showMarketAreaForm && <form className="form-grid" onSubmit={submitMarketArea}>
+          <label>Nome<input name="name" required placeholder="Ex.: Área primária — empreendimento" /></label>
+          <label>Tipo<select name="type" defaultValue="RADIUS"><option value="RADIUS">Raio</option><option value="NEIGHBORHOOD">Bairro</option><option value="MUNICIPALITY">Município</option><option value="CUSTOM_POLYGON">Polígono customizado</option><option value="ISOCHRONE">Isócrona</option></select></label>
+          <label>Latitude central<input name="centerLatitude" type="number" step="any" required /></label>
+          <label>Longitude central<input name="centerLongitude" type="number" step="any" required /></label>
+          <label>Raio (m)<input name="radiusMeters" type="number" min="100" max="50000" defaultValue="3000" /></label>
+          <label>Bairro<input name="neighborhood" /></label>
+          <label>Cidade<input name="city" required /></label>
+          <label>UF<input name="state" maxLength={2} required /></label>
+          <div className="form-actions"><button className="button button-primary" disabled={busy} type="submit">{busy ? "Criando..." : "Criar área de mercado"}</button></div>
+        </form>}
       </div>
     );
   }
