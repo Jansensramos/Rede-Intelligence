@@ -9,7 +9,7 @@ import {
   assignPostSaleSupplier,
   blockSalesUnit,
   confirmSalesReservation,
-  createBrokerProfile,
+  upsertBrokerProfile,
   convertSalesLead,
   createSale,
   createSalesLead,
@@ -142,9 +142,9 @@ export async function activateSalesPriceTableAction(priceTableId: string) {
   const ctx = await approve();
   return run(() => activateSalesPriceTable(ctx, priceTableId));
 }
-export async function createBrokerProfileAction(input: Parameters<typeof createBrokerProfile>[1]) {
+export async function createBrokerProfileAction(input: Parameters<typeof upsertBrokerProfile>[1]) {
   const ctx = await write();
-  return run(() => createBrokerProfile(ctx, input));
+  return run(() => upsertBrokerProfile(ctx, input));
 }
 export async function createSalesCommissionPolicyAction(input: Parameters<typeof createSalesCommissionPolicy>[1]) {
   const ctx = await approve();
