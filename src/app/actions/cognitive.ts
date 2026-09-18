@@ -510,11 +510,11 @@ export async function getCognitiveProductionReadinessAction(input: {
         checks: [
           {
             key: "COGNITIVE_GOVERNANCE",
-            label: "Governança cognitiva",
+            label: "Registro de decisões",
             status: cognitiveRuns > 0 ? "READY" : "WAITING_DATA",
             detail: cognitiveRuns > 0
               ? `${cognitiveRuns} rodada(s) auditada(s)`
-              : "Aguardando a primeira rodada real do Comitê Cognitivo.",
+              : "Aguardando a primeira análise registrada.",
           },
           {
             key: "HUMAN_DECISIONS",
@@ -526,7 +526,7 @@ export async function getCognitiveProductionReadinessAction(input: {
           },
           {
             key: "LEARNING_LOOP",
-            label: "Learning Loop",
+            label: "Aprendizado com resultados",
             status: evaluatedForecasts > 0 ? "READY" : "WAITING_DATA",
             detail: evaluatedForecasts > 0
               ? `${evaluatedForecasts} observação(ões) previsto × realizado`
@@ -534,10 +534,10 @@ export async function getCognitiveProductionReadinessAction(input: {
           },
           {
             key: "AI_PROVIDER",
-            label: "Provider de IA",
+            label: "Provedor de inteligência",
             status: provider === "AVAILABLE" ? "READY" : "EXTERNAL_DEPENDENCY",
             detail: provider === "AVAILABLE"
-              ? "Provider comercial disponível."
+              ? "Provedor comercial disponível."
               : "Depende de configuração e credencial do ambiente.",
           },
           {
