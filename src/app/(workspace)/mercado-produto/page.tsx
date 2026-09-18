@@ -15,7 +15,7 @@ export default async function MercadoProdutoPage() {
   return (
     <Suspense fallback={<Loading label="Carregando Mercado e Produto…" />}>
       {/* Fechamento 9K.1: `key` por projeto — ver comentário em viabilidade/page.tsx. */}
-      <MercadoProdutoWorkspace key={context.project.id} initialWorkspace={view} role={authContext.role} />
+      <MercadoProdutoWorkspace key={context.project.id} initialWorkspace={view} role={authContext.role} projectId={context.project.id} />
     </Suspense>
   );
 }
