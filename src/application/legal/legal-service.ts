@@ -350,7 +350,7 @@ export async function reverseLegalFinancialEvent(context: AuthContext, legalObli
 export async function getLegalWorkspace(context: Pick<AuthContext, "organizationId">, projectId: string, referenceDate = new Date()) {
   await projectForTenant(context.organizationId, projectId);
   await refreshLegalDeadlines(context, projectId, referenceDate);
-  const [cases, registrations, municipalRecords, obligations, alerts, licenses, processes, timeline, contracts] = await Promise.all([
+  const [cases, registrations, municipalRecords, obligations, alerts, licenses, processes, timeline, contracts, suppliers, companies] = await Promise.all([
     prisma.legalDueDiligenceCase.findMany({ where: { organizationId: context.organizationId, projectId }, include: { checklistItems: true, documentRequests: true, findings: true, decisions: { orderBy: { version: "desc" }, take: 1 }, parties: true }, orderBy: { updatedAt: "desc" }, take: 50 }),
     prisma.legalAssetRegistration.findMany({ where: { organizationId: context.organizationId, landAsset: { projectId } }, orderBy: [{ registrationNumber: "asc" }, { version: "desc" }], take: 100 }),
     prisma.municipalPropertyRecord.findMany({ where: { organizationId: context.organizationId, landAsset: { projectId } }, orderBy: [{ fiscalYear: "desc" }, { version: "desc" }], take: 100 }),
@@ -360,11 +360,13 @@ export async function getLegalWorkspace(context: Pick<AuthContext, "organization
     prisma.legalAuthorityProcess.findMany({ where: { organizationId: context.organizationId, projectId }, orderBy: { updatedAt: "desc" }, take: 100 }),
     prisma.legalTimelineEvent.findMany({ where: { organizationId: context.organizationId, projectId }, orderBy: { plannedAt: "asc" }, take: 200 }),
     prisma.operationalContract.findMany({ where: { organizationId: context.organizationId, projectId, type: "ACQUISITION" }, include: { supplier: true, legalConditions: true, legalGuarantees: true }, take: 50 }),
+    prisma.supplier.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" }, take: 500 }),
+    prisma.company.findMany({ where: { organizationId: context.organizationId, status: "ACTIVE" }, select: { id: true, name: true, type: true }, orderBy: { name: "asc" }, take: 200 }),
   ]);
   const checklist = cases.flatMap((item) => item.checklistItems);
   const findings = cases.flatMap((item) => item.findings);
   const readiness = legalReadiness({ checklist, findings, obligations });
-  return plain({ projectId, generatedAt: referenceDate.toISOString(), summary: { readiness, openAlerts: alerts.length, criticalFindings: findings.filter((item) => item.severity === "CRITICAL" && item.status !== "RESOLVED").length, pendingDocuments: cases.flatMap((item) => item.documentRequests).filter((item) => !["COMPLIANT", "WAIVED", "RESOLVED"].includes(item.status)).length, overdueObligations: obligations.filter((item) => item.status === "OVERDUE").length, scheduleBlockers: timeline.filter((item) => item.blocksSchedule && item.status !== "RESOLVED").length }, cases, registrations, municipalRecords, obligations, alerts, licenses, processes, timeline, contracts });
+  return plain({ projectId, generatedAt: referenceDate.toISOString(), suppliers, companies, summary: { readiness, openAlerts: alerts.length, criticalFindings: findings.filter((item) => item.severity === "CRITICAL" && item.status !== "RESOLVED").length, pendingDocuments: cases.flatMap((item) => item.documentRequests).filter((item) => !["COMPLIANT", "WAIVED", "RESOLVED"].includes(item.status)).length, overdueObligations: obligations.filter((item) => item.status === "OVERDUE").length, scheduleBlockers: timeline.filter((item) => item.blocksSchedule && item.status !== "RESOLVED").length }, cases, registrations, municipalRecords, obligations, alerts, licenses, processes, timeline, contracts });
 }
 
 export type LegalWorkspaceView = Awaited<ReturnType<typeof getLegalWorkspace>>;
