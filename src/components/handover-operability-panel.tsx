@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, Building2, MessageSquareWarning } from "lucide-react";
 import type { SalesWorkspaceView } from "@/application/sales/sales-service";
 import {
+  addPostSaleEvidenceAction,
   assignPostSaleSupplierAction,
   cancelBankFinancingDisbursementAction,
   createBankFinancingDisbursementAction,
@@ -52,6 +53,7 @@ export function HandoverOperabilityPanel({ workspace }: { workspace: SalesWorksp
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [showCondoForm, setShowCondoForm] = useState(false);
   const [assistanceId, setAssistanceId] = useState<string | null>(null);
+  const [evidenceRequestId, setEvidenceRequestId] = useState<string | null>(null);
 
   const today = () => new Date().toISOString().slice(0, 10);
 
@@ -125,6 +127,33 @@ export function HandoverOperabilityPanel({ workspace }: { workspace: SalesWorksp
       transferredAt: status === "IMPLEMENTED" && form?.get("transferredAt") ? new Date(String(form.get("transferredAt")) + "T12:00:00.000Z") : undefined,
       notes: String(form?.get("notes") || "") || undefined,
     }), status === "IMPLEMENTED" ? "Condomínio implantado e responsabilidade transferida." : status === "IN_PROGRESS" ? "Implantação do condomínio iniciada." : "Implantação cancelada.");
+  }
+
+  async function addEvidence(requestId: string, form: FormData) {
+    const file = form.get("file");
+    if (!(file instanceof File) || file.size === 0) {
+      setFeedback("Selecione um arquivo de evidência.");
+      return;
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const evidenceKind = String(form.get("evidenceKind")) as "BEFORE" | "AFTER";
+    const note = String(form.get("note") || "").trim();
+
+    startTransition(async () => {
+      setFeedback(null);
+      const result = await addPostSaleEvidenceAction({
+        requestId,
+        evidenceKind,
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        note: note || null,
+        bytes,
+      });
+      if (!result.ok) return setFeedback(result.error ?? "Não foi possível adicionar a evidência.");
+      setFeedback("Evidência registrada com checksum e trilha de auditoria.");
+      setEvidenceRequestId(null);
+      router.refresh();
+    });
   }
 
   function updateAssistance(requestId: string, form: FormData) {
@@ -205,7 +234,13 @@ export function HandoverOperabilityPanel({ workspace }: { workspace: SalesWorksp
     <article className="panel">
       <div className="panel-heading"><div><span className="eyebrow">ASSISTÊNCIA TÉCNICA</span><h2>Fornecedor responsável, custo, reincidência e SLA</h2></div></div>
       {workspace.postSaleRequests.map((item) => <div className="model-note" key={item.id}><MessageSquareWarning size={20}/><div style={{ width: "100%" }}><strong>{item.unit} · {item.customer}</strong><p>{item.category.replaceAll("_"," ")} · Fornecedor: {item.supplier ?? "não atribuído"} · Custo: {item.actualCost !== null ? brl.format(item.actualCost) : item.estimatedCost !== null ? brl.format(item.estimatedCost) + " (estimado)" : "—"}{item.recurrenceOfId ? " · Reincidência" : ""}</p><Status value={item.status}/>{item.slaViolated && <span className="negative-value"><AlertTriangle size={14}/> SLA vencido</span>}
-        <div className="panel-actions"><button className="text-button" disabled={pending} onClick={() => setAssistanceId(assistanceId === item.id ? null : item.id)}>Configurar assistência</button></div>
+        <div className="panel-actions"><button className="text-button" disabled={pending} onClick={() => setAssistanceId(assistanceId === item.id ? null : item.id)}>Configurar assistência</button><button className="text-button" disabled={pending} onClick={() => setEvidenceRequestId(evidenceRequestId === item.id ? null : item.id)}>Adicionar evidência</button></div>
+        {evidenceRequestId === item.id && <form className="form-grid" action={(form) => void addEvidence(item.id, form)}>
+          <label>Momento<select name="evidenceKind" defaultValue="BEFORE"><option value="BEFORE">Antes do reparo</option><option value="AFTER">Depois do reparo</option></select></label>
+          <label>Arquivo<input name="file" type="file" accept="image/*,.pdf" required /></label>
+          <label style={{ gridColumn: "1 / -1" }}>Observação<textarea name="note" rows={2} placeholder="Contexto da evidência (opcional)" /></label>
+          <div className="form-actions"><button className="button button-primary" type="submit" disabled={pending}>Registrar evidência</button><button className="button button-secondary" type="button" onClick={() => setEvidenceRequestId(null)}>Cancelar</button></div>
+        </form>}
         {assistanceId === item.id && <form className="form-grid" action={(form) => updateAssistance(item.id, form)}>
           <label>Fornecedor<select name="supplierId" defaultValue=""><option value="">Sem fornecedor</option>{workspace.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
           <label>Custo estimado<input name="estimatedCost" type="number" min="0" step="0.01" defaultValue={item.estimatedCost ?? ""} /></label>
