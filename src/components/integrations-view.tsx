@@ -5,6 +5,7 @@ import { AlertTriangle, Building2, Check, CircleAlert, CircleCheck, Clock, KeyRo
 import { refreshIntegrationsWorkspaceAction, reprocessQuarantineItemAction, resolveIntegrationConflictAction, syncMockDriveInstallationAction } from "@/app/actions/integrations";
 import type { IntegrationsWorkspaceView } from "@/application/integrations/integrations-service";
 import { GoogleDriveControls } from "./google-drive-controls";
+import { ClicksignControls } from "./clicksign-controls";
 
 type ScopeFilter = "ALL" | "GROUP" | "COMPANY" | "SPE" | "PROJECT";
 type Area = "installations" | "syncRuns" | "conflicts" | "quarantine" | "deadLetters" | "credentials";
@@ -63,6 +64,7 @@ export function IntegrationsView({ initialWorkspace, projectId, onWorkspaceChang
     return (
       <div className="view-stack">
         {workspace.permissions.canConfigure && <GoogleDriveControls projectId={projectId} installations={[]} onChanged={() => runAction(() => refreshIntegrationsWorkspaceAction(projectId))} />}
+        {(workspace.permissions.canConfigure || workspace.permissions.canManageCredentials) && <ClicksignControls projectId={projectId} workspace={workspace} onChanged={update} />}
         <div className="empty-state"><Plug size={18} /> Nenhum conector instalado ainda para esta organização.</div>
       </div>
     );
@@ -71,6 +73,7 @@ export function IntegrationsView({ initialWorkspace, projectId, onWorkspaceChang
   return (
     <div className="view-stack">
       {workspace.permissions.canConfigure && <GoogleDriveControls projectId={projectId} installations={workspace.installations.filter(i => i.connectorCode === "GOOGLE_DRIVE_V3").map(i => ({ id: i.id, name: i.name }))} onChanged={() => runAction(() => refreshIntegrationsWorkspaceAction(projectId))} />}
+      {(workspace.permissions.canConfigure || workspace.permissions.canManageCredentials) && <ClicksignControls projectId={projectId} workspace={workspace} onChanged={update} />}
       <section className="metrics-grid">
         <article className="metric-card"><div><span>Instalações</span><Plug size={17} /></div><strong>{workspace.summary.installations}</strong><small>{workspace.summary.staleInstallations} desatualizada(s)</small></article>
         <article className="metric-card"><div><span>Críticas</span><ShieldAlert size={17} /></div><strong className={workspace.summary.criticalInstallations > 0 ? "metric-negative" : undefined}>{workspace.summary.criticalInstallations}</strong><small>Saúde DOWN ou credencial inválida</small></article>
