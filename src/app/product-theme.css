@@ -257,3 +257,55 @@ body {
   .sidebar-brand { min-height: 82px !important; }
   .brand-logo { width: 160px; }
 }
+
+
+/* Login na mesma linguagem clara da aplicação. */
+.login-shell {
+  background:
+    radial-gradient(circle at 72% 16%, rgba(11,52,113,.055), transparent 34%),
+    var(--rede-page) !important;
+}
+
+.login-card {
+  background: var(--rede-surface) !important;
+  border: 1px solid var(--rede-border) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 24px 70px rgba(31,36,42,.08) !important;
+  overflow: hidden;
+}
+
+.login-brand {
+  background: var(--rede-sidebar) !important;
+  color: var(--rede-text) !important;
+  border-bottom: 1px solid var(--rede-border) !important;
+}
+
+.login-form input {
+  border-color: var(--rede-border-strong) !important;
+  border-radius: 9px !important;
+}
+
+.login-card > p,
+.login-form label > span,
+.login-demo {
+  color: var(--rede-text-soft) !important;
+}
+
+/* A entrada executiva deixa de carregar o tratamento dourado da antiga barra escura. */
+.main-nav button.is-primary,
+.main-nav a.is-primary,
+.main-nav button.is-primary.is-active,
+.main-nav a.is-primary.is-active {
+  color: var(--rede-blue) !important;
+  background: var(--rede-active) !important;
+}
+
+.main-nav button.is-primary:hover,
+.main-nav a.is-primary:hover {
+  background: var(--rede-hover) !important;
+}
+
+.sidebar-overlay {
+  background: rgba(31,36,42,.18) !important;
+  backdrop-filter: blur(2px);
+}
