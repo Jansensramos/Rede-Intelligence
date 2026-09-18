@@ -192,6 +192,28 @@ export async function recordPartySigned(context: AuthContext, input: { requestId
   return requestForTenant(context.organizationId, request.id);
 }
 
+/**
+ * Atalho estritamente local para smoke test humano do fluxo de assinatura.
+ * Nunca disponível em produção e nunca aplicado a providers reais.
+ */
+export async function completeMockSignatureRequest(context: AuthContext, requestId: string) {
+  assertMutable(context);
+  if (process.env.NODE_ENV === "production") throw new Error("Assinatura simulada é proibida em produção.");
+
+  let request = await requestForTenant(context.organizationId, requestId);
+  if (request.provider !== "MOCK") throw new Error("Somente solicitações do provider MOCK podem ser concluídas por este atalho local.");
+  if (request.status === "PREPARADO") {
+    await sendSignatureRequest(context, request.id);
+    request = await requestForTenant(context.organizationId, request.id);
+  }
+  if (!["ENVIADO", "AGUARDANDO_ASSINATURAS", "ASSINADO"].includes(request.status)) throw new Error(`Solicitação em status ${request.status} não pode ser concluída no modo local.`);
+
+  for (const party of request.parties.filter((item) => item.status === "PENDING")) {
+    await recordPartySigned(context, { requestId: request.id, partyId: party.id, authMethod: "LOCAL_SMOKE_TEST" });
+  }
+  return requestForTenant(context.organizationId, request.id);
+}
+
 export async function recordPartyDeclined(context: AuthContext, input: { requestId: string; partyId: string; reason: string }, sourceInboxEventId: string | null = null) {
   assertMutable(context);
   const request = await requestForTenant(context.organizationId, input.requestId);
