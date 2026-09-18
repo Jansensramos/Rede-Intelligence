@@ -5,6 +5,7 @@ import { requireDomainActionContext } from "./authorization";
 const requireAuthContext = () => requireDomainActionContext("FINANCIAL_READ");
 import {
   applyPayableInstallmentCorrection,
+  applyReceivableInstallmentCorrection,
   approveIntercompanyTransaction,
   closeFinancialPeriod,
   confirmReconciliation,
@@ -74,6 +75,11 @@ export async function registerPayablePaymentAction(input: Parameters<typeof regi
 export async function applyPayableInstallmentCorrectionAction(input: Parameters<typeof applyPayableInstallmentCorrection>[1]) {
   const context = await requireAuthContext();
   return run(() => applyPayableInstallmentCorrection(context, input));
+}
+
+export async function applyReceivableInstallmentCorrectionAction(input: Parameters<typeof applyReceivableInstallmentCorrection>[1]) {
+  const context = await requireAuthContext();
+  return run(() => applyReceivableInstallmentCorrection(context, input));
 }
 
 export async function createReceivableAccountAction(input: Parameters<typeof createReceivableAccount>[1]) {
