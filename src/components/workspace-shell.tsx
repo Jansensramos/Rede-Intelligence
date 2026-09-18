@@ -124,7 +124,7 @@ export function WorkspaceShell({
             <span>Minha Rotina</span>
           </Link>}
 
-          <div className="ds-nav-group-label">GRANDES ÁREAS</div>
+          <div className="ds-nav-group-label">ÁREAS</div>
           {secondaryAreas.map((area) => {
             const Icon = AREA_ICONS[area.id] ?? Boxes;
             return (
@@ -148,9 +148,9 @@ export function WorkspaceShell({
         </nav>
 
         {canAccessWorkspacePath(context.user.role, "/assistente") && <Link href="/assistente" className="sidebar-module sidebar-ai-live" onClick={() => setSidebarOpen(false)}>
-          <span>ASSISTENTE REDE</span>
+          <span>ASSISTENTE</span>
           <Sparkles size={18} />
-          <div><strong>Pergunte à REDE</strong><small>Contexto do empreendimento</small></div>
+          <div><strong>Pergunte à REDE</strong><small>Dados do empreendimento</small></div>
           <span className="soon">IA</span>
         </Link>}
 
