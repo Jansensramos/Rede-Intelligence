@@ -6,17 +6,24 @@ import { CheckCircle2, FilePlus2, Gavel, ReceiptText, ShoppingCart, Workflow } f
 import type { ProcurementOperabilityMetadata } from "@/application/procurement/procurement-operability-service";
 import type { ProcurementWorkspaceView } from "@/application/procurement/procurement-service";
 import {
+  approveMeasurementAction,
+  approvePurchaseOrderAction,
+  createMeasurementAction,
+  createOperationalContractAction,
   createProcurementNeedAction,
+  createPurchaseOrderAction,
   createPurchaseRequisitionAction,
   createQuotationProcessAction,
   decideQuotationAction,
   submitSupplierProposalAction,
+  transitionMeasurementAction,
+  transitionOperationalContractAction,
   transitionPurchaseRequisitionAction,
   validateProcurementNeedAction,
 } from "@/app/actions/procurement";
 import styles from "./procurement-professional.module.css";
 
-type FormKey = "need" | "requisition" | "quotation" | "proposal" | "decision" | null;
+type FormKey = "need" | "requisition" | "quotation" | "proposal" | "decision" | "order" | "contract" | "measurement" | null;
 type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 const STATUS: Record<string, string> = {
@@ -41,6 +48,8 @@ export function ProcurementOperabilityPanel({ workspace, operability }: { worksp
   const [selectedSupplierIds, setSelectedSupplierIds] = useState<string[]>([]);
   const [proposalQuotationId, setProposalQuotationId] = useState("");
   const [decisionQuotationId, setDecisionQuotationId] = useState("");
+  const [instrumentQuotationId, setInstrumentQuotationId] = useState("");
+  const [measurementContractId, setMeasurementContractId] = useState("");
 
   const identifiedNeeds = useMemo(() => workspace.needs.filter((item) => item.status === "IDENTIFIED"), [workspace.needs]);
   const validatedNeeds = useMemo(() => workspace.needs.filter((item) => item.status === "VALIDATED"), [workspace.needs]);
@@ -51,6 +60,11 @@ export function ProcurementOperabilityPanel({ workspace, operability }: { worksp
   const decisionQuotation = useMemo(() => workspace.quotations.find((item) => item.id === decisionQuotationId) ?? null, [workspace.quotations, decisionQuotationId]);
   const decidableQuotations = useMemo(() => workspace.quotations.filter((item) => ["OPEN", "UNDER_ANALYSIS"].includes(item.status) && item.proposals.some((proposal) => proposal.status === "SUBMITTED")), [workspace.quotations]);
   const activeSuppliers = useMemo(() => workspace.suppliers.filter((item) => item.status === "ACTIVE"), [workspace.suppliers]);
+  const decidedQuotations = useMemo(() => operability.quotations.filter((item) => item.status === "DECIDED" && item.selectedProposal), [operability.quotations]);
+  const instrumentQuotation = useMemo(() => decidedQuotations.find((item) => item.id === instrumentQuotationId) ?? null, [decidedQuotations, instrumentQuotationId]);
+  const measurableContracts = useMemo(() => operability.contracts.filter((item) => ["APPROVED", "ACTIVE"].includes(item.status)), [operability.contracts]);
+  const measurementContract = useMemo(() => measurableContracts.find((item) => item.id === measurementContractId) ?? null, [measurableContracts, measurementContractId]);
+
 
   async function run<T>(operation: () => Promise<ActionResult<T>>, success: string) {
     setBusy(true);
@@ -163,6 +177,58 @@ export function ProcurementOperabilityPanel({ workspace, operability }: { worksp
     }), "Cotação decidida e registrada.");
   }
 
+  async function submitOrder(data: FormData) {
+    if (!operability.companyId) return setFeedback("O empreendimento precisa estar vinculado a uma empresa/SPE.");
+    const quotation = operability.quotations.find((item) => item.id === String(data.get("quotationProcessId")));
+    const proposal = quotation?.selectedProposal;
+    if (!quotation || !proposal) return setFeedback("Selecione uma cotação decidida com proposta vencedora.");
+    await run(() => createPurchaseOrderAction({
+      projectId: workspace.projectId, companyId: operability.companyId!, supplierId: proposal.supplierId, quotationProcessId: quotation.id, selectedProposalId: proposal.id,
+      number: String(data.get("number")), title: String(data.get("title")), scope: String(data.get("scope")),
+      deliveryAt: data.get("deliveryAt") ? new Date(String(data.get("deliveryAt")) + "T00:00:00Z") : null,
+      paymentTerms: String(data.get("paymentTerms") || "") || null,
+      items: proposal.items.map((item) => ({ description: item.description, quantity: String(item.quantity), unit: item.unit, unitPrice: String(item.unitPrice) })),
+    }), "Pedido de compra criado.");
+  }
+
+  async function submitContract(data: FormData) {
+    if (!operability.companyId) return setFeedback("O empreendimento precisa estar vinculado a uma empresa/SPE.");
+    const quotation = operability.quotations.find((item) => item.id === String(data.get("quotationProcessId")));
+    const proposal = quotation?.selectedProposal;
+    if (!quotation || !proposal) return setFeedback("Selecione uma cotação decidida com proposta vencedora.");
+    await run(() => createOperationalContractAction({
+      projectId: workspace.projectId, companyId: operability.companyId!, supplierId: proposal.supplierId, quotationProcessId: quotation.id, selectedProposalId: proposal.id,
+      number: String(data.get("number")), title: String(data.get("title")), type: String(data.get("type")) as "SUPPLY" | "SERVICE" | "CONSTRUCTION" | "DESIGN" | "CONSULTING" | "LEASE" | "ACQUISITION" | "OTHER",
+      billingModel: String(data.get("billingModel")) as "MEASUREMENT" | "FIXED_INSTALLMENT" | "MONTHLY" | "MILESTONE" | "DELIVERY" | "ADVANCE" | "CUSTOM",
+      scope: String(data.get("scope")), startsAt: new Date(String(data.get("startsAt")) + "T00:00:00Z"), endsAt: new Date(String(data.get("endsAt")) + "T00:00:00Z"),
+      responsibleId: operability.currentUserId, paymentTerms: String(data.get("paymentTerms") || "") || null, retentionRate: String(data.get("retentionRate") || "0"), warrantyTerms: String(data.get("warrantyTerms") || "") || null,
+      items: proposal.items.map((item, index) => ({ code: "ITEM-" + (index + 1), description: item.description, quantity: String(item.quantity), unit: item.unit, unitPrice: String(item.unitPrice) })),
+    }), "Contrato operacional criado.");
+  }
+
+  async function submitMeasurement(data: FormData) {
+    const contract = operability.contracts.find((item) => item.id === String(data.get("contractId")));
+    if (!contract) return setFeedback("Selecione um contrato aprovado ou ativo.");
+    await run(() => createMeasurementAction({
+      contractId: contract.id, number: Number(data.get("number")), version: 1, competenceDate: new Date(String(data.get("competenceDate")) + "T00:00:00Z"),
+      periodStart: new Date(String(data.get("periodStart")) + "T00:00:00Z"), periodEnd: new Date(String(data.get("periodEnd")) + "T00:00:00Z"),
+      issuedAt: new Date(String(data.get("issuedAt")) + "T00:00:00Z"), dueDate: new Date(String(data.get("dueDate")) + "T00:00:00Z"),
+      physicalProgress: String(data.get("physicalProgress") || "0"), retentionAmount: String(data.get("retentionAmount") || "0"), discountAmount: String(data.get("discountAmount") || "0"), advanceAmortizationAmount: "0",
+      lines: contract.items.map((item) => ({ contractItemId: item.id, periodQuantity: String(data.get("qty_" + item.id) || "0") })).filter((item) => Number(item.periodQuantity) > 0),
+    }), "Medição criada em rascunho.");
+  }
+
+  async function advanceContract(id: string, status: string) {
+    const next = status === "DRAFT" ? "UNDER_REVIEW" : status === "UNDER_REVIEW" ? "IN_APPROVAL" : status === "IN_APPROVAL" ? "APPROVED" : status === "APPROVED" ? "ACTIVE" : null;
+    if (!next) return;
+    await run(() => transitionOperationalContractAction(id, next as "UNDER_REVIEW" | "IN_APPROVAL" | "APPROVED" | "ACTIVE"), "Contrato atualizado.");
+  }
+
+  async function advanceMeasurement(id: string, status: string) {
+    const next = status === "DRAFT" ? "SUBMITTED" : status === "SUBMITTED" ? "IN_TECHNICAL_REVIEW" : status === "IN_TECHNICAL_REVIEW" ? "TECHNICALLY_APPROVED" : status === "TECHNICALLY_APPROVED" ? "IN_APPROVAL" : null;
+    if (next) await run(() => transitionMeasurementAction(id, next as "SUBMITTED" | "IN_TECHNICAL_REVIEW" | "TECHNICALLY_APPROVED" | "IN_APPROVAL"), "Medição atualizada.");
+    else if (status === "IN_APPROVAL") await run(() => approveMeasurementAction(id), "Medição aprovada e enviada ao Financeiro.");
+  }
   async function validateNeed(id: string) {
     await run(() => validateProcurementNeedAction(id), "Necessidade validada.");
   }
@@ -189,6 +255,9 @@ export function ProcurementOperabilityPanel({ workspace, operability }: { worksp
           <button className="button button-secondary" onClick={() => setForm(form === "quotation" ? null : "quotation")}><ShoppingCart size={15} /> Cotação</button>
           <button className="button button-secondary" onClick={() => setForm(form === "proposal" ? null : "proposal")}><ReceiptText size={15} /> Proposta</button>
           <button className="button button-primary" onClick={() => setForm(form === "decision" ? null : "decision")}><Gavel size={15} /> Decisão</button>
+          <button className="button button-secondary" onClick={() => setForm(form === "order" ? null : "order")}>Pedido</button>
+          <button className="button button-secondary" onClick={() => setForm(form === "contract" ? null : "contract")}>Contrato</button>
+          <button className="button button-secondary" onClick={() => setForm(form === "measurement" ? null : "measurement")}>Medição</button>
         </div>
       </div>
 
@@ -262,6 +331,29 @@ export function ProcurementOperabilityPanel({ workspace, operability }: { worksp
         </form>
       )}
 
+      {form === "order" && (
+        <form action={submitOrder} className={styles.formCard}>
+          <h3 className={styles.formTitle}>Novo pedido de compra</h3>
+          <div className={styles.field}><label>Cotação decidida</label><select name="quotationProcessId" value={instrumentQuotationId} onChange={(event) => setInstrumentQuotationId(event.target.value)} required><option value="">Selecione</option>{decidedQuotations.map((item) => <option key={item.id} value={item.id}>{item.number} · {item.title} · {item.selectedProposal?.supplierName}</option>)}</select></div>
+          {instrumentQuotation && <><div className={styles.grid2}><div className={styles.field}><label>Número</label><input name="number" required placeholder="PC-0001" /></div><div className={styles.field}><label>Título</label><input name="title" required defaultValue={instrumentQuotation.title} /></div></div><div className={styles.field}><label>Escopo</label><textarea name="scope" required defaultValue={instrumentQuotation.title} /></div><div className={styles.grid2}><div className={styles.field}><label>Entrega prevista</label><input name="deliveryAt" type="date" /></div><div className={styles.field}><label>Pagamento</label><input name="paymentTerms" /></div></div><div className={styles.formActions}><button className="button button-primary" disabled={busy} type="submit">Criar pedido</button></div></>}
+        </form>
+      )}
+
+      {form === "contract" && (
+        <form action={submitContract} className={styles.formCard}>
+          <h3 className={styles.formTitle}>Novo contrato operacional</h3>
+          <div className={styles.field}><label>Cotação decidida</label><select name="quotationProcessId" value={instrumentQuotationId} onChange={(event) => setInstrumentQuotationId(event.target.value)} required><option value="">Selecione</option>{decidedQuotations.map((item) => <option key={item.id} value={item.id}>{item.number} · {item.title} · {item.selectedProposal?.supplierName}</option>)}</select></div>
+          {instrumentQuotation && <><div className={styles.grid2}><div className={styles.field}><label>Número</label><input name="number" required placeholder="CT-0001" /></div><div className={styles.field}><label>Título</label><input name="title" required defaultValue={instrumentQuotation.title} /></div></div><div className={styles.grid3}><div className={styles.field}><label>Tipo</label><select name="type" defaultValue="CONSTRUCTION"><option value="SUPPLY">Fornecimento</option><option value="SERVICE">Serviço</option><option value="CONSTRUCTION">Construção</option><option value="DESIGN">Projeto</option><option value="CONSULTING">Consultoria</option><option value="OTHER">Outro</option></select></div><div className={styles.field}><label>Faturamento</label><select name="billingModel" defaultValue="MEASUREMENT"><option value="MEASUREMENT">Medição</option><option value="FIXED_INSTALLMENT">Parcela fixa</option><option value="MONTHLY">Mensal</option><option value="MILESTONE">Marco</option><option value="DELIVERY">Entrega</option></select></div><div className={styles.field}><label>Retenção (%)</label><input name="retentionRate" type="number" step="0.01" defaultValue="0" /></div></div><div className={styles.grid2}><div className={styles.field}><label>Início</label><input name="startsAt" type="date" required /></div><div className={styles.field}><label>Fim</label><input name="endsAt" type="date" required /></div></div><div className={styles.field}><label>Escopo</label><textarea name="scope" required defaultValue={instrumentQuotation.title} /></div><div className={styles.grid2}><div className={styles.field}><label>Pagamento</label><input name="paymentTerms" /></div><div className={styles.field}><label>Garantia</label><input name="warrantyTerms" /></div></div><div className={styles.formActions}><button className="button button-primary" disabled={busy} type="submit">Criar contrato</button></div></>}
+        </form>
+      )}
+
+      {form === "measurement" && (
+        <form action={submitMeasurement} className={styles.formCard}>
+          <h3 className={styles.formTitle}>Nova medição</h3>
+          <div className={styles.field}><label>Contrato</label><select name="contractId" value={measurementContractId} onChange={(event) => setMeasurementContractId(event.target.value)} required><option value="">Selecione</option>{measurableContracts.map((item) => <option key={item.id} value={item.id}>{item.number} · {item.title}</option>)}</select></div>
+          {measurementContract && <><div className={styles.grid4}><div className={styles.field}><label>Número</label><input name="number" type="number" min="1" required /></div><div className={styles.field}><label>Competência</label><input name="competenceDate" type="date" required /></div><div className={styles.field}><label>Início período</label><input name="periodStart" type="date" required /></div><div className={styles.field}><label>Fim período</label><input name="periodEnd" type="date" required /></div></div><div className={styles.grid4}><div className={styles.field}><label>Emissão</label><input name="issuedAt" type="date" required /></div><div className={styles.field}><label>Vencimento</label><input name="dueDate" type="date" required /></div><div className={styles.field}><label>Avanço físico (%)</label><input name="physicalProgress" type="number" step="0.01" defaultValue="0" /></div><div className={styles.field}><label>Retenção</label><input name="retentionAmount" type="number" step="0.01" defaultValue="0" /></div></div><div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Item</th><th>Contratado</th><th>Quantidade do período</th></tr></thead><tbody>{measurementContract.items.map((item) => <tr key={item.id}><td>{item.code} · {item.description}</td><td>{item.quantity} {item.unit}</td><td><input name={"qty_" + item.id} type="number" min="0" step="0.0001" defaultValue="0" /></td></tr>)}</tbody></table></div><div className={styles.formActions}><button className="button button-primary" disabled={busy} type="submit">Criar medição</button></div></>}
+        </form>
+      )}
       {form === "decision" && (
         <form action={submitDecision} className={styles.formCard}>
           <h3 className={styles.formTitle}>Decisão da cotação</h3>
@@ -286,6 +378,11 @@ export function ProcurementOperabilityPanel({ workspace, operability }: { worksp
           </tbody>
         </table>
       </div>
+      <div className={styles.tableWrap} style={{ marginTop: 24 }}><table className={styles.table}><thead><tr><th>Pedido</th><th>Fornecedor</th><th>Valor</th><th>Status</th><th>Ação</th></tr></thead><tbody>{workspace.orders.map((item) => <tr key={item.id}><td>{item.number} · {item.title}</td><td>{item.supplier}</td><td>{item.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td>{item.status}</td><td>{["DRAFT", "IN_APPROVAL"].includes(item.status) ? <button className="text-button" disabled={busy} onClick={() => run(() => approvePurchaseOrderAction(item.id), "Pedido aprovado.")}>Aprovar</button> : "—"}</td></tr>)}</tbody></table></div>
+
+      <div className={styles.tableWrap} style={{ marginTop: 18 }}><table className={styles.table}><thead><tr><th>Contrato</th><th>Fornecedor</th><th>Valor atual</th><th>Status</th><th>Ação</th></tr></thead><tbody>{workspace.contracts.map((item) => <tr key={item.id}><td>{item.number} · {item.title}</td><td>{item.supplier}</td><td>{item.currentAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td>{item.status}</td><td>{["DRAFT", "UNDER_REVIEW", "IN_APPROVAL", "APPROVED"].includes(item.status) ? <button className="text-button" disabled={busy} onClick={() => advanceContract(item.id, item.status)}>Avançar</button> : "—"}</td></tr>)}</tbody></table></div>
+
+      <div className={styles.tableWrap} style={{ marginTop: 18 }}><table className={styles.table}><thead><tr><th>Medição</th><th>Contrato</th><th>Fornecedor</th><th>Líquido</th><th>Status</th><th>Ação</th></tr></thead><tbody>{workspace.measurements.map((item) => <tr key={item.id}><td>BM {item.number}</td><td>{item.contract}</td><td>{item.supplier}</td><td>{item.netAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td>{item.status}</td><td>{["DRAFT", "SUBMITTED", "IN_TECHNICAL_REVIEW", "TECHNICALLY_APPROVED", "IN_APPROVAL"].includes(item.status) ? <button className="text-button" disabled={busy} onClick={() => advanceMeasurement(item.id, item.status)}>{item.status === "IN_APPROVAL" ? "Aprovar e enviar ao Financeiro" : "Avançar"}</button> : "—"}</td></tr>)}</tbody></table></div>
     </section>
   );
 }
