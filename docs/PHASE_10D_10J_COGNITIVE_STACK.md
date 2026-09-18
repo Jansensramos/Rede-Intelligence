@@ -114,6 +114,15 @@ A classe não mantém estado privilegiado e não cria canal alternativo de muta�
 - Autopilot não executa ações;
 - Learning Loop não altera política automaticamente.
 
-## Próxima evolução operacional
+## Integração operacional concluída
 
-A fundação 10D–10J fica pronta para ser conectada às superfícies executivas da REDE. A ativação de providers comerciais e automações externas continua sujeita às políticas do AI Gateway e às credenciais/autorizações do ambiente.
+A fundação 10D–10J está conectada às superfícies reais do produto:
+
+- Comitê Cognitivo na REDE AI;
+- decisão humana separada e auditável;
+- histórico das rodadas por empreendimento;
+- linha do tempo cognitiva na Gestão Executiva;
+- painel de prontidão operacional;
+- Learning Loop conectado a `ForecastEvaluation` avaliada.
+
+Provider comercial e conectores externos continuam sendo dependências do ambiente: só podem ficar disponíveis quando houver configuração, credenciais e autorização reais. A ausência desses elementos não é mascarada por mocks em produção nem por dados fabricados.
