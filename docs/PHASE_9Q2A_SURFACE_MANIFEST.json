@@ -1,7 +1,7 @@
 [
   {
     "path": "src/app/actions/accounting.ts",
-    "sha256": "448da69ad1a1be05844f4c96f768c3a72ad4b2f3499a81191b648e341ae40c5c"
+    "sha256": "ae4e3264a568de29cf4e5b747306b620aa0fe09bb99870c009283f0229f7ebf6"
   },
   {
     "path": "src/app/actions/ai.ts",
@@ -49,7 +49,7 @@
   },
   {
     "path": "src/app/actions/financial.ts",
-    "sha256": "7cb9a74a5c907693535d48f1dc47df1065b597046c6c07e90907c65341dae76a"
+    "sha256": "d181ad4e619f6c93daae299bb339ceec96860ab2566f58d5a7a6e124a03e9f02"
   },
   {
     "path": "src/app/actions/google-drive.ts",
@@ -57,7 +57,7 @@
   },
   {
     "path": "src/app/actions/handover.ts",
-    "sha256": "56535d23490721c1fe2a1d7603231daf1adb6eaf3676d1c15d0b294544a42729"
+    "sha256": "1811f81401b6ca99a72267e2ec067445eb1cc51d9f676a03c7b36d21d3ad1717"
   },
   {
     "path": "src/app/actions/integrations.ts",
@@ -77,7 +77,7 @@
   },
   {
     "path": "src/app/actions/legal.ts",
-    "sha256": "dbabf505cf3277a8f57ca47182c4d8125ddcc34155e71c774361f3779609af33"
+    "sha256": "5765b45e958793aded12cf3bc68a51dac8d7b74b300ac026a33317e713223284"
   },
   {
     "path": "src/app/actions/local-readiness.ts",
@@ -97,7 +97,7 @@
   },
   {
     "path": "src/app/actions/procurement.ts",
-    "sha256": "d2f5b237b1c191495498d09aa0e9b66df0d1449db58657536ce205b23f5d225f"
+    "sha256": "5a8fcd60ba1e7186b43a6f727cacebd4e0863309ce7ad6ffa76bc92fcb50b86c"
   },
   {
     "path": "src/app/actions/sales.ts",
