@@ -850,7 +850,7 @@ export async function getSalesWorkspace(context: MutationContext, projectId: str
       id: condominiumSetup.id, status: condominiumSetup.status, administrator: condominiumSetup.administratorSupplier?.name ?? null,
       constitutedAt: condominiumSetup.constitutedAt?.toISOString() ?? null, transferredAt: condominiumSetup.transferredAt?.toISOString() ?? null,
     } : null,
-    brokers: brokerProfiles.map((profile) => ({ id: profile.id, name: profile.supplier.name, creci: profile.creci, defaultCommissionRate: profile.defaultCommissionRate ? Number(profile.defaultCommissionRate) : null })),
+    brokers: brokerProfiles.map((profile) => ({ id: profile.id, supplierId: profile.supplierId, name: profile.supplier.name, creci: profile.creci, defaultCommissionRate: profile.defaultCommissionRate ? Number(profile.defaultCommissionRate) : null })),
     contractTemplates: contractTemplates.map((template) => ({ id: template.id, name: template.name, status: template.status, versions: template.versions.map((version) => ({ id: version.id, version: version.version, status: version.status })) })),
     correctionRules: correctionRules.map((rule) => ({
       id: rule.id,
