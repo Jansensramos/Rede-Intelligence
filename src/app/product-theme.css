@@ -1,0 +1,259 @@
+/* Identidade visual final — REDE Intelligence
+ * Camada carregada por último para unificar a experiência em off-white claro.
+ */
+
+:root {
+  --rede-page: #f7f6f2;
+  --rede-sidebar: #f2f0ea;
+  --rede-surface: #fffefb;
+  --rede-surface-soft: #f4f2ec;
+  --rede-border: #e1ddd3;
+  --rede-border-strong: #d5cfc2;
+  --rede-text: #20242a;
+  --rede-text-soft: #687078;
+  --rede-blue: #0b3471;
+  --rede-blue-soft: #e9eef6;
+  --rede-gold: #c9921d;
+  --rede-hover: #ece9e1;
+  --rede-active: #e6e2d8;
+}
+
+html,
+body {
+  background: var(--rede-page) !important;
+  color: var(--rede-text) !important;
+}
+
+.workspace,
+.workspace-content,
+.app-shell {
+  background: var(--rede-page) !important;
+}
+
+/* Barra lateral clara, com contraste suave e linguagem visual de produto. */
+.sidebar {
+  background: var(--rede-sidebar) !important;
+  color: var(--rede-text) !important;
+  border-right: 1px solid var(--rede-border) !important;
+  box-shadow: none !important;
+}
+
+.sidebar-brand {
+  min-height: 96px !important;
+  height: auto !important;
+  padding: 14px 18px !important;
+  border-bottom: 1px solid var(--rede-border) !important;
+}
+
+.brand {
+  width: 100%;
+  min-width: 0;
+}
+
+.brand-logo {
+  display: block;
+  width: 176px;
+  max-width: 100%;
+  height: auto;
+}
+
+.brand-compact .brand-logo {
+  width: 44px;
+}
+
+.sidebar-close {
+  color: var(--rede-text-soft) !important;
+}
+
+.portfolio-label,
+.ds-nav-group-label,
+.sidebar-module > span:first-child {
+  color: #8a8275 !important;
+}
+
+.active-project {
+  background: rgba(255,255,255,.48) !important;
+  color: var(--rede-text) !important;
+  border: 1px solid var(--rede-border) !important;
+  box-shadow: none !important;
+}
+
+.active-project:hover {
+  background: var(--rede-hover) !important;
+  border-color: var(--rede-border-strong) !important;
+}
+
+.project-monogram {
+  background: var(--rede-blue-soft) !important;
+  border: 1px solid #d8e0ec !important;
+  color: var(--rede-blue) !important;
+}
+
+.active-project small {
+  color: var(--rede-text-soft) !important;
+}
+
+.main-nav button,
+.main-nav a {
+  color: #5e646b !important;
+  border-radius: 9px !important;
+}
+
+.main-nav button:hover,
+.main-nav a:hover {
+  color: var(--rede-text) !important;
+  background: var(--rede-hover) !important;
+}
+
+.main-nav button.is-active,
+.main-nav a.is-active {
+  color: var(--rede-blue) !important;
+  background: var(--rede-active) !important;
+  font-weight: 700;
+}
+
+.main-nav button.is-active::before,
+.main-nav a.is-active::before {
+  background: var(--rede-gold) !important;
+  width: 3px !important;
+  border-radius: 3px;
+}
+
+.sidebar-module {
+  color: var(--rede-text) !important;
+  background: rgba(255,255,255,.48) !important;
+  border: 1px solid var(--rede-border) !important;
+  border-radius: 10px !important;
+}
+
+.sidebar-ai-live:hover {
+  background: var(--rede-hover) !important;
+  border-color: #d5c49e !important;
+}
+
+.sidebar-module svg {
+  color: var(--rede-gold) !important;
+}
+
+.sidebar-module small {
+  color: var(--rede-text-soft) !important;
+}
+
+.sidebar-module .soon {
+  background: #eee4cd !important;
+  color: #8d6515 !important;
+  border-radius: 999px;
+}
+
+.sidebar-footer {
+  border-top: 1px solid var(--rede-border) !important;
+}
+
+.sidebar-footer button,
+.sidebar-footer .help-trigger {
+  color: var(--rede-text-soft) !important;
+}
+
+.sidebar-footer .help-trigger {
+  border-color: var(--rede-border) !important;
+  background: rgba(255,255,255,.45) !important;
+}
+
+.sidebar-footer .help-trigger:hover {
+  color: var(--rede-blue) !important;
+  border-color: #cbd5e4 !important;
+}
+
+.avatar-button,
+.user-avatar {
+  background: var(--rede-blue-soft) !important;
+  color: var(--rede-blue) !important;
+  border-color: #d6dfeb !important;
+}
+
+/* Cabeçalho e superfícies. */
+.topbar {
+  background: rgba(247,246,242,.94) !important;
+  border-bottom: 1px solid var(--rede-border) !important;
+  backdrop-filter: blur(10px);
+}
+
+.topbar-left,
+.topbar-actions,
+.topbar a {
+  color: var(--rede-text-soft) !important;
+}
+
+.topbar-left strong {
+  color: var(--rede-text) !important;
+}
+
+.panel,
+.operations-panel,
+.executive-phase-readiness,
+.executive-learning-loop,
+.executive-cognitive-timeline,
+.cognitive-panel,
+.metric-card,
+.scenario-card,
+.isolated-panel {
+  background: var(--rede-surface) !important;
+  border-color: var(--rede-border) !important;
+  box-shadow: 0 1px 2px rgba(25,28,33,.025) !important;
+}
+
+.button-primary {
+  background: var(--rede-blue) !important;
+  border-color: var(--rede-blue) !important;
+  color: #fff !important;
+}
+
+.button-primary:hover {
+  background: #082b61 !important;
+}
+
+.button-secondary {
+  background: #fff !important;
+  color: var(--rede-text) !important;
+  border-color: var(--rede-border-strong) !important;
+}
+
+.button-secondary:hover {
+  background: var(--rede-hover) !important;
+}
+
+.eyebrow {
+  color: #8f6b24 !important;
+  letter-spacing: .08em !important;
+}
+
+.status-ready {
+  background: #edf4ef !important;
+}
+
+.status-waiting_data {
+  background: #f7f3e8 !important;
+}
+
+.status-external_dependency {
+  background: #f6f0e5 !important;
+}
+
+/* A marca passa a ser protagonista sem ocupar espaço excessivo. */
+.login-brand .brand-logo {
+  width: min(320px, 72vw);
+  margin: 0 auto 6px;
+}
+
+.login-brand .brand {
+  justify-content: center;
+}
+
+@media (max-width: 1280px) {
+  .brand-logo { width: 150px; }
+}
+
+@media (max-width: 900px) {
+  .sidebar-brand { min-height: 82px !important; }
+  .brand-logo { width: 160px; }
+}
