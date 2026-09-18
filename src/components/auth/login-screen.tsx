@@ -10,7 +10,7 @@ export function LoginScreen({ demo }: { demo: DemoLoginPresentation }) {
         <div className="login-brand"><RedeMark /></div>
         <span className="eyebrow">AMBIENTE MULTIEMPRESA</span>
         <h1>Inteligência para decisões imobiliárias.</h1>
-        <p>Acesse os estudos, snapshots e evidências da sua organização.</p>
+        <p>Acesse estudos, versões registradas e evidências da sua organização.</p>
         <LoginForm demo={demo.enabled ? { email: demo.email, password: demo.password } : undefined} />
         {demo.enabled && <small className="login-demo">Acesso demonstrativo habilitado somente neste ambiente.</small>}
       </section>
