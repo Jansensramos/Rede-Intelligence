@@ -40,6 +40,31 @@ export function ClosureOperabilityPanel({ projectId, latest, gate, canWrite, can
     });
   };
 
+  const approveClosure = () => {
+    if (!latest) return;
+    if (!canApprove) {
+      setFeedback({ type: "error", text: "Seu perfil não possui permissão para aprovar o encerramento." });
+      return;
+    }
+    if (gate.overall !== "APTO") {
+      const blocked = [
+        ["Operacional", gate.operational.status],
+        ["Contratual", gate.contractual.status],
+        ["Jurídico", gate.legal.status],
+        ["Financeiro", gate.financial.status],
+        ["Contábil", gate.accounting.status],
+      ].filter(([, status]) => !["READY", "OK", "APTO"].includes(status));
+      setFeedback({
+        type: "error",
+        text: blocked.length
+          ? `O encerramento ainda não pode ser aprovado. Resolva: ${blocked.map(([label]) => label).join(", ")}.`
+          : "O encerramento ainda não atende aos critérios necessários para aprovação.",
+      });
+      return;
+    }
+    run(() => approveProjectClosureResultAction({ closureResultId: latest.id }), "Encerramento aprovado.");
+  };
+
   const openApproveDistribution = () => {
     if (!latest) return;
     setFeedback(null);
@@ -84,7 +109,7 @@ export function ClosureOperabilityPanel({ projectId, latest, gate, canWrite, can
     {!canWrite && !canApprove && <div className="model-note"><div><strong>Modo de leitura</strong><p>Seu perfil pode consultar o encerramento, mas não preparar, distribuir, aprovar ou reabrir resultados.</p></div></div>}
     <div className="panel-heading"><div><span className="eyebrow">ENCERRAMENTO DO EMPREENDIMENTO</span><h2>Fechamento e distribuição de resultados</h2><p>Consolide as pendências operacionais, contratuais, jurídicas, financeiras e contábeis antes do encerramento definitivo.</p></div><div className="panel-actions">
       {!latest && <button className="button button-primary" disabled={pending || !canWrite} onClick={() => run(() => prepareProjectClosureResultAction({ projectId }), "Preparação do encerramento iniciada.")}><Archive size={15}/> Preparar encerramento</button>}
-      {latest?.status === "DRAFT" && <><button className="button button-secondary" disabled={pending || !canWrite} onClick={() => setModal({ type: "distribution" })}><WalletCards size={15}/> Nova distribuição</button><button className="button button-secondary" disabled={pending || !canApprove} onClick={openApproveDistribution}>Aprovar distribuição</button><button className="button button-primary" disabled={pending || !canApprove || gate.overall !== "APTO"} onClick={() => run(() => approveProjectClosureResultAction({ closureResultId: latest.id }), "Encerramento aprovado.")}><CheckCircle2 size={15}/> Aprovar encerramento</button></>}
+      {latest?.status === "DRAFT" && <><button className="button button-secondary" disabled={pending || !canWrite} onClick={() => setModal({ type: "distribution" })}><WalletCards size={15}/> Nova distribuição</button><button className="button button-secondary" disabled={pending || !canApprove} onClick={openApproveDistribution}>Aprovar distribuição</button><button className="button button-primary" disabled={pending} aria-disabled={!canApprove || gate.overall !== "APTO"} title={gate.overall === "APTO" ? "Aprovar encerramento" : "Clique para ver o que ainda impede o encerramento"} onClick={approveClosure}><CheckCircle2 size={15}/> Aprovar encerramento</button></>}
       {latest?.status === "FINAL" && <button className="button button-secondary" disabled={pending || !canReopen} onClick={() => setModal({ type: "reopen" })}><RotateCcw size={15}/> Reabrir</button>}
     </div></div>
     {feedback && <div className={feedback.type === "error" ? styles.error : styles.success}>{feedback.text}</div>}
