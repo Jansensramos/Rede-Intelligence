@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { UserFacingTextSanitizer } from "@/components/user-facing-text-sanitizer";
 import "./globals.css";
 import "./professional-overrides.css";
 import "./presentation-polish.css";
@@ -16,7 +15,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="pt-BR">
       <body>
         {children}
-        <UserFacingTextSanitizer />
       </body>
     </html>
   );
