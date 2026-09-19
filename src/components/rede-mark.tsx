@@ -5,10 +5,10 @@ export function RedeMark({ compact = false }: { compact?: boolean }) {
     <div className={`brand ${compact ? "brand-compact" : ""}`} aria-label="REDE Intelligence">
       <Image
         className="brand-logo"
-        src="/branding/rede-intelligence-logo.png"
+        src="/branding/rede-intelligence-logo-color.svg"
         alt="REDE Intelligence"
-        width={700}
-        height={426}
+        width={300}
+        height={180}
         priority
       />
     </div>
