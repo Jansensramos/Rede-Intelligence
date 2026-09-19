@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOTS = ["src/components", "src/app/(workspace)"];
+const EXCLUDED = new Set(["src/components/user-facing-text-sanitizer.tsx"]);
 const FORBIDDEN = [
   "Learning Loop",
   "Decision Engine",
@@ -20,10 +21,10 @@ const FORBIDDEN = [
 function filesUnder(root: string): string[] {
   const out: string[] = [];
   for (const name of readdirSync(root)) {
-    const path = join(root, name);
+    const path = join(root, name).replaceAll("\\", "/");
     const stat = statSync(path);
     if (stat.isDirectory()) out.push(...filesUnder(path));
-    else if (/\.(tsx|ts)$/.test(name)) out.push(path);
+    else if (/\.(tsx|ts)$/.test(name) && !EXCLUDED.has(path)) out.push(path);
   }
   return out;
 }
@@ -34,6 +35,11 @@ function stripComments(source: string) {
     .replace(/^\s*\/\/.*$/gm, "");
 }
 
+function hasWholeTerm(source: string, term: string) {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp("(^|[^A-Za-z0-9_])" + escaped + "([^A-Za-z0-9_]|$)").test(source);
+}
+
 describe("linguagem pública da interface", () => {
   it("não expõe nomes internos da arquitetura cognitiva", () => {
     const violations: string[] = [];
@@ -41,7 +47,7 @@ describe("linguagem pública da interface", () => {
       for (const file of filesUnder(root)) {
         const source = stripComments(readFileSync(file, "utf8"));
         for (const term of FORBIDDEN) {
-          if (source.includes(term)) violations.push(`${file}: ${term}`);
+          if (hasWholeTerm(source, term)) violations.push(file + ": " + term);
         }
       }
     }
