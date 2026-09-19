@@ -60,7 +60,7 @@ describe("linguagem pública da interface", () => {
     const theme = readFileSync("src/app/product-theme.css", "utf8");
 
     expect(layout).toContain('import "./product-theme.css"');
-    expect(mark).toContain("/branding/rede-intelligence-logo.png");
+    expect(mark).toContain("/branding/rede-intelligence-logo-color.svg");
     expect(theme).toContain("--rede-sidebar: #f2f0ea");
     expect(theme).toContain(".sidebar");
   });
