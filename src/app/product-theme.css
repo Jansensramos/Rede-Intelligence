@@ -39,9 +39,9 @@ body {
 }
 
 .sidebar-brand {
-  min-height: 84px !important;
+  min-height: 66px !important;
   height: auto !important;
-  padding: 8px 14px !important;
+  padding: 6px 12px !important;
   border-bottom: 1px solid var(--rede-border) !important;
 }
 
@@ -55,7 +55,7 @@ body {
 
 .brand-logo {
   display: block;
-  width: 145px;
+  width: 102px;
   max-width: 100%;
   height: auto;
 }
@@ -253,12 +253,12 @@ body {
 }
 
 @media (max-width: 1280px) {
-  .brand-logo { width: 138px; }
+  .brand-logo { width: 98px; }
 }
 
 @media (max-width: 900px) {
-  .sidebar-brand { min-height: 78px !important; }
-  .brand-logo { width: 132px; }
+  .sidebar-brand { min-height: 62px !important; }
+  .brand-logo { width: 94px; }
 }
 
 
@@ -311,4 +311,43 @@ body {
 .sidebar-overlay {
   background: rgba(31,36,42,.18) !important;
   backdrop-filter: blur(2px);
+}
+
+
+/* Assistente compacto na barra lateral. */
+.sidebar-module.sidebar-ai-live {
+  margin: 6px 12px 8px !important;
+  padding: 8px 9px !important;
+  grid-template-columns: 20px minmax(0, 1fr) !important;
+  column-gap: 7px !important;
+  border-radius: 8px !important;
+}
+
+.sidebar-module.sidebar-ai-live > span:first-child {
+  margin-bottom: 6px !important;
+  font-size: 7px !important;
+  letter-spacing: .14em !important;
+}
+
+.sidebar-module.sidebar-ai-live svg {
+  width: 15px !important;
+  height: 15px !important;
+}
+
+.sidebar-module.sidebar-ai-live strong {
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+}
+
+.sidebar-module.sidebar-ai-live small {
+  margin-top: 2px !important;
+  font-size: 8px !important;
+  line-height: 1.2 !important;
+}
+
+.sidebar-module.sidebar-ai-live .soon {
+  right: 6px !important;
+  bottom: 6px !important;
+  padding: 2px 4px !important;
+  font-size: 6px !important;
 }
