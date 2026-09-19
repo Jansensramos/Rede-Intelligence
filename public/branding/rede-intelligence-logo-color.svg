@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="title">
+  <title id="title">REDE Intelligence</title>
+  <defs>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0A3A7A"/>
+      <stop offset="1" stop-color="#062E67"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(70 70)">
+    <!-- R -->
+    <path fill="url(#blue)" d="M0 120h170c95 0 157 55 157 139 0 75-49 128-129 138l176 206H274L111 408H72v195H0V120Zm72 70v148h92c58 0 91-28 91-74s-33-74-91-74H72Z"/>
+    <rect x="0" y="354" width="112" height="13" fill="#C89219"/>
+    <rect x="0" y="381" width="112" height="13" fill="#C89219"/>
+    <rect x="0" y="408" width="112" height="13" fill="#C89219"/>
+
+    <!-- EDE -->
+    <text x="390" y="340" font-family="Georgia, 'Times New Roman', serif" font-size="205" font-weight="700" letter-spacing="12" fill="url(#blue)">EDE</text>
+
+    <!-- Intelligence -->
+    <text x="395" y="458" font-family="Georgia, 'Times New Roman', serif" font-size="66" font-weight="600" letter-spacing="6" fill="#C89219">INTELLIGENCE</text>
+
+    <!-- diamonds -->
+    <g transform="translate(1035 406) rotate(45)">
+      <rect x="0" y="0" width="28" height="28" fill="#C89219"/>
+      <rect x="38" y="0" width="28" height="28" fill="#ffffff" stroke="#0A3A7A" stroke-width="7"/>
+      <rect x="0" y="38" width="28" height="28" fill="#ffffff" stroke="#0A3A7A" stroke-width="7"/>
+      <rect x="38" y="38" width="28" height="28" fill="#C89219"/>
+    </g>
+  </g>
+</svg>
