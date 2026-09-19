@@ -39,9 +39,9 @@ body {
 }
 
 .sidebar-brand {
-  min-height: 66px !important;
+  min-height: 72px !important;
   height: auto !important;
-  padding: 6px 12px !important;
+  padding: 6px 10px !important;
   border-bottom: 1px solid var(--rede-border) !important;
 }
 
@@ -55,7 +55,7 @@ body {
 
 .brand-logo {
   display: block;
-  width: 102px;
+  width: 84px;
   max-width: 100%;
   height: auto;
 }
@@ -253,12 +253,12 @@ body {
 }
 
 @media (max-width: 1280px) {
-  .brand-logo { width: 98px; }
+  .brand-logo { width: 82px; }
 }
 
 @media (max-width: 900px) {
-  .sidebar-brand { min-height: 62px !important; }
-  .brand-logo { width: 94px; }
+  .sidebar-brand { min-height: 68px !important; }
+  .brand-logo { width: 78px; }
 }
 
 
@@ -316,32 +316,32 @@ body {
 
 /* Assistente compacto na barra lateral. */
 .sidebar-module.sidebar-ai-live {
-  margin: 6px 12px 8px !important;
-  padding: 8px 9px !important;
-  grid-template-columns: 20px minmax(0, 1fr) !important;
-  column-gap: 7px !important;
+  margin: 4px 12px 6px !important;
+  padding: 6px 8px !important;
+  grid-template-columns: 17px minmax(0, 1fr) !important;
+  column-gap: 6px !important;
   border-radius: 8px !important;
 }
 
 .sidebar-module.sidebar-ai-live > span:first-child {
-  margin-bottom: 6px !important;
-  font-size: 7px !important;
+  margin-bottom: 4px !important;
+  font-size: 6px !important;
   letter-spacing: .14em !important;
 }
 
 .sidebar-module.sidebar-ai-live svg {
-  width: 15px !important;
-  height: 15px !important;
+  width: 13px !important;
+  height: 13px !important;
 }
 
 .sidebar-module.sidebar-ai-live strong {
-  font-size: 10px !important;
+  font-size: 9px !important;
   line-height: 1.2 !important;
 }
 
 .sidebar-module.sidebar-ai-live small {
   margin-top: 2px !important;
-  font-size: 8px !important;
+  font-size: 7px !important;
   line-height: 1.2 !important;
 }
 
