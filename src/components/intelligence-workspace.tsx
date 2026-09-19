@@ -121,11 +121,11 @@ const viewItems: { key: ViewKey; label: string; icon: typeof Gauge }[] = [
   { key: "people", label: "Pessoas e Eficiência", icon: Users },
   { key: "scenarios", label: "Cenários", icon: BarChart3 },
   { key: "sensitivity", label: "Sensibilidade", icon: SlidersHorizontal },
-  { key: "redteam", label: "REDE Red Team", icon: Radar },
-  { key: "committee", label: "Investment Committee", icon: Gavel },
-  { key: "studio", label: "REDE Studio", icon: Presentation },
-  { key: "dataroom", label: "Data Room", icon: FolderArchive },
-  { key: "ai", label: "REDE AI", icon: Sparkles },
+  { key: "redteam", label: "Revisão Crítica", icon: Radar },
+  { key: "committee", label: "Comitê de Investimento", icon: Gavel },
+  { key: "studio", label: "Relatórios", icon: Presentation },
+  { key: "dataroom", label: "Sala de Documentos", icon: FolderArchive },
+  { key: "ai", label: "Assistente REDE", icon: Sparkles },
   { key: "cashflow", label: "Fluxo de caixa", icon: TableProperties },
   { key: "risks", label: "Riscos & alertas", icon: ShieldAlert },
   { key: "audit", label: "Trilha de cálculo", icon: BookOpenCheck },
@@ -154,11 +154,11 @@ function AssumptionSummary({ project, onEdit }: { project: ProjectAssumptions; o
   ];
   return (
     <>
-      <SectionTitle eyebrow="PREMISSAS ATIVAS" title="Uma fonte para todos os cálculos" description="Valores do caso base. Cenários aplicam deltas sem alterar este snapshot." action={<button className="button button-primary" onClick={onEdit}><Settings2 size={16} /> Editar premissas</button>} />
+      <SectionTitle eyebrow="PREMISSAS ATIVAS" title="Uma fonte para todos os cálculos" description="Valores do caso base. Os cenários aplicam variações sem alterar esta versão registrada." action={<button className="button button-primary" onClick={onEdit}><Settings2 size={16} /> Editar premissas</button>} />
       <div className="assumption-groups">
         {groups.map((group) => <article className="assumption-card" key={group.title}><h3>{group.title}</h3><dl>{group.items.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></article>)}
       </div>
-      <div className="model-note"><ClipboardCheck size={20} /><div><strong>Hipóteses declaradas do Engine v1</strong><p>Terreno no mês zero, curva S padronizada, tributo sobre recebimentos e financiamento usado para cobrir déficits até o limite. Inflação, distrato, inadimplência e permuta ainda não estão modelados.</p></div></div>
+      <div className="model-note"><ClipboardCheck size={20} /><div><strong>Hipóteses declaradas do Motor de Viabilidade</strong><p>Terreno no mês zero, curva S padronizada, tributo sobre recebimentos e financiamento usado para cobrir déficits até o limite. Inflação, distrato, inadimplência e permuta ainda não estão modelados.</p></div></div>
     </>
   );
 }
