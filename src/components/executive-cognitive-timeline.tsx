@@ -130,7 +130,7 @@ export function ExecutiveCognitiveTimeline({ projectId }: { projectId: string })
           </div>
           <div className="executive-readiness-summary">
             <strong>{readiness?.checks.filter((item) => item.status === "READY").length ?? 0}</strong>
-            <span>de {readiness?.checks.length ?? 6} prontos</span>
+            <span>{`de ${readiness?.checks.length ?? 6} prontos`}</span>
           </div>
         </header>
 
